@@ -1,6 +1,6 @@
 # ⚡ G-Helper (Flow X16 & Convertible Edition)
 
-A lightweight Armoury Crate alternative for ASUS ROG & TUF laptops, extended with specialized hardware controls for 2-in-1 convertibles (**ROG Flow X16, Flow X13, Flow Z13**) and enhanced mobile productivity.
+A lightweight Armoury Crate alternative for ASUS Flow laptops, extended with specialized hardware controls and enhanced mobile productivity.
 
 ---
 
