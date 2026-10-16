@@ -49,6 +49,8 @@ namespace GHelper
               {"brightness_up", Properties.Strings.BrightnessUp},
               {"visual", Properties.Strings.VisualMode},
               {"touchscreen", Properties.Strings.ToggleTouchscreen },
+              {"penonly", "Toggle Pen Only Mode"},
+              {"rotation", "Toggle Rotation Lock"},
               {"micmute", Properties.Strings.MuteMic},
               {"ghelper", Properties.Strings.OpenGHelper},
               {"overlay", Properties.Strings.Overlay},

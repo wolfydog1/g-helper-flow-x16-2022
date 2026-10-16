@@ -348,7 +348,9 @@ public static class HardwareControl
 
     static long _lastBatteryRead;
     public static string? batteryTimeStr;
+    public static string? batteryHealthStr;
     public static bool isAcOnline;
+    private static decimal? _smoothedBatteryRate;
 
     public static void ReadBatteryState()
     {
@@ -413,10 +415,27 @@ public static class HardwareControl
                 if (batteryState.HasValue && batteryState.Value.MaxCapacity > 0)
                     fullCapacity = batteryState.Value.MaxCapacity;
             }
+            if (designCapacity is null or 0)
+            {
+                ReadDesignCapacity();
+            }
         }
         catch (Exception ex)
         {
             Debug.WriteLine("Battery Reading: " + ex.Message);
+        }
+
+        if (batteryRate is null or 0)
+        {
+            _smoothedBatteryRate = 0;
+        }
+        else if (_smoothedBatteryRate is null or 0 || Math.Sign(_smoothedBatteryRate.Value) != Math.Sign(batteryRate.Value))
+        {
+            _smoothedBatteryRate = batteryRate;
+        }
+        else
+        {
+            _smoothedBatteryRate = (_smoothedBatteryRate.Value * 0.65m) + (batteryRate.Value * 0.35m);
         }
 
         FormatBatteryCharge();
@@ -425,6 +444,13 @@ public static class HardwareControl
     private static void FormatBatteryCharge()
     {
         batteryTimeStr = null;
+        if (fullCapacity > 0 && designCapacity > 0)
+        {
+            decimal healthPct = Math.Min(100m, (decimal)fullCapacity / (decimal)designCapacity * 100m);
+            batteryHealth = healthPct;
+            batteryHealthStr = $"Battery Health: {Math.Round(healthPct, 1)}% ({Math.Round((decimal)fullCapacity / 1000m, 1)} / {Math.Round((decimal)designCapacity / 1000m, 1)} Wh)";
+        }
+
         if (fullCapacity > 0 && chargeCapacity > 0)
         {
             batteryCapacity = Math.Min(100, (decimal)chargeCapacity / (decimal)fullCapacity * 100);
@@ -435,9 +461,10 @@ public static class HardwareControl
 
             BatteryControl.EvaluateSmartCharge(batteryCapacity, isAcOnline);
 
-            if (batteryRate is < -0.5m)
+            decimal effectiveRate = _smoothedBatteryRate ?? batteryRate ?? 0m;
+            if (batteryRate is < -0.5m && effectiveRate < -0.5m)
             {
-                decimal dischargeW = -batteryRate.Value;
+                decimal dischargeW = -effectiveRate;
                 decimal remWh = (decimal)chargeCapacity / 1000m;
                 int totalMins = (int)Math.Round((double)(remWh / dischargeW * 60m));
                 if (totalMins > 0 && totalMins < 24 * 60)
@@ -447,9 +474,9 @@ public static class HardwareControl
                     batteryTimeStr = h > 0 ? $"~{h}h {m}m left" : $"~{m}m left";
                 }
             }
-            else if (batteryRate is > 0.5m)
+            else if (batteryRate is > 0.5m && effectiveRate > 0.5m)
             {
-                decimal chargeW = batteryRate.Value;
+                decimal chargeW = effectiveRate;
                 decimal targetPct = BatteryControl.chargeFull ? 100m : AppConfig.Get("charge_limit", 80);
                 decimal targetWh = ((decimal)fullCapacity / 1000m) * (targetPct / 100m);
                 decimal remToTargetWh = Math.Max(0m, targetWh - ((decimal)chargeCapacity / 1000m));

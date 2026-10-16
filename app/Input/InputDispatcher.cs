@@ -22,6 +22,8 @@ namespace GHelper.Input
         public static bool tabletMode = false;
         private static bool touchpadDisabledByTablet = false;
         private static bool touchpadDisabledByTent = false;
+        private static TouchPenMode? _preTabletTouchMode = null;
+        private static int? _preTabletPerfMode = null;
         private static bool? _fnLock = null;
         private static string? _asusPath = null;
 
@@ -126,8 +128,8 @@ namespace GHelper.Input
 
         public void InitBacklightTimer()
         {
-            timer.Enabled = AppConfig.Get("keyboard_timeout") > 0 && SystemInformation.PowerStatus.PowerLineStatus != PowerLineStatus.Online ||
-                            AppConfig.Get("keyboard_ac_timeout") > 0 && SystemInformation.PowerStatus.PowerLineStatus == PowerLineStatus.Online;
+            timer.Enabled = AppConfig.Get("keyboard_timeout", 60) > 0 && SystemInformation.PowerStatus.PowerLineStatus != PowerLineStatus.Online ||
+                            AppConfig.Get("keyboard_ac_timeout", 0) > 0 && SystemInformation.PowerStatus.PowerLineStatus == PowerLineStatus.Online;
         }
 
         private static ModifierKeys GetModifierKeys(string configKey, ModifierKeys defaultModifiers)
@@ -741,6 +743,12 @@ namespace GHelper.Input
                 case "touchscreen":
                     ToggleTouchScreen();
                     break;
+                case "penonly":
+                    TogglePenOnlyMode();
+                    break;
+                case "rotation":
+                    ToggleRotationLock();
+                    break;
                 default:
                     break;
             }
@@ -760,13 +768,45 @@ namespace GHelper.Input
 
         static void ToggleTouchScreen()
         {
-            var status = !TouchscreenHelper.GetStatus();
-            Logger.WriteLine("Touchscreen status: " + status);
-            if (status is not null)
+            var currentMode = TouchscreenHelper.GetMode();
+            var nextMode = currentMode switch
             {
-                Program.toast.RunToast(Properties.Strings.Touchscreen + " " + ((bool)status ? Properties.Strings.On : Properties.Strings.Off), ToastIcon.Touchpad);
-                TouchscreenHelper.ToggleTouchscreen((bool)status);
-            }
+                TouchPenMode.TouchAndPen => TouchPenMode.PenOnly,
+                TouchPenMode.PenOnly => TouchPenMode.Off,
+                _ => TouchPenMode.TouchAndPen
+            };
+            Logger.WriteLine("TouchPenMode cycle: " + currentMode + " -> " + nextMode);
+            TouchscreenHelper.SetMode(nextMode);
+            string toastMsg = nextMode switch
+            {
+                TouchPenMode.TouchAndPen => "Touchscreen + Pen: On",
+                TouchPenMode.PenOnly => "Pen Only Mode (Touch Off for Palm Rejection)",
+                _ => "Touchscreen + Pen: Off"
+            };
+            Program.toast.RunToast(toastMsg, ToastIcon.Touchpad);
+            Program.settingsForm?.SyncTouchPenMode(nextMode);
+        }
+
+        static void TogglePenOnlyMode()
+        {
+            var currentMode = TouchscreenHelper.GetMode();
+            var nextMode = currentMode == TouchPenMode.PenOnly
+                ? TouchPenMode.TouchAndPen
+                : TouchPenMode.PenOnly;
+            Logger.WriteLine("PenOnly toggle: " + currentMode + " -> " + nextMode);
+            TouchscreenHelper.SetMode(nextMode);
+            string toastMsg = nextMode == TouchPenMode.PenOnly
+                ? "Pen Only Mode (Touch Off for Palm Rejection)"
+                : "Touchscreen + Pen: On";
+            Program.toast.RunToast(toastMsg, ToastIcon.Touchpad);
+            Program.settingsForm?.SyncTouchPenMode(nextMode);
+        }
+
+        static void ToggleRotationLock()
+        {
+            bool unlocked = AutoRotationControl.Toggle();
+            Program.toast.RunToast(unlocked ? "Screen Rotation: Unlocked" : "Screen Rotation: Locked", ToastIcon.Touchpad);
+            Program.settingsForm?.VisualiseRotation();
         }
 
         public static void ToggleMic()
@@ -995,16 +1035,53 @@ namespace GHelper.Input
                 if (AppConfig.Get("auto_tablet_rotation", 1) == 1)
                 {
                     AutoRotationControl.SetAutoRotation(isTablet || tentMode);
-                    Program.settingsForm?.BeginInvoke(() => Program.settingsForm.VisualiseScreenSwitches(ScreenCCD.GetHDRStatus()));
                 }
+
+                // Touch safety: ensure touch is enabled when folding into tablet mode so user is never locked out of input
                 if (isTablet)
                 {
+                    var curTouch = TouchscreenHelper.GetMode();
+                    if (curTouch == TouchPenMode.Off)
+                    {
+                        _preTabletTouchMode = curTouch;
+                        TouchscreenHelper.SetMode(TouchPenMode.TouchAndPen);
+                        Program.settingsForm?.SyncTouchPenMode(TouchPenMode.TouchAndPen);
+                    }
+
+                    // Auto-switch to Silent profile in Tablet mode so chassis stays cool and quiet in hands
+                    if (AppConfig.Get("auto_tablet_silent", 1) == 1 && modeControl != null)
+                    {
+                        int curPerf = Modes.GetCurrent();
+                        if (curPerf != AsusACPI.PerformanceSilent)
+                        {
+                            _preTabletPerfMode = curPerf;
+                            modeControl.SetPerformanceMode(AsusACPI.PerformanceSilent);
+                        }
+                    }
+
                     Program.toast?.RunToast("Tablet Mode: Rotation Unlocked & Touch Active", ToastIcon.Touchpad);
                 }
                 else
                 {
+                    if (_preTabletTouchMode.HasValue)
+                    {
+                        var restoreTouch = _preTabletTouchMode.Value;
+                        _preTabletTouchMode = null;
+                        TouchscreenHelper.SetMode(restoreTouch);
+                        Program.settingsForm?.SyncTouchPenMode(restoreTouch);
+                    }
+
+                    if (_preTabletPerfMode.HasValue && AppConfig.Get("auto_tablet_silent", 1) == 1 && modeControl != null)
+                    {
+                        int restorePerf = _preTabletPerfMode.Value;
+                        _preTabletPerfMode = null;
+                        modeControl.SetPerformanceMode(restorePerf);
+                    }
+
                     Program.toast?.RunToast("Laptop Mode Restored", ToastIcon.Touchpad);
                 }
+
+                Program.settingsForm?.BeginInvoke(() => Program.settingsForm.VisualiseScreenSwitches(ScreenCCD.GetHDRStatus()));
             }
         }
 
@@ -1358,6 +1435,7 @@ namespace GHelper.Input
             else
                 AppConfig.Set("keyboard_brightness", backlight);
 
+            backlightActivity = true;
             Program.settingsForm?.VisualiseBacklight(backlight);
             var extraForm = Program.settingsForm?.extraForm;
             if (extraForm != null && extraForm.Text != "") extraForm.VisualiseBacklight(backlight);

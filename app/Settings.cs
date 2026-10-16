@@ -62,7 +62,19 @@ namespace GHelper
         bool isProgrammaticBrightnessChange = false;
         bool activateCheck = false;
 
-                private Windows.Devices.Sensors.LightSensor ambientLightSensor;
+        private Windows.Devices.Sensors.LightSensor? ambientLightSensor;
+        private System.Windows.Forms.Timer? ambientLightPollTimer;
+        private float _smoothedLux = -1f;
+        public static float CurrentLux { get; private set; } = -1f;
+        private static int[][]? _cachedScreenCurve = null;
+        private static int[][]? _cachedKeyboardCurve = null;
+
+        public static void InvalidateCurveCache()
+        {
+            _cachedScreenCurve = null;
+            _cachedKeyboardCurve = null;
+        }
+
         private void InitAmbientLightSensor()
         {
             try
@@ -71,88 +83,118 @@ namespace GHelper
                 if (ambientLightSensor != null)
                 {
                     ambientLightSensor.ReportInterval = Math.Max(ambientLightSensor.MinimumReportInterval, 1000);
-                    ambientLightSensor.ReadingChanged += LightSensor_ReadingChanged; ambientLightPollTimer = new System.Windows.Forms.Timer(); ambientLightPollTimer.Interval = 2000; ambientLightPollTimer.Tick += (s, e) => PollLightSensor(); ambientLightPollTimer.Start();
+                    ambientLightSensor.ReadingChanged += LightSensor_ReadingChanged;
+                    ambientLightPollTimer = new System.Windows.Forms.Timer { Interval = 2000 };
+                    ambientLightPollTimer.Tick += (s, e) => PollLightSensor();
+                    ambientLightPollTimer.Start();
                 }
             }
             catch { }
         }
 
-                        private int InterpolateCurve(string key, float lux, int defaultMax, bool inverse)
+        private int InterpolateCurve(string key, float lux, int defaultMax)
         {
-            string saved = AppConfig.GetString(key);
-            int[][] points = null;
-            if (!string.IsNullOrEmpty(saved))
+            int[][]? points = key == "screen_curve" ? _cachedScreenCurve : _cachedKeyboardCurve;
+            if (points == null)
             {
-                try { points = System.Text.Json.JsonSerializer.Deserialize<int[][]>(saved); } catch { }
+                string? saved = AppConfig.GetString(key);
+                if (!string.IsNullOrEmpty(saved))
+                {
+                    try { points = System.Text.Json.JsonSerializer.Deserialize<int[][]>(saved); } catch { }
+                }
+                if (points == null || points.Length == 0)
+                {
+                    if (defaultMax == 100)
+                        points = new int[][] { new int[] { 0, 20 }, new int[] { 100, 50 }, new int[] { 500, 100 } };
+                    else
+                        points = new int[][] { new int[] { 0, 3 }, new int[] { 50, 2 }, new int[] { 200, 1 }, new int[] { 500, 0 } };
+                }
+                if (key == "screen_curve") _cachedScreenCurve = points;
+                else _cachedKeyboardCurve = points;
             }
-            if (points == null || points.Length == 0)
-            {
-                if (defaultMax == 100) points = new int[][] { new int[] { 0, 20 }, new int[] { 100, 50 }, new int[] { 500, 100 } };
-                else points = new int[][] { new int[] { 0, 3 }, new int[] { 50, 2 }, new int[] { 200, 1 }, new int[] { 500, 0 } };
-            }
-            
+
             if (lux <= points[0][0]) return points[0][1];
             if (lux >= points[points.Length - 1][0]) return points[points.Length - 1][1];
-            
+
             for (int i = 0; i < points.Length - 1; i++)
             {
                 if (lux >= points[i][0] && lux <= points[i + 1][0])
                 {
-                    float t = (lux - points[i][0]) / (float)(points[i + 1][0] - points[i][0]);
+                    int span = points[i + 1][0] - points[i][0];
+                    if (span <= 0) return points[i][1];
+                    float t = (lux - points[i][0]) / (float)span;
                     return (int)Math.Round(points[i][1] + t * (points[i + 1][1] - points[i][1]));
                 }
             }
             return points[0][1];
         }
 
-                private System.Windows.Forms.Timer ambientLightPollTimer;
-        
-                private void PollLightSensor()
+        public void TriggerAlsUpdate()
+        {
+            PollLightSensor(force: true);
+        }
+
+        private void PollLightSensor(bool force = false)
         {
             if (ambientLightSensor == null) return;
-            try {
+            try
+            {
                 var reading = ambientLightSensor.GetCurrentReading();
                 if (reading != null)
                 {
-                    float lux = reading.IlluminanceInLux;
-                    this.BeginInvoke(new Action(() => {
-                        if (AppConfig.Get("auto_screen_brightness") == 1) {
-                            int newScreenBright = InterpolateCurve("screen_curve", lux, 100, false);
-                            if (trackScreenBrightness.Value != newScreenBright) {
-                                trackScreenBrightness.Value = newScreenBright;
-                                ScreenBrightness.Set(newScreenBright);
-                            }
-                        }
-                        if (AppConfig.Get("auto_keyboard_brightness") == 1) {
-                            int newKbBright = InterpolateCurve("keyboard_curve", lux, 3, true);
-                            if (trackKeyboardBrightness.Value != newKbBright) {
-                                trackKeyboardBrightness.Value = newKbBright;
-                            }
-                        }
-                    }));
+                    ProcessLightReading(reading.IlluminanceInLux, force);
                 }
-            } catch {}
+            }
+            catch { }
         }
+
         private void LightSensor_ReadingChanged(Windows.Devices.Sensors.LightSensor sender, Windows.Devices.Sensors.LightSensorReadingChangedEventArgs args)
         {
-            float lux = args.Reading.IlluminanceInLux;
-            
-            int newScreenBright = InterpolateCurve("screen_curve", lux, 100, false);
-            int newKbBright = InterpolateCurve("keyboard_curve", lux, 3, true);
-            
-            this.BeginInvoke(new Action(() => {
+            try
+            {
+                if (args?.Reading != null)
+                {
+                    ProcessLightReading(args.Reading.IlluminanceInLux, force: false);
+                }
+            }
+            catch { }
+        }
+
+        private void ProcessLightReading(float rawLux, bool force)
+        {
+            CurrentLux = rawLux;
+            if (_smoothedLux < 0 || force)
+                _smoothedLux = rawLux;
+            else
+                _smoothedLux = (_smoothedLux * 0.65f) + (rawLux * 0.35f);
+
+            float lux = _smoothedLux;
+            if (!IsHandleCreated) return;
+
+            this.BeginInvoke(new Action(() =>
+            {
                 if (AppConfig.Get("auto_screen_brightness") == 1)
                 {
-                    if (trackScreenBrightness.Value != newScreenBright)
+                    int newScreenBright = Math.Clamp(InterpolateCurve("screen_curve", lux, 100), 0, 100);
+                    int diff = Math.Abs(trackScreenBrightness.Value - newScreenBright);
+                    // Require >= 2% change (hysteresis) unless forced or hitting 0%/100% endpoints
+                    if (force || diff >= 2 || (diff >= 1 && (newScreenBright == 0 || newScreenBright == 100)))
                     {
-                        trackScreenBrightness.Value = newScreenBright;
-                        ScreenBrightness.Set(newScreenBright);
+                        UpdateBrightnessSlider(newScreenBright);
+                        ScreenBrightness.SetAsync(newScreenBright);
                     }
                 }
                 if (AppConfig.Get("auto_keyboard_brightness") == 1)
                 {
-                    if (trackKeyboardBrightness.Value != newKbBright)
-                        trackKeyboardBrightness.Value = newKbBright;
+                    // Do not turn keyboard backlight back on when folded in Tablet/Tent mode, lid closed, or idle-off
+                    if (!InputDispatcher.tabletMode && !InputDispatcher.tentMode && !InputDispatcher.lidClose && InputDispatcher.backlightActivity)
+                    {
+                        int newKbBright = Math.Clamp(InterpolateCurve("keyboard_curve", lux, 3), 0, 3);
+                        if (trackKeyboardBrightness.Value != newKbBright)
+                        {
+                            trackKeyboardBrightness.Value = newKbBright;
+                        }
+                    }
                 }
             }));
         } 
@@ -349,7 +391,29 @@ namespace GHelper
             labelKeyboardBrightness.Margin = new Padding(4, 0, 6, 0);
             labelKeyboardBrightness.TextAlign = ContentAlignment.MiddleLeft;
             labelKeyboardBrightness.Text = "Backlight:";
+            labelKeyboardBrightness.Cursor = Cursors.Hand;
             labelKeyboardBrightness.Visible = true;
+            toolTip.SetToolTip(labelKeyboardBrightness, "Right-click: Cycle Keyboard Backlight Idle Auto-Off Timer (Off / 30s / 60s / 120s)");
+            labelKeyboardBrightness.MouseDown += (s, e) =>
+            {
+                if (e.Button == MouseButtons.Right)
+                {
+                    bool onBat = SystemInformation.PowerStatus.PowerLineStatus != PowerLineStatus.Online;
+                    int curTimeout = onBat ? AppConfig.Get("keyboard_timeout", 60) : AppConfig.Get("keyboard_ac_timeout", 0);
+                    int nextTimeout = curTimeout switch
+                    {
+                        0 => 30,
+                        <= 30 => 60,
+                        <= 60 => 120,
+                        _ => 0
+                    };
+                    AppConfig.Set("keyboard_timeout", nextTimeout);
+                    AppConfig.Set("keyboard_ac_timeout", nextTimeout);
+                    Program.inputDispatcher?.InitBacklightTimer();
+                    UpdateKeyboardBrightnessLabel(trackKeyboardBrightness.Value);
+                    Program.toast.RunToast(nextTimeout > 0 ? $"Keyboard Idle Auto-Off: {nextTimeout}s" : "Keyboard Idle Auto-Off: Off", ToastIcon.BacklightUp);
+                }
+            };
 
             GHelper.UI.RButton buttonAutoKeyboard = new GHelper.UI.RButton();
             buttonAutoKeyboard.Text = "Auto";
@@ -569,6 +633,16 @@ namespace GHelper
             buttonArmoury.Click += ButtonArmoury_Click;
 
             buttonSilent.Click += ButtonSilent_Click;
+            toolTip.SetToolTip(buttonSilent, "Left-click: Silent Mode  |  Right-click: Toggle Auto-Silent Mode when folded into Tablet Mode");
+            buttonSilent.MouseDown += (s, e) =>
+            {
+                if (e.Button == MouseButtons.Right)
+                {
+                    int next = AppConfig.Get("auto_tablet_silent", 1) == 1 ? 0 : 1;
+                    AppConfig.Set("auto_tablet_silent", next);
+                    Program.toast.RunToast(next == 1 ? "Auto Tablet Silent Mode: On" : "Auto Tablet Silent Mode: Off", ToastIcon.Touchpad);
+                }
+            };
             buttonBalanced.Click += ButtonBalanced_Click;
             buttonTurbo.Click += ButtonTurbo_Click;
 
@@ -1102,7 +1176,10 @@ namespace GHelper
         {
             string[] backlightNames = [Properties.Strings.BacklightOff, Properties.Strings.BacklightLow, Properties.Strings.BacklightMid, Properties.Strings.BacklightMax];
             string name = (val >= 0 && val < backlightNames.Length) ? backlightNames[val] : val.ToString();
-            labelKeyboardBrightness.Text = $"Backlight: {name}";
+            bool onBat = SystemInformation.PowerStatus.PowerLineStatus != PowerLineStatus.Online;
+            int timeout = onBat ? AppConfig.Get("keyboard_timeout", 60) : AppConfig.Get("keyboard_ac_timeout", 0);
+            string timeoutStr = timeout > 0 ? $" ({timeout}s)" : "";
+            labelKeyboardBrightness.Text = $"Backlight: {name}{timeoutStr}";
         }
 
         private void TrackKeyboardBrightness_ValueChanged(object? sender, EventArgs e)
@@ -1114,6 +1191,7 @@ namespace GHelper
             else
                 AppConfig.Set("keyboard_brightness", val);
 
+            InputDispatcher.backlightActivity = true;
             UpdateKeyboardBrightnessLabel(val);
             buttonBacklight.Text = Math.Round((double)val * 33.33).ToString() + "%";
             if (extraForm != null && extraForm.Text != "") extraForm.VisualiseBacklight(val);
@@ -1232,7 +1310,9 @@ namespace GHelper
 
             if (batteryMouseOver && HardwareControl.batteryHealth != -1)
             {
-                labelCharge.Text = Properties.Strings.BatteryHealth + ": " + Math.Round(HardwareControl.batteryHealth, 1) + "%";
+                labelCharge.Text = !string.IsNullOrEmpty(HardwareControl.batteryHealthStr)
+                    ? HardwareControl.batteryHealthStr
+                    : (Properties.Strings.BatteryHealth + ": " + Math.Round(HardwareControl.batteryHealth, 1) + "%");
             }
         }
 
@@ -1246,6 +1326,11 @@ namespace GHelper
                 {
                     int liveBrightness = ScreenBrightness.Get();
                     if (liveBrightness >= 0) UpdateBrightnessSlider(liveBrightness);
+                    if (lastBatteryRefresh == 0 || Math.Abs(DateTimeOffset.Now.ToUnixTimeMilliseconds() - lastBatteryRefresh) > 15 * 60_000)
+                    {
+                        lastBatteryRefresh = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+                        HardwareControl.RefreshBatteryHealth();
+                    }
                 });
                 VisualiseScreenSwitches(ScreenCCD.GetHDRStatus());
                 VisualiseBatteryOptions();
@@ -2911,6 +2996,14 @@ namespace GHelper
 
                     SetLabelText(labelBattery, battery);
                     if (!batteryMouseOver && !batteryFullMouseOver) SetLabelText(labelCharge, charge);
+                    if (!string.IsNullOrEmpty(HardwareControl.batteryHealthStr))
+                    {
+                        if (toolTip.GetToolTip(labelBattery) != HardwareControl.batteryHealthStr)
+                        {
+                            toolTip.SetToolTip(labelBattery, HardwareControl.batteryHealthStr);
+                            toolTip.SetToolTip(labelBatteryTitle, HardwareControl.batteryHealthStr);
+                        }
+                    }
 
                     if (fansForm != null && !fansForm.IsDisposed && fansForm.Visible)
                         fansForm.UpdateSensors();
@@ -3323,6 +3416,15 @@ namespace GHelper
 
         private TouchPenMode? _cachedTouchPenMode;
         private bool _touchStatusChecked;
+
+        public void SyncTouchPenMode(TouchPenMode mode)
+        {
+            _cachedTouchPenMode = mode;
+            if (IsHandleCreated)
+            {
+                BeginInvoke(() => UpdateTouchButtonDisplay(mode));
+            }
+        }
 
         private void ApplyTouchPenModeUI(TouchPenMode nextMode)
         {
