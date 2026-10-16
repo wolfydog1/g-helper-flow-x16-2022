@@ -1032,6 +1032,7 @@ namespace GHelper.Input
             if (wasTablet != isTablet)
             {
                 Logger.WriteLine($"Tablet mode transition: {isTablet}");
+                TouchscreenHelper.SetTouchKeyboardAutoInvoke(isTablet || tentMode);
                 if (AppConfig.Get("auto_tablet_rotation", 1) == 1)
                 {
                     AutoRotationControl.SetAutoRotation(isTablet || tentMode);
@@ -1123,6 +1124,7 @@ namespace GHelper.Input
             if (wasTent != tentMode)
             {
                 Logger.WriteLine($"Tent mode transition: {tentMode}");
+                TouchscreenHelper.SetTouchKeyboardAutoInvoke(tentMode || tabletMode);
                 if (AppConfig.Get("auto_tablet_rotation", 1) == 1)
                 {
                     AutoRotationControl.SetAutoRotation(tentMode || tabletMode);

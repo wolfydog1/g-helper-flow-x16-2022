@@ -99,8 +99,45 @@ namespace GHelper
         {
             float lux = SettingsForm.CurrentLux;
             labelCurrentLux.Text = lux >= 0
-                ? $"Current Room Light: {lux:F0} Lux  (Drag points to customize)"
-                : "Ambient Light Sensor: Active (Drag points to customize)";
+                ? $"Room Light: {lux:F0} Lux  (Drag to move • Double-click to add • Right-click point to remove)"
+                : "Ambient Light Sensor: Active  (Drag to move • Double-click to add • Right-click point to remove)";
+
+            UpdateChartLuxLine(chartScreen, lux);
+            UpdateChartLuxLine(chartKeyboard, lux);
+        }
+
+        private static void UpdateChartLuxLine(Chart? chart, float lux)
+        {
+            if (chart == null || chart.ChartAreas.Count == 0) return;
+            var stripLines = chart.ChartAreas[0].AxisX.StripLines;
+            if (lux < 0)
+            {
+                if (stripLines.Count > 0) stripLines.Clear();
+                return;
+            }
+            double clampedLux = Math.Clamp(lux, 0, 500);
+            if (stripLines.Count == 0)
+            {
+                StripLine line = new StripLine
+                {
+                    Interval = 0,
+                    IntervalOffset = clampedLux,
+                    StripWidth = 0,
+                    BorderColor = Color.MediumSpringGreen,
+                    BorderDashStyle = ChartDashStyle.Dash,
+                    BorderWidth = 2,
+                    Text = $"{lux:F0} lx",
+                    ForeColor = Color.MediumSpringGreen
+                };
+                stripLines.Add(line);
+                chart.Invalidate();
+            }
+            else if (Math.Abs(stripLines[0].IntervalOffset - clampedLux) >= 1.0)
+            {
+                stripLines[0].IntervalOffset = clampedLux;
+                stripLines[0].Text = $"{lux:F0} lx";
+                chart.Invalidate();
+            }
         }
 
         private Chart CreateChart(string title, int maxY, string configKey)
@@ -144,10 +181,12 @@ namespace GHelper
             LoadCurve(series, configKey, maxY);
             chart.Series.Add(series);
             RefreshPointLabels(chart);
+            UpdateChartLuxLine(chart, SettingsForm.CurrentLux);
 
             chart.MouseDown += Chart_MouseDown;
             chart.MouseMove += Chart_MouseMove;
             chart.MouseUp += Chart_MouseUp;
+            chart.MouseDoubleClick += Chart_MouseDoubleClick;
 
             return chart;
         }
@@ -209,12 +248,40 @@ namespace GHelper
             Program.settingsForm?.TriggerAlsUpdate();
         }
 
+        private void Chart_MouseDoubleClick(object? sender, MouseEventArgs e)
+        {
+            if (sender is not Chart chart || e.Button != MouseButtons.Left) return;
+            var series = chart.Series[0];
+            if (series.Points.Count >= 8) return;
+
+            ChartArea ca = chart.ChartAreas[0];
+            try
+            {
+                double xVal = Math.Round(Math.Clamp(ca.AxisX.PixelPositionToValue(e.X), ca.AxisX.Minimum, ca.AxisX.Maximum) / 10.0) * 10;
+                double yVal = Math.Round(Math.Clamp(ca.AxisY.PixelPositionToValue(e.Y), ca.AxisY.Minimum, ca.AxisY.Maximum));
+                series.Points.AddXY(xVal, yVal);
+                series.Sort(PointSortOrder.Ascending, "X");
+                RefreshPointLabels(chart);
+                chart.Invalidate();
+                SaveCurve(chart);
+            }
+            catch { }
+        }
+
         private void Chart_MouseDown(object? sender, MouseEventArgs e)
         {
             if (sender is not Chart chart) return;
             HitTestResult hit = chart.HitTest(e.X, e.Y);
             if (hit.ChartElementType == ChartElementType.DataPoint)
             {
+                if (e.Button == MouseButtons.Right && hit.Series.Points.Count > 2)
+                {
+                    hit.Series.Points.RemoveAt(hit.PointIndex);
+                    RefreshPointLabels(chart);
+                    chart.Invalidate();
+                    SaveCurve(chart);
+                    return;
+                }
                 curPoint = hit.Series.Points[hit.PointIndex];
                 curChart = chart;
             }

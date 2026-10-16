@@ -180,7 +180,25 @@ public static class TouchscreenHelper
         }
 
         AppConfig.Set("touch_pen_mode", (int)mode);
+        if (mode == TouchPenMode.PenOnly)
+        {
+            SetTouchKeyboardAutoInvoke(true);
+        }
         Logger.WriteLine($"TouchPenMode set to {mode} (Touch={enableTouch}, Pen={enablePen})");
+    }
+
+    public static void SetTouchKeyboardAutoInvoke(bool enable)
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"SOFTWARE\Microsoft\TabletTip\1.7", true);
+            key?.SetValue("EnableDesktopModeAutoInvoke", enable ? 1 : 0, Microsoft.Win32.RegistryValueKind.DWord);
+            key?.SetValue("DisableNewKeyboardExperience", 0, Microsoft.Win32.RegistryValueKind.DWord);
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteLine($"SetTouchKeyboardAutoInvoke error: {ex.Message}");
+        }
     }
 
     private static bool SetDeviceClassState(Func<string, bool> predicate, bool enable)
