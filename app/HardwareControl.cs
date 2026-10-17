@@ -280,38 +280,62 @@ public static class HardwareControl
         }
     }
 
+    private static IntPtr _batteryHandle = INVALID_HANDLE_VALUE;
+    private static uint _batteryTag = 0;
+    private static readonly object _batteryIoLock = new();
+
+    private static void ResetBatteryHandle()
+    {
+        if (_batteryHandle != INVALID_HANDLE_VALUE && _batteryHandle != IntPtr.Zero)
+        {
+            CloseHandle(_batteryHandle);
+            _batteryHandle = INVALID_HANDLE_VALUE;
+        }
+        _batteryTag = 0;
+    }
+
     private static BATTERY_STATUS? QueryBatteryStatus()
     {
-        string? devicePath = GetBatteryDevicePath();
-        if (devicePath == null) return null;
-
-        IntPtr handle = CreateFile(devicePath, GENERIC_READ | GENERIC_WRITE,
-            FILE_SHARE_READ | FILE_SHARE_WRITE, IntPtr.Zero, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, IntPtr.Zero);
-
-        if (handle == INVALID_HANDLE_VALUE) return null;
-
-        try
+        lock (_batteryIoLock)
         {
-            uint timeout = 0;
-            uint batteryTag = 0;
-            if (!DeviceIoControl(handle, IOCTL_BATTERY_QUERY_TAG,
-                ref timeout, 4, ref batteryTag, 4, out _, IntPtr.Zero) || batteryTag == 0)
-                return null;
+            for (int attempt = 0; attempt < 2; attempt++)
+            {
+                if (_batteryHandle == INVALID_HANDLE_VALUE || _batteryHandle == IntPtr.Zero)
+                {
+                    string? devicePath = GetBatteryDevicePath();
+                    if (devicePath == null) return null;
 
-            BATTERY_WAIT_STATUS waitStatus = new() { BatteryTag = batteryTag };
-            BATTERY_STATUS status = new();
+                    _batteryHandle = CreateFile(devicePath, GENERIC_READ | GENERIC_WRITE,
+                        FILE_SHARE_READ | FILE_SHARE_WRITE, IntPtr.Zero, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, IntPtr.Zero);
 
-            if (!DeviceIoControlStatus(handle, IOCTL_BATTERY_QUERY_STATUS,
-                ref waitStatus, (uint)Marshal.SizeOf<BATTERY_WAIT_STATUS>(),
-                ref status, (uint)Marshal.SizeOf<BATTERY_STATUS>(),
-                out _, IntPtr.Zero))
-                return null;
+                    if (_batteryHandle == INVALID_HANDLE_VALUE) return null;
+                }
 
-            return status;
-        }
-        finally
-        {
-            CloseHandle(handle);
+                if (_batteryTag == 0)
+                {
+                    uint timeout = 0;
+                    if (!DeviceIoControl(_batteryHandle, IOCTL_BATTERY_QUERY_TAG,
+                        ref timeout, 4, ref _batteryTag, 4, out _, IntPtr.Zero) || _batteryTag == 0)
+                    {
+                        ResetBatteryHandle();
+                        continue;
+                    }
+                }
+
+                BATTERY_WAIT_STATUS waitStatus = new() { BatteryTag = _batteryTag };
+                BATTERY_STATUS status = new();
+
+                if (DeviceIoControlStatus(_batteryHandle, IOCTL_BATTERY_QUERY_STATUS,
+                    ref waitStatus, (uint)Marshal.SizeOf<BATTERY_WAIT_STATUS>(),
+                    ref status, (uint)Marshal.SizeOf<BATTERY_STATUS>(),
+                    out _, IntPtr.Zero))
+                {
+                    return status;
+                }
+
+                ResetBatteryHandle();
+            }
+            return null;
         }
     }
 
@@ -351,6 +375,7 @@ public static class HardwareControl
     public static string? batteryHealthStr;
     public static bool isAcOnline;
     private static decimal? _smoothedBatteryRate;
+    private static bool _lowBatteryGuardTriggered;
 
     public static void ReadBatteryState()
     {
@@ -398,8 +423,7 @@ public static class HardwareControl
         try
         {
             isAcOnline = SystemInformation.PowerStatus.PowerLineStatus == PowerLineStatus.Online;
-            var statusTask = Task.Run(QueryBatteryStatus);
-            var directStatus = statusTask.Wait(1000) ? statusTask.Result : null;
+            var directStatus = QueryBatteryStatus();
 
             if (directStatus.HasValue)
             {
@@ -460,6 +484,28 @@ public static class HardwareControl
                 : Math.Round(batteryCapacity, 0) + "%";
 
             BatteryControl.EvaluateSmartCharge(batteryCapacity, isAcOnline);
+
+            // Auto Low-Battery Saver Guard (< 20% while discharging on battery)
+            if (isAcOnline || batteryCapacity > 22m)
+            {
+                _lowBatteryGuardTriggered = false;
+            }
+            else if (!isAcOnline && batteryCapacity > 0m && batteryCapacity <= 20m && batteryRate is < -0.5m && !_lowBatteryGuardTriggered)
+            {
+                _lowBatteryGuardTriggered = true;
+                if (AppConfig.Get("auto_low_battery_saver", 1) == 1 && !GHelper.Mode.PowerNative.IsPowerSaverActive())
+                {
+                    GHelper.Mode.PowerNative.TogglePowerSaver();
+                    if (GHelper.Program.settingsForm != null && GHelper.Program.settingsForm.IsHandleCreated)
+                    {
+                        GHelper.Program.settingsForm.BeginInvoke(() =>
+                        {
+                            GHelper.Program.settingsForm.VisualiseMicAndPowerSaver();
+                            GHelper.Program.toast?.RunToast($"Low Battery ({Math.Round(batteryCapacity, 0)}%): Auto Power Saver Activated", GHelper.Helpers.ToastIcon.Battery);
+                        });
+                    }
+                }
+            }
 
             decimal effectiveRate = _smoothedBatteryRate ?? batteryRate ?? 0m;
             if (batteryRate is < -0.5m && effectiveRate < -0.5m)
@@ -1029,6 +1075,10 @@ public static class HardwareControl
             Logger.WriteLine($"Sensors -> CPU: {cpuTemp}°C ({cpuFan}), GPU: {gpuTemp}°C ({gpuFan}), Mid: {midTemp}°C ({midFan}) [rawMid={rawMidFan}]{(xgmFan is not null ? $" XGM: {xgmTemp}°C ({xgmFan})" : "")}");
         }
 
+        var ram = GetRAMInfo();
+        ramUsage = ram?.percent;
+        ramUsedMb = ram?.usedMb;
+
         ReadBatteryState();
     }
 
@@ -1312,6 +1362,7 @@ public static class HardwareControl
     {
         _cpuTempCounter?.Dispose();
         _cpuTempCounter = null;
+        ResetBatteryHandle();
     }
 }
 

@@ -231,20 +231,31 @@ public static class AppConfig
 
     public static void Set(string name, int value)
     {
-        lock (configLock) config[name] = value;
+        lock (configLock)
+        {
+            if (config.TryGetValue(name, out var existing) && int.TryParse(existing?.ToString(), out int cur) && cur == value)
+                return;
+            config[name] = value;
+        }
         Write();
     }
 
     public static void Set(string name, string value)
     {
-        lock (configLock) config[name] = value;
+        lock (configLock)
+        {
+            if (config.TryGetValue(name, out var existing) && string.Equals(existing?.ToString(), value, StringComparison.Ordinal))
+                return;
+            config[name] = value;
+        }
         Write();
     }
 
     public static void Remove(string name)
     {
-        lock (configLock) config.Remove(name);
-        Write();
+        bool removed;
+        lock (configLock) removed = config.Remove(name);
+        if (removed) Write();
     }
 
     public static void RemoveMode(string name)

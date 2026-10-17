@@ -61,6 +61,10 @@ namespace GHelper
         bool sliderGammaIgnore = false;
         bool isProgrammaticBrightnessChange = false;
         bool activateCheck = false;
+        bool _displayOff = false;
+
+        private GHelper.UI.RButton? buttonAutoScreen;
+        private GHelper.UI.RButton? buttonAutoKeyboard;
 
         private Windows.Devices.Sensors.LightSensor? ambientLightSensor;
         private System.Windows.Forms.Timer? ambientLightPollTimer;
@@ -134,9 +138,17 @@ namespace GHelper
             PollLightSensor(force: true);
         }
 
+        private bool ShouldSkipAlsPoll(bool force)
+        {
+            if (force) return false;
+            if (InputDispatcher.lidClose || Aura.sessionLock || _displayOff) return true;
+            if (!Visible && AppConfig.Get("auto_screen_brightness") != 1 && AppConfig.Get("auto_keyboard_brightness") != 1) return true;
+            return false;
+        }
+
         private void PollLightSensor(bool force = false)
         {
-            if (ambientLightSensor == null) return;
+            if (ambientLightSensor == null || ShouldSkipAlsPoll(force)) return;
             try
             {
                 var reading = ambientLightSensor.GetCurrentReading();
@@ -150,6 +162,7 @@ namespace GHelper
 
         private void LightSensor_ReadingChanged(Windows.Devices.Sensors.LightSensor sender, Windows.Devices.Sensors.LightSensorReadingChangedEventArgs args)
         {
+            if (ShouldSkipAlsPoll(false)) return;
             try
             {
                 if (args?.Reading != null)
@@ -192,7 +205,15 @@ namespace GHelper
                         int newKbBright = Math.Clamp(InterpolateCurve("keyboard_curve", lux, 3), 0, 3);
                         if (trackKeyboardBrightness.Value != newKbBright)
                         {
-                            trackKeyboardBrightness.Value = newKbBright;
+                            try
+                            {
+                                isProgrammaticBrightnessChange = true;
+                                trackKeyboardBrightness.Value = newKbBright;
+                            }
+                            finally
+                            {
+                                isProgrammaticBrightnessChange = false;
+                            }
                         }
                     }
                 }
@@ -342,7 +363,7 @@ namespace GHelper
             labelScreenBrightness.TextAlign = ContentAlignment.MiddleLeft;
             labelScreenBrightness.Text = "Brightness:";
 
-            GHelper.UI.RButton buttonAutoScreen = new GHelper.UI.RButton();
+            buttonAutoScreen = new GHelper.UI.RButton();
             buttonAutoScreen.Size = new Size(smallBtnWidth, smallBtnHeight);
             buttonAutoScreen.Margin = new Padding(2, 2, 2, 2);
             buttonAutoScreen.BorderRadius = 4;
@@ -350,7 +371,7 @@ namespace GHelper
             buttonAutoScreen.BorderColor = colorEco;
             buttonAutoScreen.Text = "Auto";
             buttonAutoScreen.Activated = ambientLightSensor != null && AppConfig.Get("auto_screen_brightness") == 1;
-            toolTip.SetToolTip(buttonAutoScreen, "Toggle Ambient Light Sensor (ALS) automatic screen brightness");
+            toolTip.SetToolTip(buttonAutoScreen, "Toggle Ambient Light Sensor (ALS) automatic screen brightness (dragging slider manually overrides Auto)");
 
             GHelper.UI.RButton buttonScreenCurve = new GHelper.UI.RButton();
             buttonScreenCurve.Text = "Curve";
@@ -365,7 +386,8 @@ namespace GHelper
             trackScreenBrightness.Dock = DockStyle.Fill;
             trackScreenBrightness.Margin = new Padding(0, 1, 0, 1);
             trackScreenBrightness.Size = new Size(200, sliderRowHeight - 2);
-            trackScreenBrightness.Enabled = !buttonAutoScreen.Activated;
+            trackScreenBrightness.Enabled = true;
+            trackScreenBrightness.accentColor = buttonAutoScreen.Activated ? colorEco : colorStandard;
 
             buttonAutoScreen.Click += (s, e) => {
                 if (ambientLightSensor == null) {
@@ -376,7 +398,8 @@ namespace GHelper
                 AppConfig.Set("auto_screen_brightness", next);
                 buttonAutoScreen.Activated = next == 1;
                 buttonAutoScreen.Invalidate();
-                trackScreenBrightness.Enabled = !buttonAutoScreen.Activated;
+                trackScreenBrightness.accentColor = buttonAutoScreen.Activated ? colorEco : colorStandard;
+                trackScreenBrightness.Invalidate();
                 if (buttonAutoScreen.Activated) Task.Run(() => PollLightSensor(force: true));
             };
 
@@ -438,7 +461,7 @@ namespace GHelper
                 }
             };
 
-            GHelper.UI.RButton buttonAutoKeyboard = new GHelper.UI.RButton();
+            buttonAutoKeyboard = new GHelper.UI.RButton();
             buttonAutoKeyboard.Text = "Auto";
             buttonAutoKeyboard.Size = new Size(smallBtnWidth, smallBtnHeight);
             buttonAutoKeyboard.Margin = new Padding(2, 2, 2, 2);
@@ -446,7 +469,7 @@ namespace GHelper
             buttonAutoKeyboard.Secondary = true;
             buttonAutoKeyboard.BorderColor = colorEco;
             buttonAutoKeyboard.Activated = ambientLightSensor != null && AppConfig.Get("auto_keyboard_brightness") == 1;
-            toolTip.SetToolTip(buttonAutoKeyboard, "Toggle Ambient Light Sensor (ALS) automatic keyboard backlight");
+            toolTip.SetToolTip(buttonAutoKeyboard, "Toggle Ambient Light Sensor (ALS) automatic keyboard backlight (dragging slider manually overrides Auto)");
 
             GHelper.UI.RButton buttonKeyboardCurve = new GHelper.UI.RButton();
             buttonKeyboardCurve.Text = "Curve";
@@ -461,7 +484,8 @@ namespace GHelper
             trackKeyboardBrightness.Dock = DockStyle.Fill;
             trackKeyboardBrightness.Margin = new Padding(0, 1, 0, 1);
             trackKeyboardBrightness.Size = new Size(200, sliderRowHeight - 2);
-            trackKeyboardBrightness.Enabled = !buttonAutoKeyboard.Activated;
+            trackKeyboardBrightness.Enabled = true;
+            trackKeyboardBrightness.accentColor = buttonAutoKeyboard.Activated ? colorEco : colorStandard;
 
             buttonAutoKeyboard.Click += (s, e) => {
                 if (ambientLightSensor == null) {
@@ -472,7 +496,8 @@ namespace GHelper
                 AppConfig.Set("auto_keyboard_brightness", next);
                 buttonAutoKeyboard.Activated = next == 1;
                 buttonAutoKeyboard.Invalidate();
-                trackKeyboardBrightness.Enabled = !buttonAutoKeyboard.Activated;
+                trackKeyboardBrightness.accentColor = buttonAutoKeyboard.Activated ? colorEco : colorStandard;
+                trackKeyboardBrightness.Invalidate();
                 if (buttonAutoKeyboard.Activated) Task.Run(() => PollLightSensor(force: true));
             };
 
@@ -882,14 +907,14 @@ namespace GHelper
                 }
             };
 
-            toolTip.SetToolTip(buttonPowerSaver, "Left-click: Toggle Windows Power Saver & Energy Saver  |  Right-click: Toggle Keep Awake / Caffeine (prevent sleep & screen off)");
+            toolTip.SetToolTip(buttonPowerSaver, "Left-click: Toggle Windows Power Saver & Energy Saver  |  Right-click: Cycle Keep Awake / Caffeine Timer (30m → 1h → 2h → ∞ → Off)");
             buttonPowerSaver.Click += ButtonPowerSaver_Click;
             buttonPowerSaver.MouseDown += (s, e) =>
             {
                 if (e.Button == MouseButtons.Right)
                 {
-                    bool awake = PowerNative.ToggleKeepAwake();
-                    Program.toast.RunToast(awake ? "Keep Awake (Caffeine): On" : "Keep Awake (Caffeine): Off", ToastIcon.Battery);
+                    string msg = PowerNative.CycleKeepAwake();
+                    Program.toast.RunToast(msg, ToastIcon.Battery);
                     VisualiseMicAndPowerSaver();
                     SetContextMenu();
                 }
@@ -1251,6 +1276,18 @@ namespace GHelper
 
         private void TrackKeyboardBrightness_ValueChanged(object? sender, EventArgs e)
         {
+            if (!isProgrammaticBrightnessChange && AppConfig.Get("auto_keyboard_brightness") == 1)
+            {
+                AppConfig.Set("auto_keyboard_brightness", 0);
+                if (buttonAutoKeyboard != null)
+                {
+                    buttonAutoKeyboard.Activated = false;
+                    buttonAutoKeyboard.Invalidate();
+                }
+                trackKeyboardBrightness.accentColor = colorStandard;
+                trackKeyboardBrightness.Invalidate();
+            }
+
             int val = Math.Clamp(trackKeyboardBrightness.Value, 0, 3);
             bool onBattery = SystemInformation.PowerStatus.PowerLineStatus != PowerLineStatus.Online;
             if (onBattery)
@@ -1285,8 +1322,24 @@ namespace GHelper
             }
         }
 
+        private void DisengageAutoScreenIfManual()
+        {
+            if (!isProgrammaticBrightnessChange && AppConfig.Get("auto_screen_brightness") == 1)
+            {
+                AppConfig.Set("auto_screen_brightness", 0);
+                if (buttonAutoScreen != null)
+                {
+                    buttonAutoScreen.Activated = false;
+                    buttonAutoScreen.Invalidate();
+                }
+                trackScreenBrightness.accentColor = colorStandard;
+                trackScreenBrightness.Invalidate();
+            }
+        }
+
         private void TrackScreenBrightness_Scroll(object? sender, EventArgs e)
         {
+            DisengageAutoScreenIfManual();
             int val = trackScreenBrightness.Value;
             labelScreenBrightness.Text = $"{Properties.Strings.Brightness}: {val}%";
             ScreenBrightness.SetAsync(val);
@@ -1295,6 +1348,7 @@ namespace GHelper
         private void TrackScreenBrightness_ValueChanged(object? sender, EventArgs e)
         {
             if (isProgrammaticBrightnessChange) return;
+            DisengageAutoScreenIfManual();
             int val = trackScreenBrightness.Value;
             labelScreenBrightness.Text = $"{Properties.Strings.Brightness}: {val}%";
             ScreenBrightness.SetAsync(val);
@@ -1475,6 +1529,7 @@ namespace GHelper
                             InputDispatcher.lidClose = AniMatrixControl.lidClose = false;
                             Aura.ApplyBrightness(InputDispatcher.GetBacklight(), "Lid");
                             matrixControl.SetLidMode();
+                            Task.Run(() => PollLightSensor(force: true));
                             break;
                     }
 
@@ -1490,15 +1545,18 @@ namespace GHelper
                     {
                         case 0:
                             Logger.WriteLine("Monitor Power Off");
+                            _displayOff = true;
                             Aura.SleepBrightness();
                             XGM.NotifyShutdown();
                             Program.hardwareOverlay?.SuspendForDisplayOff();
                             break;
                         case 1:
                             Logger.WriteLine("Monitor Power On");
+                            _displayOff = false;
                             GPUModeControl.suspended = false;
                             if (!Program.SetAutoModes(wakeup: true)) BatteryControl.AutoBattery();
                             Program.hardwareOverlay?.ResumeForDisplayOn();
+                            Task.Run(() => PollLightSensor(force: true));
                             break;
                         case 2:
                             Logger.WriteLine("Monitor Dimmed");
@@ -1708,17 +1766,43 @@ namespace GHelper
 
             menuPower.DropDownItems.Add("-");
 
-            var menuKeepAwake = new ToolStripMenuItem("Keep Awake (Prevent Sleep)")
+            string awakeSuffix = PowerNative.IsKeepAwake ? $" ({PowerNative.GetKeepAwakeShortLabel()})" : "";
+            var menuKeepAwake = new ToolStripMenuItem("Keep Awake (Caffeine)" + awakeSuffix)
             {
                 Margin = padding,
                 Checked = PowerNative.IsKeepAwake
             };
-            menuKeepAwake.Click += (s, e) =>
+            menuKeepAwake.DropDown.BackColor = this.BackColor;
+            menuKeepAwake.DropDown.ForeColor = this.ForeColor;
+
+            var awakePresets = new (int min, string label)[]
             {
-                bool active = PowerNative.ToggleKeepAwake();
-                menuKeepAwake.Checked = active;
-                Program.toast?.RunToast(active ? "Keep Awake: Active" : "Keep Awake: Disabled");
+                (0, "Off (Allow Normal Sleep)"),
+                (30, "30 Minutes"),
+                (60, "1 Hour"),
+                (120, "2 Hours"),
+                (-1, "Always On (∞)")
             };
+            foreach (var preset in awakePresets)
+            {
+                int m = preset.min;
+                var item = new ToolStripMenuItem(preset.label)
+                {
+                    Margin = padding,
+                    Checked = (PowerNative.KeepAwakePresetMinutes == m)
+                };
+                item.Click += (s, e) =>
+                {
+                    PowerNative.SetKeepAwake(m);
+                    VisualiseMicAndPowerSaver();
+                    SetContextMenu();
+                    string toastText = m == 0 ? "Keep Awake: Off"
+                                     : m < 0 ? "Keep Awake: Always On (∞)"
+                                     : $"Keep Awake: {m}m Timer";
+                    Program.toast?.RunToast(toastText, ToastIcon.Battery);
+                };
+                menuKeepAwake.DropDownItems.Add(item);
+            }
             menuPower.DropDownItems.Add(menuKeepAwake);
 
             menuPower.DropDownItems.Add("-");
@@ -3071,6 +3155,10 @@ namespace GHelper
                 {
                     string cpuHeader = "CPU: " + (cpuTempStr.Length > 0 ? cpuTempStr : "--") + (cpuFanStr.Length > 0 ? " " + cpuFanStr : "");
                     SetLabelText(labelCPUFan, cpuHeader);
+                    Color cpuColor = HardwareControl.cpuTemp >= 85 ? colorTurbo
+                                   : HardwareControl.cpuTemp >= 75 ? colorCustom
+                                   : foreMain;
+                    if (labelCPUFan.ForeColor != cpuColor) labelCPUFan.ForeColor = cpuColor;
 
                     string gpuHeader;
                     if (HardwareControl.gpuTemp > 0 || HardwareControl.gpuFan is not null)
@@ -3082,6 +3170,21 @@ namespace GHelper
                         gpuHeader = AppConfig.Get("gpu_mode") == AsusACPI.GPUModeEco ? "GPU: Off (Eco)" : "GPU: --";
                     }
                     SetLabelText(labelGPUFan, gpuHeader);
+                    Color gpuColor = HardwareControl.gpuTemp >= 85 ? colorTurbo
+                                   : HardwareControl.gpuTemp >= 75 ? colorCustom
+                                   : foreMain;
+                    if (labelGPUFan.ForeColor != gpuColor) labelGPUFan.ForeColor = gpuColor;
+
+                    if (HardwareControl.ramUsedMb > 0)
+                    {
+                        string fanTip = $"System RAM: {HardwareControl.ramUsedMb / 1024.0:F1} GB used ({HardwareControl.ramUsage}%)  |  Left-click: Toggle Fan RPM / %  |  Right-click: Trim Standby RAM";
+                        if (toolTip.GetToolTip(labelCPUFan) != fanTip)
+                        {
+                            toolTip.SetToolTip(labelCPUFan, fanTip);
+                            toolTip.SetToolTip(labelGPUFan, fanTip);
+                            toolTip.SetToolTip(labelMidFan, fanTip);
+                        }
+                    }
 
                     string midHeader = "";
                     if (AppConfig.IsMidFan() || HardwareControl.midFan is not null)
@@ -3120,6 +3223,7 @@ namespace GHelper
                         if (labelBattery.ForeColor != batColor) labelBattery.ForeColor = batColor;
                     }
                     UpdateScreenHeaderLabel();
+                    if (Visible && PowerNative.KeepAwakeExpiresAt.HasValue) VisualiseMicAndPowerSaver();
                     if (!batteryMouseOver && !batteryFullMouseOver) SetLabelText(labelCharge, charge);
                     if (!string.IsNullOrEmpty(HardwareControl.batteryHealthStr))
                     {
@@ -3507,6 +3611,18 @@ namespace GHelper
                 suffix = $" (Smart <{BatteryControl.smartChargeMin}%)";
 
             labelBatteryTitle.Text = Properties.Strings.BatteryChargeLimit + ": " + limit.ToString() + "%" + suffix;
+
+            if (sliderBattery != null)
+            {
+                Color sliderColor = (limit <= 80 || BatteryControl.chargePaused || BatteryControl.isSmartHoldActive)
+                    ? colorEco
+                    : (limit <= 95 ? colorStandard : colorCustom);
+                if (sliderBattery.accentColor != sliderColor)
+                {
+                    sliderBattery.accentColor = sliderColor;
+                    sliderBattery.Invalidate();
+                }
+            }
         }
 
         public void VisualiseBattery(int limit)
@@ -3914,10 +4030,11 @@ namespace GHelper
             {
                 bool saver = PowerNative.IsPowerSaverActive();
                 bool awake = PowerNative.IsKeepAwake;
+                string awakeShort = PowerNative.GetKeepAwakeShortLabel();
                 buttonPowerSaver.Activated = saver || awake;
                 buttonPowerSaver.BorderColor = awake ? colorStandard : colorEco;
-                buttonPowerSaver.Text = (saver && awake) ? "Saver + Awake"
-                                      : awake ? "Keep Awake: On"
+                buttonPowerSaver.Text = (saver && awake) ? $"Saver + {awakeShort}"
+                                      : awake ? $"Awake: {awakeShort}"
                                       : saver ? "Power Saver: On"
                                       : "Power Saver";
             }

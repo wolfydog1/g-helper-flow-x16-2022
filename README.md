@@ -33,17 +33,22 @@ A lightweight Armoury Crate alternative for ASUS Flow laptops, extended with spe
   - If your battery is already above the threshold (e.g. 75%), plugging in keeps the laptop on pure **AC bypass** without topping up.
   - Charging only resumes when the battery level drops below the lower threshold.
   - Right-click cycles between `<50%`, `<60%`, and `<70%`. Also accessible from the system tray menu.
-- **Reversible Ultra-Eco Travel Mode**: Right-click **`No Boost on Bat`** (or toggle from the system tray menu) to engage **Travel Mode** (Silent + Eco GPU + 60Hz + 1-Zone Mini-LED + No CPU Boost + Windows Power Saver), and right-click again to restore all previous settings.
+- **Reversible Ultra-Eco Travel Mode & Low-Battery Guard**: Right-click **`No Boost on Bat`** (or toggle from the system tray menu / hardware keybinding) to engage **Travel Mode** (Silent + Eco GPU + 60Hz + 1-Zone Mini-LED + No CPU Boost + Windows Power Saver), and right-click again to restore all previous settings. Also includes an **Auto Low-Battery Saver Guard** (`≤ 20%` on battery) that automatically engages Windows Power Saver and switches high refresh rates down to 60Hz.
 
 ### 5. 💡 Ambient Light Sensor (ALS) Auto Brightness, Custom Curves & Idle Backlight Timer
-- **Auto Screen & Auto Keyboard Brightness**: Smoothly adjusts screen brightness and keyboard backlight using EMA-filtered lux readings and deadband hysteresis, while respecting Tablet/Tent mode and idle backlight off states.
-- **Interactive Lux Curve Editor**: Live room Lux readout (`Current Room Light: XX Lux`), live vertical dashed Lux marker line on both charts, double-click anywhere on a chart to add control points (up to 8), right-click a point to remove it, and one-click **Reset Defaults**.
+- **Auto Screen & Auto Keyboard Brightness**: Smoothly adjusts screen brightness and keyboard backlight using EMA-filtered lux readings and deadband hysteresis, while respecting Tablet/Tent mode, lid close, display off, and session lock states. Sliders stay active and glow green (`Eco`) in Auto mode—dragging a slider at any time smoothly overrides and disengages Auto mode.
+- **Interactive Lux Curve Editor**: Live room Lux readout (`Room Light: XX Lux`), live vertical dashed Lux marker line on both charts, double-click anywhere on a chart to add control points (up to 8), right-click a point to remove it, and one-click **Reset Defaults**.
 - **Keyboard Backlight Idle Auto-Off Timer**: Right-click the `Backlight:` label to quickly cycle the keyboard idle auto-off timeout (`Off / 30s / 60s / 120s`).
 
-### 6. 🎙️ Quick Mic Mute / Audio Switcher, Power Saver + Keep Awake & RAM Trim
+### 6. 🎙️ Quick Mic Mute / Audio Switcher, Timed Keep Awake (Caffeine) & RAM Trim
 - **`Mic: On` / `Mic: Muted`**: Left-click toggles microphone mute and syncs the ASUS hardware mic mute LED. Right-click quickly cycles active audio output devices (e.g. laptop speakers ↔ headphones).
-- **`Power Saver` + Keep Awake (Caffeine)**: Left-click toggles Windows Best Power Efficiency and Energy Saver modes. Right-click toggles **Keep Awake (Caffeine)** (`SetThreadExecutionState`) to prevent the laptop from sleeping or dimming the screen during long downloads, renders, or reference reading.
-- **1-Click Standby RAM Trim**: Left-click the `CPU` / `GPU` fan header to toggle RPM ↔ %, or **right-click** to immediately trim standby working-set RAM and display freed MB.
+- **`Power Saver` + Timed Keep Awake (Caffeine)**: Left-click toggles Windows Best Power Efficiency and Energy Saver modes. Right-click cycles **Keep Awake (Caffeine)** timer presets (`30m` → `1h` → `2h` → `∞` → `Off`, also selectable in the system tray **Power & Sleep** menu) to prevent sleep and screen dimming with live remaining-time display on the button (`Awake: 30m`).
+- **Thermal Color-Coding, Live Fan Curve Markers & 1-Click RAM Trim**:
+  - `CPU` and `GPU` headers dynamically color-code by temperature (Normal → Warm Amber `≥ 75°C` → Hot Coral-Red `≥ 85°C`) and show live system RAM usage on hover (`System RAM: X.X GB used (XX%)`).
+  - Left-click toggles RPM ↔ %, or **right-click** to immediately trim standby working-set RAM.
+  - The **Fans & Power** window renders live vertical dashed temperature marker lines on the CPU, GPU, Mid, and XG Mobile fan curve charts.
+- **Expanded Hardware Keybindings**: Bind custom M-keys (`M3`, `M4`, `Fn+F4`, etc.) in **Extra** to `Toggle Pen Only Mode`, `Toggle Auto-Rotation Lock`, `Toggle Ultra-Eco Travel Mode`, `Cycle Keep Awake (Caffeine)`, `Toggle Smart Charge (<60%)`, `Switch Audio Output Device`, or `Trim Standby RAM`.
+- **Zero-Allocation Background Polling**: Persistent Win32 battery device handle & tag caching, reused WMI `root\wmi` scope with brightness deduplication, smart ALS suspension when the lid is closed or screen is off, and config dirty-checking eliminate redundant disk writes and background CPU/GC overhead.
 
 ---
 

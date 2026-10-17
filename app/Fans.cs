@@ -963,6 +963,7 @@ namespace GHelper
         private void Fans_Shown(object? sender, EventArgs e)
         {
             FormPosition();
+            UpdateSensors();
         }
 
 
@@ -1071,6 +1072,39 @@ namespace GHelper
             catch (ObjectDisposedException) { }
         }
 
+        private static void UpdateChartTempLine(Chart chart, double? temp, Color lineColor)
+        {
+            if (chart == null || chart.ChartAreas.Count == 0) return;
+            var stripLines = chart.ChartAreas[0].AxisX.StripLines;
+            if (temp == null || temp <= 0)
+            {
+                if (stripLines.Count > 0) stripLines.Clear();
+                return;
+            }
+            double clampedTemp = Math.Clamp(temp.Value, tempMin, tempMax);
+            Color targetColor = Color.FromArgb(180, lineColor);
+            if (stripLines.Count == 0)
+            {
+                StripLine line = new StripLine
+                {
+                    Interval = 0,
+                    IntervalOffset = clampedTemp,
+                    StripWidth = 0,
+                    BorderColor = targetColor,
+                    BorderDashStyle = ChartDashStyle.Dash,
+                    BorderWidth = 2
+                };
+                stripLines.Add(line);
+                chart.Invalidate();
+            }
+            else if (Math.Abs(stripLines[0].IntervalOffset - clampedTemp) >= 0.5 || stripLines[0].BorderColor.ToArgb() != targetColor.ToArgb())
+            {
+                stripLines[0].IntervalOffset = clampedTemp;
+                stripLines[0].BorderColor = targetColor;
+                chart.Invalidate();
+            }
+        }
+
         public void UpdateSensors()
         {
             if (this.IsDisposed || !this.IsHandleCreated || this.Text == "" || !this.Visible) return;
@@ -1086,18 +1120,21 @@ namespace GHelper
                         string cpuFanStr = HardwareControl.cpuFan != null ? $", {HardwareControl.cpuFan}" : "";
                         chartCPU.Titles[0].Text = $"{Properties.Strings.FanProfileCPU} ({TempHelper.FormatTemp((double)HardwareControl.cpuTemp)}{cpuFanStr}){scale}";
                     }
+                    UpdateChartTempLine(chartCPU, HardwareControl.cpuTemp, colorStandard);
 
                     if (chartGPU.Titles.Count > 0 && HardwareControl.gpuTemp > 0)
                     {
                         string gpuFanStr = HardwareControl.gpuFan != null ? $", {HardwareControl.gpuFan}" : "";
                         chartGPU.Titles[0].Text = $"{Properties.Strings.FanProfileGPU} ({TempHelper.FormatTemp((double)HardwareControl.gpuTemp)}{gpuFanStr}){scale}";
                     }
+                    UpdateChartTempLine(chartGPU, HardwareControl.gpuTemp, colorTurbo);
 
                     if (chartMid.Visible && chartMid.Titles.Count > 0)
                     {
                         string midTempStr = HardwareControl.midTemp > 0 ? TempHelper.FormatTemp((double)HardwareControl.midTemp) + ", " : "";
                         string midFanStr = HardwareControl.midFan ?? (FanSensorControl.fanRpm ? "0RPM" : "0%");
                         chartMid.Titles[0].Text = $"{Properties.Strings.FanProfileMid} ({midTempStr}{midFanStr}){scale}";
+                        UpdateChartTempLine(chartMid, HardwareControl.midTemp ?? HardwareControl.cpuTemp, colorEco);
                     }
 
                     if (chartXGM.Visible && chartXGM.Titles.Count > 0)
@@ -1112,6 +1149,7 @@ namespace GHelper
                             xgmInfo = $" ({tempStr}{fanStr})";
                         }
                         chartXGM.Titles[0].Text = $"XG Mobile{xgmInfo}{scale}";
+                        UpdateChartTempLine(chartXGM, HardwareControl.xgmTemp, Color.Orange);
                     }
                 });
             }

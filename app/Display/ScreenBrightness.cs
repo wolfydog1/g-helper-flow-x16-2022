@@ -6,11 +6,33 @@ namespace GHelper.Display
 
     public static class ScreenBrightness
     {
+        private static ManagementScope? _wmiScope;
+        private static readonly object _wmiLock = new();
+        private static int _lastKnownBrightness = -1;
+
+        private static ManagementScope GetScope()
+        {
+            lock (_wmiLock)
+            {
+                if (_wmiScope == null)
+                {
+                    _wmiScope = new ManagementScope(@"root\wmi");
+                    _wmiScope.Connect();
+                }
+                else if (!_wmiScope.IsConnected)
+                {
+                    _wmiScope.Connect();
+                }
+                return _wmiScope;
+            }
+        }
+
         public static int Get()
         {
             try
             {
-                using var searcher = new ManagementObjectSearcher(@"root\wmi", "SELECT * FROM WmiMonitorBrightness");
+                var scope = GetScope();
+                using var searcher = new ManagementObjectSearcher(scope, new ObjectQuery("SELECT CurrentBrightness, Active FROM WmiMonitorBrightness"));
                 using var instances = searcher.Get();
 
                 int fallbackVal = -1;
@@ -26,7 +48,11 @@ namespace GHelper.Display
                             var active = instance.GetPropertyValue("Active");
                             if (active is bool b && b)
                             {
-                                if (val >= 0 && val <= 100) AppConfig.Set("screen_brightness", val);
+                                if (val >= 0 && val <= 100)
+                                {
+                                    _lastKnownBrightness = val;
+                                    AppConfig.Set("screen_brightness", val);
+                                }
                                 return val;
                             }
                         }
@@ -36,12 +62,14 @@ namespace GHelper.Display
 
                 if (fallbackVal >= 0)
                 {
+                    _lastKnownBrightness = fallbackVal;
                     AppConfig.Set("screen_brightness", fallbackVal);
                     return fallbackVal;
                 }
             }
             catch (Exception ex)
             {
+                lock (_wmiLock) _wmiScope = null;
                 Logger.WriteLine("ScreenBrightness.Get error: " + ex.Message);
             }
 
@@ -51,9 +79,15 @@ namespace GHelper.Display
         public static void Set(int brightness)
         {
             brightness = Math.Clamp(brightness, 0, 100);
+            if (_lastKnownBrightness == brightness)
+            {
+                AppConfig.Set("screen_brightness", brightness);
+                return;
+            }
             try
             {
-                using var searcher = new ManagementObjectSearcher(@"root\wmi", "SELECT * FROM WmiMonitorBrightnessMethods");
+                var scope = GetScope();
+                using var searcher = new ManagementObjectSearcher(scope, new ObjectQuery("SELECT * FROM WmiMonitorBrightnessMethods"));
                 using var instances = searcher.Get();
                 var args = new object[] { 1, brightness };
                 foreach (ManagementObject instance in instances)
@@ -63,6 +97,7 @@ namespace GHelper.Display
                         try
                         {
                             instance.InvokeMethod("WmiSetBrightness", args);
+                            _lastKnownBrightness = brightness;
                             Logger.WriteLine($"ScreenBrightness.Set: {brightness}%");
                         }
                         catch (Exception ex)
@@ -76,6 +111,7 @@ namespace GHelper.Display
             }
             catch (Exception ex)
             {
+                lock (_wmiLock) _wmiScope = null;
                 Logger.WriteLine("ScreenBrightness.Set error: " + ex.Message);
             }
         }
@@ -114,7 +150,7 @@ namespace GHelper.Display
 
         public static int Adjust(int delta)
         {
-            int brightness = Get();
+            int brightness = _lastKnownBrightness >= 0 ? _lastKnownBrightness : Get();
             if (brightness < 0) brightness = AppConfig.Get("screen_brightness", 100);
             Debug.WriteLine(brightness);
             brightness = Math.Min(100, Math.Max(0, brightness + delta));

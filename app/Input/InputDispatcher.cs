@@ -749,6 +749,37 @@ namespace GHelper.Input
                 case "rotation":
                     ToggleRotationLock();
                     break;
+                case "travelmode":
+                    Program.settingsForm?.BeginInvoke(TravelMode.Toggle);
+                    break;
+                case "keepawake":
+                    Program.settingsForm?.BeginInvoke(() =>
+                    {
+                        string msg = PowerNative.CycleKeepAwake();
+                        Program.toast.RunToast(msg, ToastIcon.Battery);
+                    });
+                    break;
+                case "smartcharge":
+                    Program.settingsForm?.BeginInvoke(() =>
+                    {
+                        Battery.BatteryControl.ToggleSmartCharge();
+                        Program.settingsForm.VisualiseBatteryOptions();
+                    });
+                    break;
+                case "audiooutput":
+                    Task.Run(() =>
+                    {
+                        string? nextOut = Audio.CycleAudioOutput();
+                        if (nextOut != null) Program.toast.RunToast("Audio: " + nextOut, ToastIcon.Microphone);
+                    });
+                    break;
+                case "trimram":
+                    Task.Run(() =>
+                    {
+                        long freedMB = MemoryCleaner.TrimWorkingSet();
+                        Program.toast.RunToast($"RAM Trimmed: Freed ~{freedMB} MB");
+                    });
+                    break;
                 default:
                     break;
             }

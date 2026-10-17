@@ -543,21 +543,131 @@ namespace GHelper.Mode
         const uint ES_CONTINUOUS = 0x80000000;
 
         public static bool IsKeepAwake { get; private set; } = false;
+        public static int KeepAwakePresetMinutes { get; private set; } = 0; // 0 = Off, 30, 60, 120, -1 = Indefinite
+        public static DateTime? KeepAwakeExpiresAt { get; private set; } = null;
+        private static System.Windows.Forms.Timer? _keepAwakeTimer;
 
-        public static bool ToggleKeepAwake()
+        private static void ApplyExecutionStateOnUIThread(bool enable)
         {
-            IsKeepAwake = !IsKeepAwake;
-            if (IsKeepAwake)
+            if (Program.settingsForm != null && Program.settingsForm.IsHandleCreated && Program.settingsForm.InvokeRequired)
+            {
+                Program.settingsForm.BeginInvoke(() => ApplyExecutionStateOnUIThread(enable));
+                return;
+            }
+
+            if (enable)
             {
                 SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED);
-                Logger.WriteLine("KeepAwake: Enabled (System + Display)");
             }
             else
             {
                 SetThreadExecutionState(ES_CONTINUOUS);
+            }
+        }
+
+        private static void EnsureKeepAwakeTimer()
+        {
+            if (_keepAwakeTimer != null) return;
+            _keepAwakeTimer = new System.Windows.Forms.Timer { Interval = 15000 };
+            _keepAwakeTimer.Tick += (s, e) =>
+            {
+                if (!IsKeepAwake)
+                {
+                    _keepAwakeTimer.Stop();
+                    return;
+                }
+                if (KeepAwakeExpiresAt.HasValue && DateTime.Now >= KeepAwakeExpiresAt.Value)
+                {
+                    SetKeepAwake(0);
+                    Program.toast?.RunToast("Keep Awake Timer Expired (Sleep Restored)", GHelper.Helpers.ToastIcon.Battery);
+                    return;
+                }
+                // Periodically refresh execution state and update remaining minutes on button
+                SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED);
+                Program.settingsForm?.VisualiseMicAndPowerSaver();
+            };
+        }
+
+        public static void SetKeepAwake(int minutes)
+        {
+            if (Program.settingsForm != null && Program.settingsForm.IsHandleCreated && Program.settingsForm.InvokeRequired)
+            {
+                Program.settingsForm.Invoke(() => SetKeepAwake(minutes));
+                return;
+            }
+
+            KeepAwakePresetMinutes = minutes;
+            if (minutes == 0)
+            {
+                IsKeepAwake = false;
+                KeepAwakeExpiresAt = null;
+                _keepAwakeTimer?.Stop();
+                ApplyExecutionStateOnUIThread(false);
                 Logger.WriteLine("KeepAwake: Disabled");
             }
+            else if (minutes < 0)
+            {
+                IsKeepAwake = true;
+                KeepAwakeExpiresAt = null;
+                EnsureKeepAwakeTimer();
+                _keepAwakeTimer!.Start();
+                ApplyExecutionStateOnUIThread(true);
+                Logger.WriteLine("KeepAwake: Enabled (Indefinite)");
+            }
+            else
+            {
+                IsKeepAwake = true;
+                KeepAwakeExpiresAt = DateTime.Now.AddMinutes(minutes);
+                EnsureKeepAwakeTimer();
+                _keepAwakeTimer!.Start();
+                ApplyExecutionStateOnUIThread(true);
+                Logger.WriteLine($"KeepAwake: Enabled ({minutes} min)");
+            }
+
+            Program.settingsForm?.VisualiseMicAndPowerSaver();
+            Program.settingsForm?.SetContextMenu();
+        }
+
+        public static string CycleKeepAwake()
+        {
+            int next = KeepAwakePresetMinutes switch
+            {
+                0 => 30,
+                30 => 60,
+                60 => 120,
+                120 => -1,
+                _ => 0
+            };
+            SetKeepAwake(next);
+            return GetKeepAwakeToastText();
+        }
+
+        public static bool ToggleKeepAwake()
+        {
+            SetKeepAwake(IsKeepAwake ? 0 : -1);
             return IsKeepAwake;
+        }
+
+        public static string GetKeepAwakeShortLabel()
+        {
+            if (!IsKeepAwake) return "";
+            if (!KeepAwakeExpiresAt.HasValue) return "Awake: ∞";
+            int remMins = Math.Max(1, (int)Math.Ceiling((KeepAwakeExpiresAt.Value - DateTime.Now).TotalMinutes));
+            if (remMins >= 60)
+            {
+                int h = remMins / 60;
+                int m = remMins % 60;
+                return m > 0 ? $"Awake: {h}h{m}m" : $"Awake: {h}h";
+            }
+            return $"Awake: {remMins}m";
+        }
+
+        public static string GetKeepAwakeToastText()
+        {
+            if (!IsKeepAwake) return "Keep Awake (Caffeine): Off";
+            if (!KeepAwakeExpiresAt.HasValue) return "Keep Awake (Caffeine): Always On (∞)";
+            int remMins = Math.Max(1, (int)Math.Round((KeepAwakeExpiresAt.Value - DateTime.Now).TotalMinutes));
+            return $"Keep Awake (Caffeine): {remMins} min";
         }
 
         private static readonly Guid GUID_SUB_ENERGYSAVER = new("de830923-a562-41af-a086-e3a2c6bad2da");
