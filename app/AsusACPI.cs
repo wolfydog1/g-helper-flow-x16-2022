@@ -733,11 +733,11 @@ public class AsusACPI
         if (curve.Length != 16) throw new Exception("Incorrect curve");
 
         var points = new Dictionary<byte, byte>();
-        byte old = 0;
+        int old = -1;
 
         for (int i = 0; i < 8; i++)
         {
-            if (curve[i] <= old) curve[i] = (byte)Math.Min(100, old + 6); // preventing 2 points in same spot from default asus profiles
+            if (curve[i] <= old) curve[i] = (byte)Math.Min(100, old + 1); // preventing 2 points in same spot from default asus profiles
             points[curve[i]] = curve[i + 8];
             old = curve[i];
         }
@@ -766,7 +766,7 @@ public class AsusACPI
 
             if (AppConfig.IsClampFanDots())
             {
-                int minX = 30 + (count * 10);
+                int minX = count == 0 ? 0 : (20 + (count * 10));
                 int maxX = minX + 10;
                 x = Math.Max(minX, Math.Min(maxX, x));
             }

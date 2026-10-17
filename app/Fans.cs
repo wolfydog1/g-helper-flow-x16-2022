@@ -28,7 +28,7 @@ namespace GHelper
 
         static readonly Font _axisFont = new Font("Arial", 7F);
 
-        const int tempMin = 20;
+        const int tempMin = 0;
         const int tempMax = 110;
 
         const int fansMax = 100;
@@ -1470,10 +1470,10 @@ namespace GHelper
 
             //Debug.WriteLine(BitConverter.ToString(curve));
 
-            byte old = 0;
+            int old = -1;
             for (int i = 0; i < 8; i++)
             {
-                if (curve[i] == old) curve[i]++; // preventing 2 points in same spot from default asus profiles
+                if (curve[i] <= old) curve[i] = (byte)Math.Min(100, old + 1); // preventing 2 points in same spot from default asus profiles
                 series.Points.AddXY(curve[i], curve[i + 8]);
                 old = curve[i];
             }
@@ -1703,7 +1703,7 @@ namespace GHelper
             newX = Math.Max(tempMin, Math.Min(tempMax, newX));
             if (clampFanDots)
             {
-                double minX = 30 + (_kbIndex * 10);
+                double minX = _kbIndex == 0 ? tempMin : (tempMin + (_kbIndex * 10));
                 double maxX = minX + 9;
                 newX = Math.Max(minX, Math.Min(maxX, newX));
             }
@@ -1818,7 +1818,7 @@ namespace GHelper
 
                         if (clampFanDots)
                         {
-                            double minX = 30 + (curIndex * 10);
+                            double minX = curIndex == 0 ? tempMin : (tempMin + (curIndex * 10));
                             double maxX = minX + 9;
                             dx = Math.Max(minX, Math.Min(maxX, dx));
                         }
@@ -2037,10 +2037,10 @@ namespace GHelper
         {
             byte[] fixedCurve = AsusACPI.FixFanCurve(curve);
             series.Points.Clear();
-            byte old = 0;
+            int old = -1;
             for (int i = 0; i < 8; i++)
             {
-                if (fixedCurve[i] == old) fixedCurve[i]++;
+                if (fixedCurve[i] <= old) fixedCurve[i] = (byte)Math.Min(100, old + 1);
                 series.Points.AddXY(fixedCurve[i], fixedCurve[i + 8]);
                 old = fixedCurve[i];
             }

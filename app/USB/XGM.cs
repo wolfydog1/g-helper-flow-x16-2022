@@ -284,27 +284,23 @@ namespace GHelper.USB
 
         public static void SetFan(byte[] curve)
         {
-            Task.Run(async () =>
+            Task.Run(() =>
             {
                 if (AsusACPI.IsInvalidCurve(curve)) return;
                 byte[] xgmPayload = new byte[16];
+                int oldTemp = -1;
                 for (int i = 0; i < 8; i++)
                 {
-                    xgmPayload[i] = curve[i];                              // Temperatures (°C) in bytes 0..7
+                    int t = curve[i];
+                    if (t <= oldTemp) t = Math.Min(100, oldTemp + 1);
+                    xgmPayload[i] = (byte)t;                               // Temperatures (°C) in bytes 0..7
                     xgmPayload[i + 8] = Math.Min((byte)100, curve[i + 8]); // Fan speeds (0-100%) in bytes 8..15
+                    oldTemp = t;
                 }
-
-                // The XG Mobile EC firmware evaluates the curve from 0°C upwards.
-                // If point 0 starts at 30°C, idle temperatures (0°C..28°C) fall below the curve,
-                // causing the EC to get stuck in its 4,200 RPM fallback clamp. Setting point 0 to 0°C
-                // ensures the curve covers idle through max load, unlocking the full 0..7,673 RPM range!
-                xgmPayload[0] = 0;
 
                 if (IsConnected())
                 {
-                    Write([XGM_REPORT_ID, 0xce, 0x03]);
-                    await Task.Delay(25);
-                    // Send custom fan curve payload directly (matches official Armoury Crate capture)
+                    // Send custom fan curve payload directly (matches official Armoury Crate capture 5E-D1-01)
                     Write([XGM_REPORT_ID, 0xd1, 0x01, .. xgmPayload]);
                 }
             });
