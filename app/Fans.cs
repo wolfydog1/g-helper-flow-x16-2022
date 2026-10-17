@@ -414,6 +414,7 @@ namespace GHelper
 
         private void Fans_FormClosed(object? sender, FormClosedEventArgs e)
         {
+            fanSensorControl.StopCalibration();
             //Because windows charts seem to eat a lot of memory :(
             GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced);
         }
@@ -1057,16 +1058,20 @@ namespace GHelper
 
         public void InitAxis()
         {
-            if (this == null || this.Text == "") return;
+            if (this.IsDisposed || !this.IsHandleCreated || this.Text == "") return;
 
-            Invoke(delegate
+            try
             {
-                buttonCalibrate.Enabled = true;
-                SetAxis(chartCPU, AsusFan.CPU);
-                SetAxis(chartGPU, AsusFan.GPU);
-                if (chartMid.Visible) SetAxis(chartMid, AsusFan.Mid);
-                if (chartXGM.Visible) SetAxis(chartXGM, AsusFan.XGM);
-            });
+                BeginInvoke(delegate
+                {
+                    buttonCalibrate.Enabled = true;
+                    SetAxis(chartCPU, AsusFan.CPU);
+                    SetAxis(chartGPU, AsusFan.GPU);
+                    if (chartMid.Visible) SetAxis(chartMid, AsusFan.Mid);
+                    if (chartXGM.Visible) SetAxis(chartXGM, AsusFan.XGM);
+                });
+            }
+            catch (ObjectDisposedException) { }
         }
 
         public void LabelFansResult(string text)
@@ -2201,6 +2206,44 @@ namespace GHelper
                     InitFans();
                 };
                 menu.Items.Add(itemAlwaysShowXgm);
+
+                var itemXgmScale = new ToolStripMenuItem($"XG Mobile: Max RPM Scale ({FanSensorControl.GetFanMax(AsusFan.XGM) * 100} RPM)") { Margin = pad };
+                int currentXgmMax = FanSensorControl.GetFanMax(AsusFan.XGM);
+                int[] scaleOptions = new int[] { 76, 72, 65, 60, 55, 50, 45, 36 };
+
+                if (!scaleOptions.Contains(currentXgmMax))
+                {
+                    var customOpt = new ToolStripMenuItem($"Current: {currentXgmMax * 100} RPM") { Checked = true, Margin = pad };
+                    itemXgmScale.DropDownItems.Add(customOpt);
+                }
+
+                foreach (int scaleVal in scaleOptions)
+                {
+                    string optionName = scaleVal switch
+                    {
+                        76 => "7600 RPM (Full Physical Max)",
+                        72 => "7200 RPM (Rated Spec)",
+                        36 => "3600 RPM (Quiet Limit)",
+                        _ => $"{scaleVal * 100} RPM"
+                    };
+
+                    var subOption = new ToolStripMenuItem(optionName)
+                    {
+                        Checked = (currentXgmMax == scaleVal),
+                        Margin = pad
+                    };
+
+                    int targetVal = scaleVal;
+                    subOption.Click += (s, e) =>
+                    {
+                        FanSensorControl.SetFanMax(AsusFan.XGM, targetVal);
+                        InitFans();
+                        Program.toast?.RunToast($"XG Mobile Max RPM Scale: {targetVal * 100} RPM");
+                    };
+
+                    itemXgmScale.DropDownItems.Add(subOption);
+                }
+                menu.Items.Add(itemXgmScale);
 
                 if (Program.acpi.IsXGConnected() || XGM.IsConnected())
                 {

@@ -289,7 +289,7 @@ namespace GHelper.Mode
                 if (AppConfig.IsMidFan())
                 {
                     byte[] midCurve = GetValidFanCurve(AsusFan.Mid);
-                    if (HardwareControl.IsXGConnectedCached() && AppConfig.Is("xgm_mid_boost"))
+                    if (HardwareControl.IsXGConnectedCached() && AppConfig.Get("xgm_mid_fan_boost", AppConfig.Get("xgm_mid_boost", 1)) == 1)
                     {
                         midCurve = GetValidFanCurve(AsusFan.CPU);
                     }

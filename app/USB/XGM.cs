@@ -74,30 +74,35 @@ namespace GHelper.USB
             return GetDevice() is not null;
         }
 
+        private static readonly object _writeLock = new();
+
         public static void Write(byte[] data)
         {
-            try
+            lock (_writeLock)
             {
-                HidDevice? device = GetDevice();
-                if (device is null)
+                try
                 {
-                    Logger.WriteLine("XGM USB device not found");
-                    return;
-                }
+                    HidDevice? device = GetDevice();
+                    if (device is null)
+                    {
+                        Logger.WriteLine("XGM USB device not found");
+                        return;
+                    }
 
-                using (HidStream hidStream = device.Open())
-                {
-                    int reportLen = device.GetMaxFeatureReportLength();
-                    int payloadLen = Math.Max(reportLen > 0 ? reportLen : 300, data.Length);
-                    byte[] payload = new byte[payloadLen];
-                    data.CopyTo(payload, 0);
-                    hidStream.SetFeature(payload);
-                    Logger.WriteLine($"XGM-{device.ProductID}|{reportLen}:{BitConverter.ToString(data)}");
+                    using (HidStream hidStream = device.Open())
+                    {
+                        int reportLen = device.GetMaxFeatureReportLength();
+                        int payloadLen = Math.Max(reportLen > 0 ? reportLen : 300, data.Length);
+                        byte[] payload = new byte[payloadLen];
+                        data.CopyTo(payload, 0);
+                        hidStream.SetFeature(payload);
+                        Logger.WriteLine($"XGM-{device.ProductID}|{reportLen}:{BitConverter.ToString(data)}");
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                Logger.WriteLine($"Error accessing XGM device: {ex}");
+                catch (Exception ex)
+                {
+                    Logger.WriteLine($"Error accessing XGM device: {ex}");
+                }
             }
         }
 
@@ -106,10 +111,54 @@ namespace GHelper.USB
         public static int? LastHotspotTemp { get; private set; } = null;
         public static int? LastCoreTemp { get; private set; } = null;
 
-        public static bool IsIndependentFanEnabled() => AppConfig.Is("xgm_independent_fan");
+        public static bool IsIndependentFanEnabled() => AppConfig.Get("xgm_independent_fan", 1) == 1;
         public static bool AlwaysShowFanCurve() => AppConfig.Is("show_xgm_fan");
 
         private static bool _isProbing = false;
+
+        public static void ProbeSync()
+        {
+            try
+            {
+                HidDevice? device = GetDevice();
+                if (device is null) return;
+
+                lock (_writeLock)
+                {
+                    using (HidStream hidStream = device.Open())
+                    {
+                        int reportLen = device.GetMaxFeatureReportLength();
+                        byte[] req = new byte[reportLen];
+                        req[0] = XGM_REPORT_ID;
+                        req[1] = 0xC0;
+                        req[2] = 0x01;
+                        req[3] = 0x01;
+                        hidStream.SetFeature(req);
+                        Thread.Sleep(50);
+
+                        byte[] response = new byte[reportLen];
+                        response[0] = XGM_REPORT_ID;
+                        hidStream.GetFeature(response);
+
+                        if (response[1] == 0xC0)
+                        {
+                            int rpm = response[12] + (response[13] << 8);
+                            int targetRpm = response[14] + (response[15] << 8);
+                            LastFanRPM = rpm;
+                            LastTargetRPM = targetRpm;
+                            int b6 = response[6];
+                            int b9 = response[9];
+                            if (b6 > 0 && b6 < 125) LastCoreTemp = b6;
+                            if (b9 > 0 && b9 < 125) LastHotspotTemp = b9;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.WriteLine($"XGM Probe Error: {ex.Message}");
+            }
+        }
 
         public static void Probe()
         {
@@ -120,53 +169,7 @@ namespace GHelper.USB
             {
                 try
                 {
-                    // Logger.WriteLine("XGM Probe: Getting device...");
-                    HidDevice? device = GetDevice();
-                    if (device is null) { /* Logger.WriteLine("XGM Probe: Device is null"); */ return; }
-                    
-                    // Logger.WriteLine("XGM Probe: Opening stream...");
-                    using (HidStream hidStream = device.Open())
-                    {
-                        try {
-                            byte[] req = new byte[device.GetMaxFeatureReportLength()];
-                            req[0] = XGM_REPORT_ID;
-                            req[1] = 0xC0;
-                            req[2] = 0x01;
-                            req[3] = 0x01;
-                            hidStream.SetFeature(req);
-                            System.Threading.Thread.Sleep(50);
-                        } catch (Exception ex) {
-                            Logger.WriteLine($"XGM Probe SetFeature Error: {ex.Message}");
-                        }
-
-                        byte[] response = new byte[device.GetMaxFeatureReportLength()];
-                        response[0] = XGM_REPORT_ID;
-                        
-                        try {
-                            hidStream.GetFeature(response);
-                            if (response[1] == 0xC0)
-                            {
-                                LastFanRPM = response[12] + (response[13] << 8);
-                                LastTargetRPM = response[14] + (response[15] << 8);
-                                int b6 = response[6];
-                                int b7 = response[7];
-                                int b8 = response[8];
-                                int b9 = response[9];
-                                int b18 = response[18];
-                                int b19 = response[19];
-                                LastHotspotTemp = (b6 > 0 && b6 < 135) ? b6 : null; // B6 is hotspot/VRAM temp
-                                LastCoreTemp = (b9 > 0 && b9 < 125) ? b9 : null; // B9 is core temp
-                                int targetRpm = LastTargetRPM.Value;
-                                
-                                Logger.WriteLine($"XGM Telemetry -> RPM: {LastFanRPM}, TargetRPM: {targetRpm}, B6(Hotspot): {b6}, B7: {b7}, B8: {b8}, B9(Core): {b9}, B18: {b18}, B19: {b19}");
-                            }
-                        } catch (Exception ex) {
-                            Logger.WriteLine($"XGM Probe Read Error: {ex.Message}");
-                        }
-                    }
-                }
-                catch (Exception ex) { 
-                    Logger.WriteLine($"XGM Probe Outer Error: {ex.Message}");
+                    ProbeSync();
                 }
                 finally
                 {
@@ -193,7 +196,15 @@ namespace GHelper.USB
                         Write([XGM_REPORT_ID, 0xce, 0x01]);
                         await Task.Delay(25);
                         Write([XGM_REPORT_ID, 0xce, 0x03]);
+                        await Task.Delay(25);
                         Light(AppConfig.Is("xmg_light"));
+
+                        if (AppConfig.IsApplyFans() || IsIndependentFanEnabled())
+                        {
+                            byte[] xgmCurve = AppConfig.GetFanConfig(AsusFan.XGM);
+                            if (AsusACPI.IsInvalidCurve(xgmCurve)) xgmCurve = AppConfig.GetDefaultCurve(AsusFan.XGM);
+                            SetFan(xgmCurve);
+                        }
                         return;
                     }
                     await Task.Delay(500);
@@ -279,23 +290,21 @@ namespace GHelper.USB
                 byte[] xgmPayload = new byte[16];
                 for (int i = 0; i < 8; i++)
                 {
-                    xgmPayload[i] = curve[i]; // Temperatures first
-                    xgmPayload[i + 8] = Math.Min((byte)100, curve[i + 8]); // Fan speeds second (0-100%)
+                    xgmPayload[i] = curve[i];                              // Temperatures (°C) in bytes 0..7
+                    xgmPayload[i + 8] = Math.Min((byte)100, curve[i + 8]); // Fan speeds (0-100%) in bytes 8..15
                 }
+
+                // The XG Mobile EC firmware evaluates the curve from 0°C upwards.
+                // If point 0 starts at 30°C, idle temperatures (0°C..28°C) fall below the curve,
+                // causing the EC to get stuck in its 4,200 RPM fallback clamp. Setting point 0 to 0°C
+                // ensures the curve covers idle through max load, unlocking the full 0..7,673 RPM range!
+                xgmPayload[0] = 0;
+
                 if (IsConnected())
                 {
-                    // Exact Armoury Crate Mode Unlock Sequence:
-                    // D0-01, D0-02, D0-03, D0-04 unlocks the firmware for custom fan curve control
-                    Write([XGM_REPORT_ID, 0xd0, 0x01]);
-                    await Task.Delay(10);
-                    Write([XGM_REPORT_ID, 0xd0, 0x02]);
-                    await Task.Delay(10);
-                    Write([XGM_REPORT_ID, 0xd0, 0x03]);
-                    await Task.Delay(10);
-                    Write([XGM_REPORT_ID, 0xd0, 0x04]);
-                    await Task.Delay(50);
-
-                    // Send the 16-byte custom fan curve (8 temps + 8 speeds)
+                    Write([XGM_REPORT_ID, 0xce, 0x03]);
+                    await Task.Delay(25);
+                    // Send custom fan curve payload directly (matches official Armoury Crate capture)
                     Write([XGM_REPORT_ID, 0xd1, 0x01, .. xgmPayload]);
                 }
             });

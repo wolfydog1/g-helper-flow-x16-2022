@@ -8,7 +8,7 @@ namespace GHelper.Fan
         public const int DEFAULT_FAN_MIN = 18;
         public const int DEFAULT_FAN_MAX = 58;
 
-        public const int XGM_FAN_MAX = 72;
+        public const int XGM_FAN_MAX = 76;
 
         public const int INADEQUATE_MAX = 104;
 
@@ -196,15 +196,19 @@ namespace GHelper.Fan
             return (formatted, calculatedRpm);
         }
 
+        static int previousXgmMax = XGM_FAN_MAX;
+
         public void StartCalibration()
         {
 
             measuredMax = new int[] { 0, 0, 0, 0 };
             timer.Enabled = true;
 
+            previousXgmMax = AppConfig.Get("fan_max_" + (int)AsusFan.XGM, XGM_FAN_MAX);
+            if (previousXgmMax <= 36) previousXgmMax = XGM_FAN_MAX;
+
             for (int i = 0; i < FAN_COUNT; i++)
                 AppConfig.Remove("fan_max_" + i);
-            AppConfig.Remove("fan_max_" + (int)AsusFan.XGM);
 
             Program.acpi.DeviceSet(AsusACPI.PerformanceMode, AppConfig.IsManualModeRequired() ? AsusACPI.PerformanceManual : AsusACPI.PerformanceTurbo, "ModeCalibration");
 
@@ -213,7 +217,7 @@ namespace GHelper.Fan
 
             if (Program.acpi.IsXGConnected() || XGM.IsConnected())
             {
-                XGM.SetFan(new byte[] { 20, 30, 40, 50, 60, 70, 80, 90, 100, 100, 100, 100, 100, 100, 100, 100 });
+                XGM.SetFan(new byte[] { 20, 25, 30, 35, 40, 45, 50, 55, 100, 100, 100, 100, 100, 100, 100, 100 });
             }
 
         }
@@ -235,7 +239,13 @@ namespace GHelper.Fan
 
             if (Program.acpi.IsXGConnected() || XGM.IsConnected())
             {
-                int xgmRPM = HardwareControl.xgmFanRPM ?? 0;
+                XGM.ProbeSync();
+                int xgmRPM = XGM.LastFanRPM ?? HardwareControl.xgmFanRPM ?? 0;
+                if (xgmRPM > 0)
+                {
+                    HardwareControl.xgmFanRPM = xgmRPM;
+                    HardwareControl.xgmFan = $"{xgmRPM}RPM";
+                }
                 int xgmFan = xgmRPM / 100;
                 if (xgmFan > measuredMax[3])
                 {
@@ -263,19 +273,42 @@ namespace GHelper.Fan
 
                 if (Program.acpi.IsXGConnected() || XGM.IsConnected())
                 {
-                    if (measuredMax[3] > 30 && measuredMax[3] < INADEQUATE_MAX)
+                    // The XG Mobile fan can physically reach 5500-7200 RPM under thermal load, but the onboard
+                    // MCU firmware limits idle target speed to ~3400-3600 RPM. Only store measuredMax if it
+                    // reached true high RPM (>= 5000 RPM). Otherwise, preserve the full XGM_FAN_MAX rating (7200 RPM).
+                    if (measuredMax[3] >= 50 && measuredMax[3] < INADEQUATE_MAX)
                         SetFanMax(AsusFan.XGM, measuredMax[3]);
                     else
-                    {
-                        int xgmMax = AppConfig.Get("fan_max_" + (int)AsusFan.XGM, XGM_FAN_MAX);
-                        SetFanMax(AsusFan.XGM, xgmMax);
-                    }
+                        SetFanMax(AsusFan.XGM, Math.Max(previousXgmMax, XGM_FAN_MAX));
                 }
 
                 sameCount = 0;
                 FinishCalibration();
             }
 
+        }
+
+        public void StopCalibration()
+        {
+            if (timer is not null && timer.Enabled)
+            {
+                timer.Enabled = false;
+                sameCount = 0;
+                modeControl.SetPerformanceMode();
+                if (Program.acpi.IsXGConnected() || XGM.IsConnected())
+                {
+                    if (AppConfig.IsApplyFans())
+                    {
+                        byte[] xgmCurve = AppConfig.GetFanConfig(AsusFan.XGM);
+                        if (AsusACPI.IsInvalidCurve(xgmCurve)) xgmCurve = AppConfig.GetDefaultCurve(AsusFan.XGM);
+                        XGM.SetFan(xgmCurve);
+                    }
+                    else
+                    {
+                        XGM.Reset();
+                    }
+                }
+            }
         }
 
         private void FinishCalibration()
@@ -294,10 +327,22 @@ namespace GHelper.Fan
 
             if (Program.acpi.IsXGConnected() || XGM.IsConnected())
             {
-                label = label + ", XGM: " + GetFanMax(AsusFan.XGM) * 100;
-                byte[] xgmCurve = AppConfig.GetFanConfig(AsusFan.XGM);
-                if (AsusACPI.IsInvalidCurve(xgmCurve)) xgmCurve = AppConfig.GetDefaultCurve(AsusFan.XGM);
-                XGM.SetFan(xgmCurve);
+                int currentXgmMax = GetFanMax(AsusFan.XGM) * 100;
+                if (measuredMax[3] > 0 && measuredMax[3] < 50)
+                    label = label + $", XGM: {currentXgmMax} (idle: {measuredMax[3] * 100})";
+                else
+                    label = label + ", XGM: " + currentXgmMax;
+
+                if (AppConfig.IsApplyFans())
+                {
+                    byte[] xgmCurve = AppConfig.GetFanConfig(AsusFan.XGM);
+                    if (AsusACPI.IsInvalidCurve(xgmCurve)) xgmCurve = AppConfig.GetDefaultCurve(AsusFan.XGM);
+                    XGM.SetFan(xgmCurve);
+                }
+                else
+                {
+                    XGM.Reset();
+                }
             }
 
             fansForm.LabelFansResult(label);

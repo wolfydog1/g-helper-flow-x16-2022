@@ -698,7 +698,7 @@ public static class HardwareControl
     private static NvAPIWrapper.GPU.PhysicalGPU? _xgmGpu;
     private static long _lastXgmGpuCheck;
 
-    public static float? GetXGMTemp()
+    private static NvAPIWrapper.GPU.PhysicalGPU? GetXGMPhysicalGpu()
     {
         if (!IsXGConnectedCached())
         {
@@ -717,21 +717,71 @@ public static class HardwareControl
                     _xgmGpu = gpus.Length > 1 ? gpus.Last() : gpus[0];
                 }
             }
+            return _xgmGpu;
+        }
+        catch
+        {
+            _xgmGpu = null;
+            return null;
+        }
+    }
 
-            if (_xgmGpu != null)
+    public static float? GetXGMTemp()
+    {
+        var gpu = GetXGMPhysicalGpu();
+        if (gpu != null)
+        {
+            try
             {
-                var therm = NvAPIWrapper.Native.GPUApi.GetThermalSettings(_xgmGpu.Handle);
+                var therm = NvAPIWrapper.Native.GPUApi.GetThermalSettings(gpu.Handle);
                 var sensor = therm.Sensors?.FirstOrDefault(s => s.Target == NvAPIWrapper.Native.GPU.ThermalSettingsTarget.GPU);
                 if (sensor is not null && sensor.CurrentTemperature > 0 && sensor.CurrentTemperature < 125)
                     return sensor.CurrentTemperature;
             }
+            catch { _xgmGpu = null; }
         }
-        catch { _xgmGpu = null; }
 
         int? hidTemp = GHelper.USB.XGM.LastCoreTemp ?? GHelper.USB.XGM.LastHotspotTemp;
         if (hidTemp is > 0 and < 125) return hidTemp.Value;
 
         return null;
+    }
+
+    public static float? GetXGMPower()
+    {
+        if (!IsXGConnectedCached()) return null;
+
+        try
+        {
+            var gpus = NvAPIWrapper.GPU.PhysicalGPU.GetPhysicalGPUs();
+            if (gpus.Length > 0)
+            {
+                uint idx = (uint)(gpus.Length - 1);
+                float? p = NvmlHelper.GetGpuPower(idx);
+                if (p is not null && p > 0) return p.Value;
+            }
+        }
+        catch { }
+
+        return gpuPower;
+    }
+
+    public static int? GetXGMUsage()
+    {
+        if (!IsXGConnectedCached()) return null;
+
+        var gpu = GetXGMPhysicalGpu();
+        if (gpu != null)
+        {
+            try
+            {
+                var usage = NvAPIWrapper.Native.GPUApi.GetUsages(gpu.Handle).GPU;
+                if (usage != null) return (int)usage.Percentage;
+            }
+            catch { }
+        }
+
+        return gpuUsage;
     }
 
     private static PerformanceCounter? _cpuPowerCounter;
@@ -1071,14 +1121,14 @@ public static class HardwareControl
 
         if (IsXGConnectedCached())
         {
-            xgmTemp = GetXGMTemp();
             GHelper.USB.XGM.Probe();
+            xgmTemp = GetXGMTemp() ?? gpuTemp;
             int? realRpm = GHelper.USB.XGM.LastFanRPM;
             xgmHotspotTemp = GHelper.USB.XGM.LastHotspotTemp;
-            if (realRpm.HasValue)
+            if (realRpm is > 0)
             {
                 xgmFanRPM = realRpm.Value;
-                xgmFan = $"{realRpm.Value} RPM";
+                xgmFan = $"{realRpm.Value}RPM";
             }
             else
             {
@@ -1138,14 +1188,14 @@ public static class HardwareControl
 
         if (IsXGConnectedCached())
         {
-            xgmTemp = GetXGMTemp();
             GHelper.USB.XGM.Probe();
+            xgmTemp = GetXGMTemp() ?? gpuTemp;
             int? realRpm = GHelper.USB.XGM.LastFanRPM;
             xgmHotspotTemp = GHelper.USB.XGM.LastHotspotTemp;
-            if (realRpm.HasValue)
+            if (realRpm is > 0)
             {
                 xgmFanRPM = realRpm.Value;
-                xgmFan = $"{realRpm.Value} RPM";
+                xgmFan = $"{realRpm.Value}RPM";
             }
             else
             {

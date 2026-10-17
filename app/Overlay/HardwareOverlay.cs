@@ -143,6 +143,7 @@ namespace GHelper.Overlay
         private SolidBrush _cpuBrush = new(DefaultCpuColor);
         private SolidBrush _midBrush = new(DefaultMidColor);
         private SolidBrush _xgmBrush = new(DefaultXgmColor);
+        private SolidBrush _xgmFillBrush = new(Color.FromArgb(128, 85, 35, 20));
         private Pen _gpuLinePen = new(DefaultGpuColor, 1.5f);
         private Pen _cpuLinePen = new(DefaultCpuColor, 1.5f);
         private SolidBrush _gpuFillBrush = new(Color.FromArgb(128, 0, 85, 27));
@@ -475,13 +476,14 @@ namespace GHelper.Overlay
             bool hasXgm = HardwareControl.IsXGConnectedCached() && (HardwareControl.xgmTemp is not null || HardwareControl.xgmFanRPM is not null);
             if (hasXgm)
             {
-                double xgmTemp = D(HardwareControl.xgmTemp);
-                string hotspotStr = HardwareControl.xgmHotspotTemp is not null ? $"/{HardwareControl.xgmHotspotTemp}° " : " ";
-                _xgmTempStr = "XGM:" + FmtTemp(xgmTemp).Trim() + hotspotStr;
+                double xgmTemp = D(HardwareControl.xgmTemp > 0 ? HardwareControl.xgmTemp : HardwareControl.xgmHotspotTemp);
+                _xgmTempStr = "XGM:" + FmtTemp(xgmTemp) + " ";
                 _xgmFanNum = FormatFan(HardwareControl.xgmFanRPM);
                 _xgmShortName = "XG Mobile";
-                _xgmPow = "";
-                _xgmUsage = null;
+
+                float? xgmPowVal = HardwareControl.GetXGMPower();
+                _xgmPow = xgmPowVal is null ? "" : Math.Round(xgmPowVal.Value, 1).ToString("F1") + "W";
+                _xgmUsage = HardwareControl.GetXGMUsage();
             }
             else
             {
@@ -603,7 +605,7 @@ namespace GHelper.Overlay
             bool showUsage = _showUsage || _showRam; // bar sizing is shared by the usage and ram bars
 
             bool showMidRow = (_midTempStr.Length > 0 || _midFanNum.Length > 0) && (showTemp || showFans);
-            bool showXgmRow = (_xgmTempStr.Length > 0 || _xgmFanNum.Length > 0) && (showTemp || showFans);
+            bool showXgmRow = (_xgmTempStr.Length > 0 || _xgmFanNum.Length > 0 || _xgmPow.Length > 0 || _xgmUsage.HasValue) && (showTemp || showFans || showPower || showUsageMetric);
 
             int rowCount = 2;
             int gpuRow = 0;
@@ -773,7 +775,7 @@ namespace GHelper.Overlay
                     DrawUsageBar(g, barX, GetBarY(gpuRow), barW, cellH, sepH, numCells, _gpuUsage ?? 0, _gpuBrush, _gpuFillBrush);
                     DrawUsageBar(g, barX, GetBarY(cpuRow), barW, cellH, sepH, numCells, _cpuUsage ?? 0, _cpuBrush, _cpuFillBrush);
                     if (showXgmRow && _xgmUsage.HasValue)
-                        DrawUsageBar(g, barX, GetBarY(xgmRow), barW, cellH, sepH, numCells, _xgmUsage.Value, _xgmBrush, _gpuFillBrush);
+                        DrawUsageBar(g, barX, GetBarY(xgmRow), barW, cellH, sepH, numCells, _xgmUsage.Value, _xgmBrush, _xgmFillBrush);
 
                     DrawUsagePercent(g, font, usageNumX, usageNumColW, GetRowY(gpuRow), _gpuUsage, _gpuBrush);
                     DrawUsagePercent(g, font, usageNumX, usageNumColW, GetRowY(cpuRow), _cpuUsage, _cpuBrush);
@@ -1059,6 +1061,7 @@ namespace GHelper.Overlay
             Color xgm = ParseColor("overlay_color_xgm", DefaultXgmColor);
             _midBrush.Dispose();     _midBrush = new SolidBrush(mid);
             _xgmBrush.Dispose();     _xgmBrush = new SolidBrush(xgm);
+            _xgmFillBrush.Dispose(); _xgmFillBrush = new SolidBrush(Color.FromArgb(128, xgm.R / 3, xgm.G / 3, xgm.B / 3));
             _gpuLinePen.Dispose();   _gpuLinePen = new Pen(gpu, 1.5f);
             _cpuLinePen.Dispose();   _cpuLinePen = new Pen(cpu, 1.5f);
             // Chart fill = base color at 1/3 brightness, alpha 128
