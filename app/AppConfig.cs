@@ -603,6 +603,11 @@ public static class AppConfig
         return ContainsModel("X16") || ContainsModel("X13") || ContainsModel("Z13");
     }
 
+    public static bool IsXGM()
+    {
+        return HasTabletMode() || IsAlly() || Is("show_xgm_fan");
+    }
+
     public static bool IsX13()
     {
         return ContainsModel("X13");

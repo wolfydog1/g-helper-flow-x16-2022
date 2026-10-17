@@ -376,6 +376,9 @@ public static class HardwareControl
     public static bool isAcOnline;
     private static decimal? _smoothedBatteryRate;
     private static bool _lowBatteryGuardTriggered;
+    private static decimal _dischargeWattSum = 0m;
+    private static int _dischargeSampleCount = 0;
+    public static decimal? sessionAvgDischargeW;
 
     public static void ReadBatteryState()
     {
@@ -462,6 +465,13 @@ public static class HardwareControl
             _smoothedBatteryRate = (_smoothedBatteryRate.Value * 0.65m) + (batteryRate.Value * 0.35m);
         }
 
+        if (!isAcOnline && batteryRate is < -0.5m)
+        {
+            _dischargeWattSum += -batteryRate.Value;
+            _dischargeSampleCount++;
+            sessionAvgDischargeW = Math.Round(_dischargeWattSum / _dischargeSampleCount, 1);
+        }
+
         FormatBatteryCharge();
     }
 
@@ -472,7 +482,20 @@ public static class HardwareControl
         {
             decimal healthPct = Math.Min(100m, (decimal)fullCapacity / (decimal)designCapacity * 100m);
             batteryHealth = healthPct;
-            batteryHealthStr = $"Battery Health: {Math.Round(healthPct, 1)}% ({Math.Round((decimal)fullCapacity / 1000m, 1)} / {Math.Round((decimal)designCapacity / 1000m, 1)} Wh)";
+            string baseHealth = $"Battery Health: {Math.Round(healthPct, 1)}% ({Math.Round((decimal)fullCapacity / 1000m, 1)} / {Math.Round((decimal)designCapacity / 1000m, 1)} Wh)";
+            if (sessionAvgDischargeW is > 0.5m)
+            {
+                decimal fullWh = (decimal)fullCapacity / 1000m;
+                int fullRunMins = (int)Math.Round((double)(fullWh / sessionAvgDischargeW.Value * 60m));
+                string fullRunStr = fullRunMins > 0 && fullRunMins < 36 * 60
+                    ? $" | Est. 100%→0%: {fullRunMins / 60}h {fullRunMins % 60}m"
+                    : "";
+                batteryHealthStr = $"{baseHealth}\nSession Avg Discharge: {sessionAvgDischargeW.Value:0.0}W{fullRunStr}  (Click Charge Limit title for HTML Report)";
+            }
+            else
+            {
+                batteryHealthStr = $"{baseHealth}  (Click Charge Limit title for HTML Report)";
+            }
         }
 
         if (fullCapacity > 0 && chargeCapacity > 0)
@@ -704,6 +727,9 @@ public static class HardwareControl
             }
         }
         catch { _xgmGpu = null; }
+
+        int? hidTemp = GHelper.USB.XGM.LastCoreTemp ?? GHelper.USB.XGM.LastHotspotTemp;
+        if (hidTemp is > 0 and < 125) return hidTemp.Value;
 
         return null;
     }

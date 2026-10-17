@@ -333,7 +333,15 @@ namespace GHelper.Mode
 
             } else
             {
-                XGM.Reset();
+                if (HardwareControl.IsXGConnectedCached() && XGM.IsIndependentFanEnabled())
+                {
+                    byte[] xgmCurve = GetValidFanCurve(AsusFan.XGM);
+                    XGM.SetFan(xgmCurve);
+                }
+                else
+                {
+                    XGM.Reset();
+                }
             }
 
             SetModeLabel();

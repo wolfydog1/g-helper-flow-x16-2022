@@ -1080,6 +1080,7 @@ namespace GHelper.Input
                         Program.settingsForm?.SyncTouchPenMode(TouchPenMode.TouchAndPen);
                     }
 
+                    bool switchedSilent = false;
                     // Auto-switch to Silent profile in Tablet mode so chassis stays cool and quiet in hands
                     if (AppConfig.Get("auto_tablet_silent", 1) == 1 && modeControl != null)
                     {
@@ -1088,10 +1089,16 @@ namespace GHelper.Input
                         {
                             _preTabletPerfMode = curPerf;
                             modeControl.SetPerformanceMode(AsusACPI.PerformanceSilent);
+                            switchedSilent = true;
                         }
                     }
 
-                    Program.toast?.RunToast("Tablet Mode: Rotation Unlocked & Touch Active", ToastIcon.Touchpad);
+                    var summaryParts = new List<string> { "Touch Active" };
+                    if (AppConfig.Get("auto_tablet_rotation", 1) == 1) summaryParts.Add("Rotation Unlocked");
+                    if (switchedSilent || Modes.GetCurrent() == AsusACPI.PerformanceSilent) summaryParts.Add("Silent Cooling");
+                    summaryParts.Add("Kbd Off");
+
+                    Program.toast?.RunToast($"Tablet Mode: {string.Join(" • ", summaryParts)}", ToastIcon.Touchpad);
                 }
                 else
                 {
@@ -1103,14 +1110,17 @@ namespace GHelper.Input
                         Program.settingsForm?.SyncTouchPenMode(restoreTouch);
                     }
 
+                    bool restoredPerf = false;
                     if (_preTabletPerfMode.HasValue && AppConfig.Get("auto_tablet_silent", 1) == 1 && modeControl != null)
                     {
                         int restorePerf = _preTabletPerfMode.Value;
                         _preTabletPerfMode = null;
                         modeControl.SetPerformanceMode(restorePerf);
+                        restoredPerf = true;
                     }
 
-                    Program.toast?.RunToast("Laptop Mode Restored", ToastIcon.Touchpad);
+                    string modeName = Modes.GetCurrentName();
+                    Program.toast?.RunToast(restoredPerf ? $"Laptop Mode Restored ({modeName})" : "Laptop Mode Restored", ToastIcon.Touchpad);
                 }
 
                 Program.settingsForm?.BeginInvoke(() => Program.settingsForm.VisualiseScreenSwitches(ScreenCCD.GetHDRStatus()));
@@ -1163,11 +1173,12 @@ namespace GHelper.Input
                 }
                 if (tentMode)
                 {
-                    Program.toast?.RunToast("Tent Mode: Open Airflow Cooling & Rotation Unlocked");
+                    string rotPart = AppConfig.Get("auto_tablet_rotation", 1) == 1 ? " • Rotation Unlocked" : "";
+                    Program.toast?.RunToast($"Tent Mode: Open Airflow{rotPart} • Touchpad Off", ToastIcon.Touchpad);
                 }
                 else if (!tabletMode)
                 {
-                    Program.toast?.RunToast("Laptop Mode Restored");
+                    Program.toast?.RunToast($"Laptop Mode Restored ({Modes.GetCurrentName()})", ToastIcon.Touchpad);
                 }
             }
         }

@@ -322,6 +322,9 @@ namespace GHelper
             chartGPU.AccessibleName = "GPU fan curve";
             chartMid.AccessibleName = "Mid fan curve";
             chartXGM.AccessibleName = "XG Mobile fan curve";
+
+            ConfigureSliderErgonomics();
+            ConfigureChartAndModeMenus();
         }
 
         private void CheckFanClamp_Click(object? sender, EventArgs e)
@@ -385,6 +388,16 @@ namespace GHelper
         {
             if (sender is null) return;
             Chart chart = (Chart)sender;
+
+            if (e.Button == MouseButtons.Right)
+            {
+                AsusFan device = chart == chartGPU ? AsusFan.GPU
+                               : chart == chartMid ? AsusFan.Mid
+                               : chart == chartXGM ? AsusFan.XGM
+                               : AsusFan.CPU;
+                ShowChartContextMenu(chart, device, e.Location);
+                return;
+            }
 
             HitTestResult result = chart.HitTest(e.X, e.Y);
 
@@ -1105,6 +1118,27 @@ namespace GHelper
             }
         }
 
+        private static int? GetInterpolatedFanPercent(Series series, double? temp)
+        {
+            if (series == null || series.Points.Count == 0 || temp == null || temp <= 0) return null;
+            double t = temp.Value;
+            if (t <= series.Points[0].XValue) return (int)Math.Round(series.Points[0].YValues[0]);
+            for (int i = 0; i < series.Points.Count - 1; i++)
+            {
+                double x0 = series.Points[i].XValue;
+                double x1 = series.Points[i + 1].XValue;
+                if (t >= x0 && t <= x1)
+                {
+                    double y0 = series.Points[i].YValues[0];
+                    double y1 = series.Points[i + 1].YValues[0];
+                    if (Math.Abs(x1 - x0) < 0.01) return (int)Math.Round(y1);
+                    double ratio = (t - x0) / (x1 - x0);
+                    return (int)Math.Round(y0 + ratio * (y1 - y0));
+                }
+            }
+            return (int)Math.Round(series.Points[^1].YValues[0]);
+        }
+
         public void UpdateSensors()
         {
             if (this.IsDisposed || !this.IsHandleCreated || this.Text == "" || !this.Visible) return;
@@ -1118,38 +1152,55 @@ namespace GHelper
                     if (chartCPU.Titles.Count > 0 && HardwareControl.cpuTemp > 0)
                     {
                         string cpuFanStr = HardwareControl.cpuFan != null ? $", {HardwareControl.cpuFan}" : "";
-                        chartCPU.Titles[0].Text = $"{Properties.Strings.FanProfileCPU} ({TempHelper.FormatTemp((double)HardwareControl.cpuTemp)}{cpuFanStr}){scale}";
+                        int? targetPct = GetInterpolatedFanPercent(seriesCPU, HardwareControl.cpuTemp);
+                        string targetStr = targetPct.HasValue ? $" → {targetPct.Value}%" : "";
+                        chartCPU.Titles[0].Text = $"{Properties.Strings.FanProfileCPU} ({TempHelper.FormatTemp((double)HardwareControl.cpuTemp)}{cpuFanStr}{targetStr}){scale}";
                     }
                     UpdateChartTempLine(chartCPU, HardwareControl.cpuTemp, colorStandard);
 
                     if (chartGPU.Titles.Count > 0 && HardwareControl.gpuTemp > 0)
                     {
                         string gpuFanStr = HardwareControl.gpuFan != null ? $", {HardwareControl.gpuFan}" : "";
-                        chartGPU.Titles[0].Text = $"{Properties.Strings.FanProfileGPU} ({TempHelper.FormatTemp((double)HardwareControl.gpuTemp)}{gpuFanStr}){scale}";
+                        int? targetPct = GetInterpolatedFanPercent(seriesGPU, HardwareControl.gpuTemp);
+                        string targetStr = targetPct.HasValue ? $" → {targetPct.Value}%" : "";
+                        chartGPU.Titles[0].Text = $"{Properties.Strings.FanProfileGPU} ({TempHelper.FormatTemp((double)HardwareControl.gpuTemp)}{gpuFanStr}{targetStr}){scale}";
                     }
                     UpdateChartTempLine(chartGPU, HardwareControl.gpuTemp, colorTurbo);
 
                     if (chartMid.Visible && chartMid.Titles.Count > 0)
                     {
-                        string midTempStr = HardwareControl.midTemp > 0 ? TempHelper.FormatTemp((double)HardwareControl.midTemp) + ", " : "";
+                        double? midActiveTemp = HardwareControl.midTemp ?? HardwareControl.cpuTemp;
+                        string midTempStr = midActiveTemp > 0 ? TempHelper.FormatTemp(midActiveTemp.Value) + ", " : "";
                         string midFanStr = HardwareControl.midFan ?? (FanSensorControl.fanRpm ? "0RPM" : "0%");
-                        chartMid.Titles[0].Text = $"{Properties.Strings.FanProfileMid} ({midTempStr}{midFanStr}){scale}";
-                        UpdateChartTempLine(chartMid, HardwareControl.midTemp ?? HardwareControl.cpuTemp, colorEco);
+                        int? targetPct = GetInterpolatedFanPercent(seriesMid, midActiveTemp);
+                        string targetStr = targetPct.HasValue ? $" → {targetPct.Value}%" : "";
+                        chartMid.Titles[0].Text = $"{Properties.Strings.FanProfileMid} ({midTempStr}{midFanStr}{targetStr}){scale}";
+                        UpdateChartTempLine(chartMid, midActiveTemp, colorEco);
                     }
 
                     if (chartXGM.Visible && chartXGM.Titles.Count > 0)
                     {
+                        double? xgmActiveTemp = HardwareControl.xgmTemp ?? HardwareControl.xgmHotspotTemp;
                         string xgmInfo = "";
-                        if (HardwareControl.xgmTemp > 0 || HardwareControl.xgmFan != null)
+                        if (xgmActiveTemp > 0 || HardwareControl.xgmFan != null)
                         {
                             string tempStr = HardwareControl.xgmTemp > 0 ? TempHelper.FormatTemp((double)HardwareControl.xgmTemp) : "";
-
-
+                            if (HardwareControl.xgmHotspotTemp > 0 && HardwareControl.xgmHotspotTemp != (int?)HardwareControl.xgmTemp)
+                            {
+                                string hotStr = TempHelper.FormatTemp((double)HardwareControl.xgmHotspotTemp.Value);
+                                tempStr = tempStr.Length > 0 ? $"{tempStr} / Hot {hotStr}" : $"Hot {hotStr}";
+                            }
                             string fanStr = HardwareControl.xgmFan != null ? (tempStr.Length > 0 ? $", {HardwareControl.xgmFan}" : HardwareControl.xgmFan) : "";
-                            xgmInfo = $" ({tempStr}{fanStr})";
+                            int? targetPct = GetInterpolatedFanPercent(seriesXGM, xgmActiveTemp);
+                            string targetStr = targetPct.HasValue ? $" → {targetPct.Value}%" : "";
+                            xgmInfo = $" ({tempStr}{fanStr}{targetStr})";
+                        }
+                        else if (!Program.acpi.IsXGConnected() && !XGM.IsConnected())
+                        {
+                            xgmInfo = " (Unplugged - Pre-configuring)";
                         }
                         chartXGM.Titles[0].Text = $"XG Mobile{xgmInfo}{scale}";
-                        UpdateChartTempLine(chartXGM, HardwareControl.xgmTemp, Color.Orange);
+                        UpdateChartTempLine(chartXGM, xgmActiveTemp, Color.Orange);
                     }
                 });
             }
@@ -1329,18 +1380,21 @@ namespace GHelper
                 AppConfig.Set("mid_fan", 0);
             }
 
-            // XG Mobile Fan check
-            if (Program.acpi.IsXGConnected() || XGM.IsConnected())
+            // XG Mobile Fan check (show when connected OR when Always Show XGM Fan Curve is enabled)
+            bool xgmConnected = Program.acpi.IsXGConnected() || XGM.IsConnected();
+            if (xgmConnected || XGM.AlwaysShowFanCurve())
             {
                 AppConfig.Set("xgm_fan", 1);
                 chartCount++;
                 chartXGM.Visible = true;
+                buttonTestXGM.Visible = xgmConnected;
                 SetChart(chartXGM, AsusFan.XGM);
                 LoadProfile(seriesXGM, AsusFan.XGM);
             }
             else
             {
                 AppConfig.Set("xgm_fan", 0);
+                chartXGM.Visible = false;
                 buttonTestXGM.Visible = false;
             }
 
@@ -1379,7 +1433,7 @@ namespace GHelper
                 seriesCPU.Color = Color.Gray;
                 seriesGPU.Color = Color.Gray;
                 seriesMid.Color = Color.Gray;
-                seriesXGM.Color = Color.Gray;
+                seriesXGM.Color = XGM.IsIndependentFanEnabled() ? Color.Orange : Color.Gray;
             }
 
             InitHysteresis();
@@ -1798,9 +1852,549 @@ namespace GHelper
 
         private void FanDragHint(bool show)
         {
-            labelFansResult.Text = show ? Properties.Strings.FanDragAll : "";
+            labelFansResult.Text = show ? (Properties.Strings.FanDragAll + "  |  Right-click chart for Presets & Copy") : "";
             labelFansResult.ForeColor = show ? colorGray : colorTurbo;
             labelFansResult.Visible = show;
+        }
+
+        private void ConfigureSliderErgonomics()
+        {
+            void AttachWheel(TrackBar tb, int step, EventHandler onScroll, Action? onCommit = null)
+            {
+                tb.MouseWheel += (s, e) =>
+                {
+                    if (e is HandledMouseEventArgs hme) hme.Handled = true;
+                    int delta = e.Delta > 0 ? step : -step;
+                    int next = Math.Clamp(tb.Value + delta, tb.Minimum, tb.Maximum);
+                    if (next != tb.Value)
+                    {
+                        tb.Value = next;
+                        onScroll(tb, EventArgs.Empty);
+                        onCommit?.Invoke();
+                    }
+                };
+            }
+
+            void AttachReset(Control labelLeft, Control labelRight, Action resetAction)
+            {
+                EventHandler handler = (s, e) => resetAction();
+                labelLeft.DoubleClick += handler;
+                labelRight.DoubleClick += handler;
+                labelLeft.Cursor = Cursors.Hand;
+                labelRight.Cursor = Cursors.Hand;
+            }
+
+            AttachWheel(trackTotal, 1, TrackTotal_Scroll, () => Task.Run(() => modeControl.AutoPower(true)));
+            AttachWheel(trackSlow, 1, TrackSlow_Scroll, () => Task.Run(() => modeControl.AutoPower(true)));
+            AttachWheel(trackFast, 1, TrackFast_Scroll, () => Task.Run(() => modeControl.AutoPower(true)));
+            AttachWheel(trackCPU, 1, TrackCPU_Scroll, () => Task.Run(() => modeControl.AutoPower(true)));
+            AttachWheel(trackCrossLoad, 1, TrackCross_Scroll, () => Task.Run(() => modeControl.AutoPower(true)));
+            AttachWheel(trackGPUtoCPU, AsusACPI.StepGPUtoCPU, TrackCross_Scroll, () => Task.Run(() => modeControl.AutoPower(true)));
+            AttachWheel(trackCPUTemp, 1, TrackCross_Scroll, () => Task.Run(() => modeControl.AutoPower(true)));
+
+            AttachWheel(trackGPUClockLimit, 5, trackGPUClockLimit_Scroll, () => modeControl.SetGPUClocks(true));
+            AttachWheel(trackGPUCore, 5, trackGPU_Scroll, () => modeControl.SetGPUClocks(true));
+            AttachWheel(trackGPUMemory, 5, trackGPU_Scroll, () => modeControl.SetGPUClocks(true));
+            AttachWheel(trackGPUBoost, 1, trackGPUPower_Scroll, () => modeControl.SetGPUPower());
+            AttachWheel(trackGPUTemp, 1, trackGPUPower_Scroll, () => modeControl.SetGPUPower());
+            AttachWheel(trackGPUPower, 1, trackGPUPower_Scroll, () => modeControl.SetGPUPower());
+
+            AttachWheel(trackUV, 1, TrackUV_Scroll);
+            AttachWheel(trackUViGPU, 1, TrackUV_Scroll);
+            AttachWheel(trackTemp, 1, TrackUV_Scroll);
+
+            AttachReset(labelLeftTotal, labelTotal, () =>
+            {
+                trackTotal.Value = Math.Clamp(AsusACPI.DefaultTotal, trackTotal.Minimum, trackTotal.Maximum);
+                TrackTotal_Scroll(trackTotal, EventArgs.Empty);
+                Task.Run(() => modeControl.AutoPower(true));
+            });
+            AttachReset(labelLeftSlow, labelSlow, () =>
+            {
+                trackSlow.Value = trackTotal.Value;
+                TrackSlow_Scroll(trackSlow, EventArgs.Empty);
+                Task.Run(() => modeControl.AutoPower(true));
+            });
+            AttachReset(labelLeftFast, labelFast, () =>
+            {
+                trackFast.Value = trackSlow.Value;
+                TrackFast_Scroll(trackFast, EventArgs.Empty);
+                Task.Run(() => modeControl.AutoPower(true));
+            });
+            AttachReset(labelLeftCPU, labelCPU, () =>
+            {
+                trackCPU.Value = Math.Clamp(AsusACPI.DefaultCPU, trackCPU.Minimum, trackCPU.Maximum);
+                TrackCPU_Scroll(trackCPU, EventArgs.Empty);
+                Task.Run(() => modeControl.AutoPower(true));
+            });
+            AttachReset(labelLeftCrossLoad, labelCrossLoad, () =>
+            {
+                trackCrossLoad.Value = AsusACPI.MaxCrossLoad;
+                TrackCross_Scroll(trackCrossLoad, EventArgs.Empty);
+                Task.Run(() => modeControl.AutoPower(true));
+            });
+            AttachReset(labelLeftGPUtoCPU, labelGPUtoCPU, () =>
+            {
+                trackGPUtoCPU.Value = AsusACPI.MaxGPUtoCPU;
+                TrackCross_Scroll(trackGPUtoCPU, EventArgs.Empty);
+                Task.Run(() => modeControl.AutoPower(true));
+            });
+            AttachReset(labelLeftCPUTemp, labelCPUTemp, () =>
+            {
+                trackCPUTemp.Value = AsusACPI.MaxCPUTemp;
+                TrackCross_Scroll(trackCPUTemp, EventArgs.Empty);
+                Task.Run(() => modeControl.AutoPower(true));
+            });
+
+            AttachReset(labelGPUClockLimitTitle, labelGPUClockLimit, () =>
+            {
+                trackGPUClockLimit.Value = NvidiaGpuControl.MaxClockLimit;
+                AppConfig.RemoveMode("gpu_clock_limit");
+                VisualiseGPUSettings();
+                modeControl.SetGPUClocks(true);
+            });
+            AttachReset(labelGPUCoreTitle, labelGPUCore, () =>
+            {
+                trackGPUCore.Value = 0;
+                AppConfig.SetMode("gpu_core", 0);
+                VisualiseGPUSettings();
+                modeControl.SetGPUClocks(true);
+            });
+            AttachReset(labelGPUMemoryTitle, labelGPUMemory, () =>
+            {
+                trackGPUMemory.Value = 0;
+                AppConfig.SetMode("gpu_memory", 0);
+                VisualiseGPUSettings();
+                modeControl.SetGPUClocks(true);
+            });
+            AttachReset(labelGPUBoostTitle, labelGPUBoost, () =>
+            {
+                trackGPUBoost.Value = AsusACPI.MaxGPUBoost;
+                AppConfig.RemoveMode("gpu_boost");
+                VisualiseGPUSettings();
+                modeControl.SetGPUPower();
+            });
+            AttachReset(labelGPUTempTitle, labelGPUTemp, () =>
+            {
+                trackGPUTemp.Value = AsusACPI.MaxGPUTemp;
+                AppConfig.RemoveMode("gpu_temp");
+                VisualiseGPUSettings();
+                modeControl.SetGPUPower();
+            });
+            AttachReset(labelGPUPowerTitle, labelGPUPower, () =>
+            {
+                trackGPUPower.Value = AsusACPI.MaxGPUPower;
+                AppConfig.RemoveMode("gpu_power");
+                VisualiseGPUSettings();
+                modeControl.SetGPUPower();
+            });
+
+            AttachReset(labelLeftUV, labelUV, () =>
+            {
+                trackUV.Value = 0;
+                AdvancedScroll();
+            });
+            AttachReset(labelLeftUViGPU, labelUViGPU, () =>
+            {
+                trackUViGPU.Value = 0;
+                AdvancedScroll();
+            });
+            AttachReset(labelLeftTemp, labelTemp, () =>
+            {
+                trackTemp.Value = CpuInfo.DefaultTemp;
+                AdvancedScroll();
+            });
+        }
+
+        private void ConfigureChartAndModeMenus()
+        {
+            MouseEventHandler modeMenuHandler = (s, e) =>
+            {
+                if (e.Button == MouseButtons.Right && s is Control ctrl)
+                {
+                    ShowModeContextMenu(ctrl, e.Location);
+                }
+            };
+            buttonAdd.MouseUp += modeMenuHandler;
+            comboModes.MouseUp += modeMenuHandler;
+            labelPowerLimits.MouseUp += modeMenuHandler;
+        }
+
+        private Series GetSeriesForDevice(AsusFan device) => device switch
+        {
+            AsusFan.GPU => seriesGPU,
+            AsusFan.Mid => seriesMid,
+            AsusFan.XGM => seriesXGM,
+            _ => seriesCPU
+        };
+
+        private void ApplyCustomCurveBytes(Series series, AsusFan device, byte[] curve)
+        {
+            byte[] fixedCurve = AsusACPI.FixFanCurve(curve);
+            series.Points.Clear();
+            byte old = 0;
+            for (int i = 0; i < 8; i++)
+            {
+                if (fixedCurve[i] == old) fixedCurve[i]++;
+                series.Points.AddXY(fixedCurve[i], fixedCurve[i + 8]);
+                old = fixedCurve[i];
+            }
+            SaveProfile(series, device);
+            if (device == AsusFan.XGM && XGM.IsIndependentFanEnabled() && !AppConfig.IsApplyFans())
+            {
+                if (HardwareControl.IsXGConnectedCached()) XGM.SetFan(fixedCurve);
+                seriesXGM.Color = Color.Orange;
+            }
+            else
+            {
+                if (!checkApplyFans.Checked)
+                {
+                    checkApplyFans.Checked = true;
+                    AppConfig.SetMode("auto_apply", 1);
+                    seriesCPU.Color = colorStandard;
+                    seriesGPU.Color = colorTurbo;
+                    seriesMid.Color = colorEco;
+                    seriesXGM.Color = Color.Orange;
+                }
+                modeControl.AutoFans();
+            }
+            UpdateSensors();
+        }
+
+        private void ShowChartContextMenu(Chart chart, AsusFan device, Point location)
+        {
+            Series series = GetSeriesForDevice(device);
+            var menu = new ContextMenuStrip
+            {
+                Renderer = new CustomMenuRenderer(),
+                BackColor = this.BackColor,
+                ForeColor = this.ForeColor,
+                ShowImageMargin = false,
+                ShowCheckMargin = true
+            };
+            Padding pad = new Padding(5, 4, 5, 4);
+
+            string fanName = device switch
+            {
+                AsusFan.CPU => "CPU Fan",
+                AsusFan.GPU => "GPU Fan",
+                AsusFan.Mid => "Mid / System Fan",
+                AsusFan.XGM => "XG Mobile Fan",
+                _ => "Fan"
+            };
+
+            var header = new ToolStripMenuItem($"{fanName} Curve Actions") { Enabled = false, Margin = pad };
+            menu.Items.Add(header);
+            menu.Items.Add("-");
+
+            // Presets
+            var presets = new (string name, byte[] curve)[]
+            {
+                ("Preset: Silent / Zero-RPM Idle (< 55°C)", [30, 40, 50, 55, 65, 75, 85, 95, 0, 0, 0, 14, 28, 48, 68, 88]),
+                ("Preset: Quiet Balanced",                  [30, 40, 50, 60, 70, 80, 90, 100, 0, 8, 18, 28, 42, 58, 74, 90]),
+                ("Preset: Linear Standard",                 [30, 40, 50, 60, 70, 80, 90, 100, 10, 20, 32, 45, 60, 74, 88, 100]),
+                ("Preset: Aggressive Cooling",              [30, 40, 50, 60, 70, 80, 90, 100, 20, 32, 46, 62, 76, 88, 96, 100]),
+                ("Preset: Max Cooling (95% Full Blast)",    [30, 40, 50, 60, 70, 80, 90, 100, 50, 65, 80, 90, 95, 95, 95, 100])
+            };
+
+            foreach (var p in presets)
+            {
+                var item = new ToolStripMenuItem(p.name) { Margin = pad };
+                byte[] curveCopy = (byte[])p.curve.Clone();
+                item.Click += (s, e) => ApplyCustomCurveBytes(series, device, curveCopy);
+                menu.Items.Add(item);
+            }
+
+            menu.Items.Add("-");
+
+            var itemShiftUp = new ToolStripMenuItem("Shift Entire Curve Up (+5%)") { Margin = pad };
+            itemShiftUp.Click += (s, e) =>
+            {
+                AdjustAll(0, 5, series);
+                Chart_Save();
+                UpdateSensors();
+            };
+            menu.Items.Add(itemShiftUp);
+
+            var itemShiftDown = new ToolStripMenuItem("Shift Entire Curve Down (-5%)") { Margin = pad };
+            itemShiftDown.Click += (s, e) =>
+            {
+                AdjustAll(0, -5, series);
+                Chart_Save();
+                UpdateSensors();
+            };
+            menu.Items.Add(itemShiftDown);
+
+            menu.Items.Add("-");
+
+            // Copy Curve From...
+            var copySources = new List<(AsusFan fan, string label)>
+            {
+                (AsusFan.CPU, "Copy Curve from CPU Fan"),
+                (AsusFan.GPU, "Copy Curve from GPU Fan")
+            };
+            if (chartMid.Visible) copySources.Add((AsusFan.Mid, "Copy Curve from Mid Fan"));
+            if (chartXGM.Visible) copySources.Add((AsusFan.XGM, "Copy Curve from XG Mobile Fan"));
+
+            foreach (var src in copySources)
+            {
+                if (src.fan == device) continue;
+                var itemCopy = new ToolStripMenuItem(src.label) { Margin = pad };
+                AsusFan sourceFan = src.fan;
+                itemCopy.Click += (s, e) =>
+                {
+                    Series srcSeries = GetSeriesForDevice(sourceFan);
+                    byte[] curve = new byte[16];
+                    for (int i = 0; i < Math.Min(8, srcSeries.Points.Count); i++)
+                    {
+                        curve[i] = (byte)srcSeries.Points[i].XValue;
+                        curve[i + 8] = (byte)srcSeries.Points[i].YValues[0];
+                    }
+                    ApplyCustomCurveBytes(series, device, curve);
+                };
+                menu.Items.Add(itemCopy);
+            }
+
+            menu.Items.Add("-");
+
+            // XG Mobile Fan Settings Submenu / Direct Items
+            bool showXgmOptions = (device == AsusFan.XGM) || Program.acpi.IsXGConnected() || XGM.IsConnected() || XGM.AlwaysShowFanCurve();
+            if (showXgmOptions)
+            {
+                var itemXgmIndep = new ToolStripMenuItem("XG Mobile: Apply Fan Curve Independently of Laptop BIOS")
+                {
+                    Checked = XGM.IsIndependentFanEnabled(),
+                    Margin = pad
+                };
+                itemXgmIndep.Click += (s, e) =>
+                {
+                    bool next = !XGM.IsIndependentFanEnabled();
+                    AppConfig.Set("xgm_independent_fan", next ? 1 : 0);
+                    InitFans();
+                    modeControl.AutoFans();
+                    Program.toast?.RunToast(next ? "XGM Independent Fan Curve: On" : "XGM Independent Fan Curve: Off");
+                };
+                menu.Items.Add(itemXgmIndep);
+
+                var itemXgmMidBoost = new ToolStripMenuItem("XG Mobile: Boost Laptop Mid Fan to Match CPU when Docked")
+                {
+                    Checked = AppConfig.Is("xgm_mid_boost"),
+                    Margin = pad
+                };
+                itemXgmMidBoost.Click += (s, e) =>
+                {
+                    bool next = !AppConfig.Is("xgm_mid_boost");
+                    AppConfig.Set("xgm_mid_boost", next ? 1 : 0);
+                    if (AppConfig.IsApplyFans()) modeControl.AutoFans();
+                };
+                menu.Items.Add(itemXgmMidBoost);
+
+                var itemAlwaysShowXgm = new ToolStripMenuItem("XG Mobile: Always Show XGM Fan Chart (Even Unplugged)")
+                {
+                    Checked = XGM.AlwaysShowFanCurve(),
+                    Margin = pad
+                };
+                itemAlwaysShowXgm.Click += (s, e) =>
+                {
+                    bool next = !XGM.AlwaysShowFanCurve();
+                    AppConfig.Set("show_xgm_fan", next ? 1 : 0);
+                    InitFans();
+                };
+                menu.Items.Add(itemAlwaysShowXgm);
+
+                if (Program.acpi.IsXGConnected() || XGM.IsConnected())
+                {
+                    var itemTestXgm = new ToolStripMenuItem("XG Mobile: Test Fan Full Speed (8s)") { Margin = pad };
+                    itemTestXgm.Click += ButtonTestXGM_Click;
+                    menu.Items.Add(itemTestXgm);
+                }
+
+                menu.Items.Add("-");
+            }
+            else
+            {
+                var itemShowXgm = new ToolStripMenuItem("Show XG Mobile Fan Curve Chart")
+                {
+                    Checked = XGM.AlwaysShowFanCurve(),
+                    Margin = pad
+                };
+                itemShowXgm.Click += (s, e) =>
+                {
+                    AppConfig.Set("show_xgm_fan", 1);
+                    InitFans();
+                };
+                menu.Items.Add(itemShowXgm);
+                menu.Items.Add("-");
+            }
+
+            var itemResetThis = new ToolStripMenuItem($"Reset {fanName} Curve to Default") { Margin = pad };
+            itemResetThis.Click += (s, e) =>
+            {
+                LoadProfile(series, device, true);
+                modeControl.AutoFans();
+                UpdateSensors();
+            };
+            menu.Items.Add(itemResetThis);
+
+            menu.Show(chart, location);
+        }
+
+        private void ShowModeContextMenu(Control anchor, Point location)
+        {
+            var menu = new ContextMenuStrip
+            {
+                Renderer = new CustomMenuRenderer(),
+                BackColor = this.BackColor,
+                ForeColor = this.ForeColor,
+                ShowImageMargin = false,
+                ShowCheckMargin = true
+            };
+            Padding pad = new Padding(5, 4, 5, 4);
+
+            int curMode = Modes.GetCurrent();
+            string curName = Modes.GetCurrentName();
+
+            var header = new ToolStripMenuItem($"Mode Profile: {curName}") { Enabled = false, Margin = pad };
+            menu.Items.Add(header);
+            menu.Items.Add("-");
+
+            var itemClone = new ToolStripMenuItem($"Clone '{curName}' into New Custom Mode") { Margin = pad };
+            itemClone.Click += (s, e) =>
+            {
+                int srcMode = Modes.GetCurrent();
+                int newMode = Modes.Add();
+                CopyModeSettings(srcMode, newMode);
+                FillModes();
+                modeControl.SetPerformanceMode(newMode);
+                InitAll();
+                Program.toast?.RunToast($"Cloned '{curName}' → '{Modes.GetCurrentName()}'");
+            };
+            menu.Items.Add(itemClone);
+
+            var menuCopyFrom = new ToolStripMenuItem("Copy Fan Curves & Power Limits From...") { Margin = pad };
+            menuCopyFrom.DropDown.BackColor = this.BackColor;
+            menuCopyFrom.DropDown.ForeColor = this.ForeColor;
+            foreach (var kv in Modes.GetDictonary())
+            {
+                if (kv.Key == curMode) continue;
+                int srcKey = kv.Key;
+                string srcLabel = kv.Value;
+                var sub = new ToolStripMenuItem(srcLabel) { Margin = pad };
+                sub.Click += (s, e) =>
+                {
+                    CopyModeSettings(srcKey, Modes.GetCurrent());
+                    InitAll();
+                    modeControl.SetPerformanceMode();
+                    Program.toast?.RunToast($"Copied settings from '{srcLabel}'");
+                };
+                menuCopyFrom.DropDownItems.Add(sub);
+            }
+            menu.Items.Add(menuCopyFrom);
+
+            menu.Items.Add("-");
+
+            var itemExport = new ToolStripMenuItem("Export Mode Profile to Clipboard (JSON)") { Margin = pad };
+            itemExport.Click += (s, e) =>
+            {
+                try
+                {
+                    var data = new Dictionary<string, string?>
+                    {
+                        ["mode_base"] = Modes.GetCurrentBase().ToString(),
+                        ["fan_cpu"] = AppConfig.GetFanConfig(AsusFan.CPU) is byte[] c ? BitConverter.ToString(c) : null,
+                        ["fan_gpu"] = AppConfig.GetFanConfig(AsusFan.GPU) is byte[] g ? BitConverter.ToString(g) : null,
+                        ["fan_mid"] = AppConfig.GetFanConfig(AsusFan.Mid) is byte[] m ? BitConverter.ToString(m) : null,
+                        ["fan_xgm"] = AppConfig.GetFanConfig(AsusFan.XGM) is byte[] x ? BitConverter.ToString(x) : null,
+                        ["auto_apply"] = AppConfig.GetMode("auto_apply", 0).ToString(),
+                        ["auto_apply_power"] = AppConfig.GetMode("auto_apply_power", 0).ToString(),
+                        ["limit_total"] = trackTotal.Value.ToString(),
+                        ["limit_slow"] = trackSlow.Value.ToString(),
+                        ["limit_fast"] = trackFast.Value.ToString(),
+                        ["limit_cpu"] = trackCPU.Value.ToString(),
+                        ["cpu_uv"] = trackUV.Value.ToString(),
+                        ["igpu_uv"] = trackUViGPU.Value.ToString(),
+                        ["cpu_temp"] = trackTemp.Value.ToString()
+                    };
+                    string json = System.Text.Json.JsonSerializer.Serialize(data, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                    Clipboard.SetText(json);
+                    Program.toast?.RunToast("Profile exported to Clipboard!");
+                }
+                catch (Exception ex)
+                {
+                    Logger.WriteLine("Export profile error: " + ex.Message);
+                }
+            };
+            menu.Items.Add(itemExport);
+
+            var itemImport = new ToolStripMenuItem("Import Mode Profile from Clipboard (JSON)") { Margin = pad };
+            itemImport.Click += (s, e) =>
+            {
+                try
+                {
+                    string clip = Clipboard.GetText();
+                    if (string.IsNullOrWhiteSpace(clip) || !clip.TrimStart().StartsWith("{")) return;
+                    var data = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string?>>(clip);
+                    if (data == null) return;
+
+                    byte[]? ParseCurve(string? str)
+                    {
+                        if (string.IsNullOrWhiteSpace(str)) return null;
+                        string[] parts = str.Split('-');
+                        if (parts.Length != 16) return null;
+                        byte[] b = new byte[16];
+                        for (int i = 0; i < 16; i++) b[i] = Convert.ToByte(parts[i], 16);
+                        return b;
+                    }
+
+                    if (data.TryGetValue("fan_cpu", out var fc) && ParseCurve(fc) is byte[] bc) AppConfig.SetFanConfig(AsusFan.CPU, bc);
+                    if (data.TryGetValue("fan_gpu", out var fg) && ParseCurve(fg) is byte[] bg) AppConfig.SetFanConfig(AsusFan.GPU, bg);
+                    if (data.TryGetValue("fan_mid", out var fm) && ParseCurve(fm) is byte[] bm) AppConfig.SetFanConfig(AsusFan.Mid, bm);
+                    if (data.TryGetValue("fan_xgm", out var fx) && ParseCurve(fx) is byte[] bx) AppConfig.SetFanConfig(AsusFan.XGM, bx);
+
+                    string[] intKeys = ["auto_apply", "auto_apply_power", "limit_total", "limit_slow", "limit_fast", "limit_cpu", "cpu_uv", "igpu_uv", "cpu_temp"];
+                    foreach (string k in intKeys)
+                    {
+                        if (data.TryGetValue(k, out var valStr) && int.TryParse(valStr, out int v))
+                            AppConfig.SetMode(k, v);
+                    }
+
+                    InitAll();
+                    modeControl.SetPerformanceMode();
+                    Program.toast?.RunToast("Profile imported from Clipboard!");
+                }
+                catch (Exception ex)
+                {
+                    Logger.WriteLine("Import profile error: " + ex.Message);
+                    Program.toast?.RunToast("Invalid profile JSON in Clipboard");
+                }
+            };
+            menu.Items.Add(itemImport);
+
+            menu.Show(anchor, location);
+        }
+
+        private static void CopyModeSettings(int srcMode, int dstMode)
+        {
+            foreach (AsusFan fan in new[] { AsusFan.CPU, AsusFan.GPU, AsusFan.Mid, AsusFan.XGM })
+            {
+                string srcKey = $"fan_profile_{fan}_{srcMode}";
+                string dstKey = $"fan_profile_{fan}_{dstMode}";
+                string? curveStr = AppConfig.GetString(srcKey);
+                if (!string.IsNullOrEmpty(curveStr))
+                    AppConfig.Set(dstKey, curveStr);
+            }
+
+            string[] intKeys = [
+                "auto_apply", "auto_apply_power", "limit_total", "limit_slow", "limit_fast", "limit_cpu",
+                "limit_crossload", "limit_gpucpu", "limit_cputemp", "gpu_boost", "gpu_temp", "gpu_power",
+                "gpu_core", "gpu_memory", "gpu_clock_limit", "auto_boost", "cpu_uv", "igpu_uv", "cpu_temp", "auto_uv"
+            ];
+            foreach (string k in intKeys)
+            {
+                int val = AppConfig.Get($"{k}_{srcMode}", int.MinValue);
+                if (val != int.MinValue)
+                    AppConfig.Set($"{k}_{dstMode}", val);
+            }
         }
 
         private void AdjustAll(double deltaX, double deltaY, Series series)

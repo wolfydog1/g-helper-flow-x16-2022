@@ -104,6 +104,10 @@ namespace GHelper.USB
         public static int? LastFanRPM { get; private set; } = null;
         public static int? LastTargetRPM { get; private set; } = null;
         public static int? LastHotspotTemp { get; private set; } = null;
+        public static int? LastCoreTemp { get; private set; } = null;
+
+        public static bool IsIndependentFanEnabled() => AppConfig.Is("xgm_independent_fan");
+        public static bool AlwaysShowFanCurve() => AppConfig.Is("show_xgm_fan");
 
         private static bool _isProbing = false;
 
@@ -144,14 +148,15 @@ namespace GHelper.USB
                             {
                                 LastFanRPM = response[12] + (response[13] << 8);
                                 LastTargetRPM = response[14] + (response[15] << 8);
-                                LastHotspotTemp = response[6]; // B6 seems to be the hotspot/VRAM temp
-                                int targetRpm = LastTargetRPM.Value;
                                 int b6 = response[6];
                                 int b7 = response[7];
                                 int b8 = response[8];
                                 int b9 = response[9];
                                 int b18 = response[18];
                                 int b19 = response[19];
+                                LastHotspotTemp = (b6 > 0 && b6 < 135) ? b6 : null; // B6 is hotspot/VRAM temp
+                                LastCoreTemp = (b9 > 0 && b9 < 125) ? b9 : null; // B9 is core temp
+                                int targetRpm = LastTargetRPM.Value;
                                 
                                 Logger.WriteLine($"XGM Telemetry -> RPM: {LastFanRPM}, TargetRPM: {targetRpm}, B6(Hotspot): {b6}, B7: {b7}, B8: {b8}, B9(Core): {b9}, B18: {b18}, B19: {b19}");
                             }
@@ -305,7 +310,7 @@ namespace GHelper.USB
 
             await Task.Delay(TimeSpan.FromSeconds(seconds));
 
-            if (AppConfig.IsApplyFans())
+            if (AppConfig.IsApplyFans() || IsIndependentFanEnabled())
             {
                 byte[] xgmCurve = AppConfig.GetFanConfig(AsusFan.XGM);
                 if (AsusACPI.IsInvalidCurve(xgmCurve)) xgmCurve = AppConfig.GetDefaultCurve(AsusFan.XGM);

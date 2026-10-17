@@ -1622,7 +1622,7 @@ namespace GHelper
                             XGM.Init();
                             if (Program.acpi.IsXGConnected())
                             {
-                                if (AppConfig.IsApplyFans())
+                                if (AppConfig.IsApplyFans() || XGM.IsIndependentFanEnabled())
                                     Program.modeControl.AutoFans();
                                 else
                                     XGM.Reset();
@@ -1634,6 +1634,29 @@ namespace GHelper
             }
             xgmDebounceTimer.Stop();
             xgmDebounceTimer.Start();
+        }
+
+        private bool _contextMenuOpeningWired = false;
+        private ToolStripMenuItem? _menuSensorHeader;
+
+        private string GetLiveSensorHeaderText()
+        {
+            var parts = new List<string>();
+            if (HardwareControl.cpuTemp > 0) parts.Add($"CPU {Math.Round((decimal)HardwareControl.cpuTemp)}°C");
+            if (HardwareControl.gpuTemp > 0) parts.Add($"GPU {Math.Round((decimal)HardwareControl.gpuTemp)}°C");
+            float? xgmT = HardwareControl.GetXGMTemp();
+            if (xgmT.HasValue && xgmT.Value > 0) parts.Add($"XGM {Math.Round(xgmT.Value)}°C");
+            if (HardwareControl.batteryCapacity >= 0)
+            {
+                string bat = $"Bat {Math.Round(HardwareControl.batteryCapacity)}%";
+                if (HardwareControl.batteryRate != 0)
+                {
+                    string sign = HardwareControl.batteryRate > 0 ? "+" : "";
+                    bat += $" ({sign}{HardwareControl.batteryRate:0.0}W)";
+                }
+                parts.Add(bat);
+            }
+            return parts.Count > 0 ? "⚡ " + string.Join("  |  ", parts) : $"⚡ Mode: {Modes.GetCurrentName()}";
         }
 
         public void SetContextMenu()
@@ -1649,6 +1672,27 @@ namespace GHelper
             contextMenuStrip.ImageScalingSize = new Size(16, 16);
             contextMenuStrip.ShowImageMargin = false;
             Padding padding = new Padding(5, 5, 5, 5);
+
+            if (!_contextMenuOpeningWired)
+            {
+                _contextMenuOpeningWired = true;
+                contextMenuStrip.Opening += (s, e) =>
+                {
+                    if (_menuSensorHeader != null && !_menuSensorHeader.IsDisposed)
+                    {
+                        _menuSensorHeader.Text = GetLiveSensorHeaderText();
+                    }
+                };
+            }
+
+            _menuSensorHeader = new ToolStripMenuItem(GetLiveSensorHeaderText())
+            {
+                Margin = padding,
+                ToolTipText = "Click to open Fans + Power tuning window"
+            };
+            _menuSensorHeader.Click += (s, e) => FansToggle(0);
+            contextMenuStrip.Items.Add(_menuSensorHeader);
+            contextMenuStrip.Items.Add("-");
 
             var title = new ToolStripMenuItem(Properties.Strings.PerformanceMode);
             title.Margin = padding;
@@ -1702,12 +1746,126 @@ namespace GHelper
                 contextMenuStrip.Items.Add("-");
             }
 
-            if (Program.acpi.IsXGConnected() || XGM.IsConnected())
+            bool xgmConnected = Program.acpi.IsXGConnected() || XGM.IsConnected();
+            if (xgmConnected || XGM.AlwaysShowFanCurve() || AppConfig.IsXGM())
             {
-                var menuXGM = new ToolStripMenuItem("ROG XG Mobile");
+                string xgmMenuTitle = xgmConnected ? "ROG XG Mobile (Connected)" : "ROG XG Mobile";
+                var menuXGM = new ToolStripMenuItem(xgmMenuTitle);
                 menuXGM.Margin = padding;
                 menuXGM.DropDown.BackColor = this.BackColor;
                 menuXGM.DropDown.ForeColor = this.ForeColor;
+
+                if (xgmConnected)
+                {
+                    float? xgmTemp = HardwareControl.GetXGMTemp();
+                    string tempStr = xgmTemp.HasValue && xgmTemp.Value > 0 ? $"{Math.Round(xgmTemp.Value)}°C" : "N/A";
+                    string hotStr = XGM.LastHotspotTemp.HasValue ? $" (Hotspot {XGM.LastHotspotTemp.Value}°C)" : "";
+                    string rpmStr = !string.IsNullOrEmpty(HardwareControl.xgmFan) ? $"  •  {HardwareControl.xgmFan}" : "";
+                    var itemXgmStatus = new ToolStripMenuItem($"Status: {tempStr}{hotStr}{rpmStr}")
+                    {
+                        Margin = padding,
+                        Enabled = false
+                    };
+                    menuXGM.DropDownItems.Add(itemXgmStatus);
+                    menuXGM.DropDownItems.Add("-");
+                }
+
+                var itemXgmIndep = new ToolStripMenuItem("Independent XGM Fan Curve")
+                {
+                    Margin = padding,
+                    Checked = XGM.IsIndependentFanEnabled()
+                };
+                itemXgmIndep.Click += (s, e) =>
+                {
+                    bool next = !XGM.IsIndependentFanEnabled();
+                    AppConfig.Set("xgm_independent_fan", next ? 1 : 0);
+                    Program.modeControl?.AutoFans();
+                    Program.toast?.RunToast(next ? "XGM Independent Fan Curve: On" : "XGM Independent Fan Curve: Linked to Apply Fans");
+                    SetContextMenu();
+                };
+                menuXGM.DropDownItems.Add(itemXgmIndep);
+
+                var itemXgmMidBoost = new ToolStripMenuItem("Boost Laptop Mid Fan to Match CPU when Docked")
+                {
+                    Margin = padding,
+                    Checked = AppConfig.Get("xgm_mid_fan_boost", 1) == 1
+                };
+                itemXgmMidBoost.Click += (s, e) =>
+                {
+                    bool next = AppConfig.Get("xgm_mid_fan_boost", 1) != 1;
+                    AppConfig.Set("xgm_mid_fan_boost", next ? 1 : 0);
+                    Program.modeControl?.AutoFans();
+                    Program.toast?.RunToast(next ? "XGM Docked Mid-Fan Boost: On" : "XGM Docked Mid-Fan Boost: Off");
+                    SetContextMenu();
+                };
+                menuXGM.DropDownItems.Add(itemXgmMidBoost);
+
+                var itemXgmShowChart = new ToolStripMenuItem("Always Show XGM Fan Chart (Even Unplugged)")
+                {
+                    Margin = padding,
+                    Checked = XGM.AlwaysShowFanCurve()
+                };
+                itemXgmShowChart.Click += (s, e) =>
+                {
+                    bool next = !XGM.AlwaysShowFanCurve();
+                    AppConfig.Set("show_xgm_fan", next ? 1 : 0);
+                    if (fansForm != null && fansForm.Text != "") fansForm.InitFans();
+                    SetContextMenu();
+                };
+                menuXGM.DropDownItems.Add(itemXgmShowChart);
+
+                var menuXgmPresets = new ToolStripMenuItem("XGM Fan Curve Presets") { Margin = padding };
+                menuXgmPresets.DropDown.BackColor = this.BackColor;
+                menuXgmPresets.DropDown.ForeColor = this.ForeColor;
+
+                var xgmPresets = new (string label, byte[] curve)[]
+                {
+                    ("Silent / Zero-RPM Idle (<55°C)", new byte[] { 20, 35, 45, 55, 62, 70, 78, 86, 0, 0, 0, 0, 12, 26, 45, 68 }),
+                    ("Quiet Balanced",                 new byte[] { 20, 35, 48, 58, 66, 74, 82, 90, 0, 0, 6, 15, 28, 44, 62, 80 }),
+                    ("Linear Standard",                new byte[] { 20, 30, 40, 50, 60, 70, 80, 90, 5, 15, 25, 38, 50, 65, 80, 95 }),
+                    ("Aggressive Cooling",             new byte[] { 20, 30, 40, 50, 60, 68, 75, 82, 15, 25, 40, 55, 72, 85, 95, 100 }),
+                    ("Max Cooling (Constant 95%)",     new byte[] { 20, 30, 40, 50, 60, 70, 80, 90, 95, 95, 95, 95, 95, 95, 100, 100 }),
+                };
+
+                foreach (var p in xgmPresets)
+                {
+                    string pLabel = p.label;
+                    byte[] pCurve = p.curve;
+                    var itemPreset = new ToolStripMenuItem(pLabel) { Margin = padding };
+                    itemPreset.Click += (s, e) =>
+                    {
+                        AppConfig.SetFanConfig(AsusFan.XGM, pCurve);
+                        AppConfig.Set("xgm_independent_fan", 1);
+                        if (XGM.IsConnected()) XGM.SetFan(pCurve);
+                        if (fansForm != null && fansForm.Text != "") fansForm.InitFans();
+                        Program.toast?.RunToast($"XGM Fan Preset: {pLabel}");
+                        SetContextMenu();
+                    };
+                    menuXgmPresets.DropDownItems.Add(itemPreset);
+                }
+
+                menuXgmPresets.DropDownItems.Add("-");
+                var itemXgmResetFw = new ToolStripMenuItem("Reset to Firmware Default") { Margin = padding };
+                itemXgmResetFw.Click += (s, e) =>
+                {
+                    AppConfig.SetFanConfig(AsusFan.XGM, new byte[0]);
+                    if (XGM.IsConnected()) XGM.Reset();
+                    if (fansForm != null && fansForm.Text != "") fansForm.InitFans();
+                    Program.toast?.RunToast("XGM Fan Reset to Firmware Default");
+                };
+                menuXgmPresets.DropDownItems.Add(itemXgmResetFw);
+
+                menuXGM.DropDownItems.Add(menuXgmPresets);
+
+                var itemXgmOpenEditor = new ToolStripMenuItem("Open XGM Fan Curve Editor...") { Margin = padding };
+                itemXgmOpenEditor.Click += (s, e) =>
+                {
+                    AppConfig.Set("show_xgm_fan", 1);
+                    FansToggle(0);
+                };
+                menuXGM.DropDownItems.Add(itemXgmOpenEditor);
+
+                menuXGM.DropDownItems.Add("-");
 
                 var menuXgmLight = new ToolStripMenuItem("LED Light");
                 menuXgmLight.Margin = padding;
@@ -1724,21 +1882,25 @@ namespace GHelper
 
                 var menuXgmTest = new ToolStripMenuItem("Test Fan (8s)");
                 menuXgmTest.Margin = padding;
+                menuXgmTest.Enabled = xgmConnected;
                 menuXgmTest.Click += async (sender, args) =>
                 {
                     await XGM.TestFan(8);
                 };
                 menuXGM.DropDownItems.Add(menuXgmTest);
 
-                menuXGM.DropDownItems.Add("-");
-
-                var menuXgmDisconnect = new ToolStripMenuItem("Safe Disconnect");
-                menuXgmDisconnect.Margin = padding;
-                menuXgmDisconnect.Click += (sender, args) =>
+                if (xgmConnected)
                 {
-                    gpuControl.ToggleXGM();
-                };
-                menuXGM.DropDownItems.Add(menuXgmDisconnect);
+                    menuXGM.DropDownItems.Add("-");
+
+                    var menuXgmDisconnect = new ToolStripMenuItem("Safe Disconnect");
+                    menuXgmDisconnect.Margin = padding;
+                    menuXgmDisconnect.Click += (sender, args) =>
+                    {
+                        gpuControl.ToggleXGM();
+                    };
+                    menuXGM.DropDownItems.Add(menuXgmDisconnect);
+                }
 
                 contextMenuStrip.Items.Add(menuXGM);
                 contextMenuStrip.Items.Add("-");
@@ -2052,6 +2214,11 @@ namespace GHelper
             limit100.Click += (s, e) => updateBatteryLimit(100);
             menuBatteryLimit.DropDownItems.Add(limit100);
 
+            menuBatteryLimit.DropDownItems.Add("-");
+            var itemBatReport = new ToolStripMenuItem("Generate Windows Battery Report (HTML)") { Margin = padding };
+            itemBatReport.Click += (s, e) => BatteryControl.BatteryReport();
+            menuBatteryLimit.DropDownItems.Add(itemBatReport);
+
             contextMenuStrip.Items.Add(menuBatteryLimit);
 
             var menuTravelMode = new ToolStripMenuItem("Ultra-Eco Travel Mode") { Checked = TravelMode.IsActive, Margin = padding };
@@ -2186,7 +2353,50 @@ namespace GHelper
             itemTouchOff.Click += (s, e) => { ApplyTouchPenModeUI(TouchPenMode.Off); SetContextMenu(); };
             menuTouchPen.DropDownItems.Add(itemTouchOff);
 
+            menuTouchPen.DropDownItems.Add("-");
+            var itemAutoPenApps = new ToolStripMenuItem("Auto Pen-Only in Drawing/Note Apps")
+            {
+                Checked = GameWatcher.IsPenDrawingAppsEnabled(),
+                Margin = padding
+            };
+            itemAutoPenApps.Click += (s, e) =>
+            {
+                bool next = !GameWatcher.IsPenDrawingAppsEnabled();
+                GameWatcher.TogglePenDrawingApps(next);
+                Program.toast?.RunToast(next ? "Auto Pen-Only (Drawing Apps): On" : "Auto Pen-Only (Drawing Apps): Off", ToastIcon.Touchpad);
+                SetContextMenu();
+            };
+            menuTouchPen.DropDownItems.Add(itemAutoPenApps);
+
             contextMenuStrip.Items.Add(menuTouchPen);
+
+            var menuAudioMic = new ToolStripMenuItem("Audio & Microphone") { Margin = padding };
+            menuAudioMic.DropDown.BackColor = this.BackColor;
+            menuAudioMic.DropDown.ForeColor = this.ForeColor;
+
+            var itemToggleMic = new ToolStripMenuItem("Toggle Microphone Mute")
+            {
+                Checked = buttonMicMute.Activated,
+                Margin = padding
+            };
+            itemToggleMic.Click += (s, e) => ButtonMicMute_Click(s, e);
+            menuAudioMic.DropDownItems.Add(itemToggleMic);
+
+            var itemCycleAudio = new ToolStripMenuItem("Cycle Audio Output Device") { Margin = padding };
+            itemCycleAudio.Click += (s, e) =>
+            {
+                Task.Run(() =>
+                {
+                    string? nextOut = Audio.CycleAudioOutput();
+                    if (nextOut != null)
+                    {
+                        Program.toast?.RunToast("Audio: " + nextOut, ToastIcon.Microphone);
+                        if (IsHandleCreated) BeginInvoke(VisualiseMicAndPowerSaver);
+                    }
+                });
+            };
+            menuAudioMic.DropDownItems.Add(itemCycleAudio);
+            contextMenuStrip.Items.Add(menuAudioMic);
 
             if (AutoRotationControl.IsSupported())
             {

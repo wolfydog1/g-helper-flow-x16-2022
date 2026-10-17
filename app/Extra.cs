@@ -128,10 +128,27 @@ namespace GHelper
             combo.SelectedValue = (action is not null) ? action : "";
             if (combo.SelectedValue is null) combo.SelectedValue = "";
 
+            void SyncCustomBoxVisibility()
+            {
+                if (!combo.Visible)
+                {
+                    txbox.Visible = false;
+                    return;
+                }
+                bool isCustom = string.Equals(combo.SelectedValue?.ToString(), "custom", StringComparison.OrdinalIgnoreCase);
+                txbox.Visible = isCustom;
+                if (combo.Parent is TableLayoutPanel tlp)
+                {
+                    tlp.SetColumnSpan(combo, isCustom ? 1 : 2);
+                }
+            }
+
             combo.SelectedValueChanged += delegate
             {
                 if (combo.SelectedValue is not null)
                     AppConfig.Set(name, combo.SelectedValue.ToString());
+
+                SyncCustomBoxVisibility();
 
                 if (name == "m1" || name == "m2" || name == "m3" || name == "m4" || name == "m5")
                 {
@@ -141,11 +158,27 @@ namespace GHelper
 
             };
 
+            txbox.PlaceholderText = "Command / Path (Double-click to browse)";
             txbox.Text = AppConfig.GetString(name + "_custom");
             txbox.TextChanged += delegate
             {
                 AppConfig.Set(name + "_custom", txbox.Text);
             };
+            txbox.DoubleClick += delegate
+            {
+                using var dlg = new OpenFileDialog
+                {
+                    Title = "Select Application or Script for Custom Hotkey",
+                    Filter = "Applications & Scripts (*.exe;*.bat;*.cmd;*.ps1)|*.exe;*.bat;*.cmd;*.ps1|All Files (*.*)|*.*"
+                };
+                if (dlg.ShowDialog(this) == DialogResult.OK)
+                {
+                    txbox.Text = dlg.FileName.Contains(' ') ? $"\"{dlg.FileName}\"" : dlg.FileName;
+                }
+            };
+            toolTip.SetToolTip(txbox, "Enter a custom command, keystroke (e.g. ^!t), or double-click to browse for an application/script.");
+
+            SyncCustomBoxVisibility();
         }
 
         public Extra()
@@ -443,7 +476,7 @@ namespace GHelper
             sliderBrightness.AccessibleName = Properties.Strings.LaptopBacklight + ": " + sliderBrightness.Value;
             sliderBrightness.ValueChanged += SliderBrightness_ValueChanged;
 
-            panelXGM.Visible = XGM.IsConnected();
+            panelXGM.Visible = XGM.IsConnected() || Program.acpi.IsXGConnected() || AppConfig.IsXGM() || AppConfig.ContainsModel("GV601") || AppConfig.ContainsModel("GV301") || AppConfig.ContainsModel("GZ301") || XGM.AlwaysShowFanCurve();
             checkXGM.Checked = !(AppConfig.Get("xmg_light") == 0);
             checkXGM.CheckedChanged += CheckXGM_CheckedChanged;
 
@@ -458,6 +491,48 @@ namespace GHelper
 
             checkXGMMidBoost.Checked = AppConfig.Is("xgm_mid_boost");
             checkXGMMidBoost.CheckedChanged += CheckXGMMidBoost_CheckedChanged;
+
+            // Add XG Mobile Fan Curve Controls to panelXGM
+            var checkXGMIndepFan = new RCheckBox
+            {
+                AutoSize = true,
+                Location = new Point(checkXGMBattery.Left, checkXGMBattery.Bottom + 4),
+                Margin = checkXGMBattery.Margin,
+                Padding = checkXGMBattery.Padding,
+                Font = checkXGMBattery.Font,
+                ForeColor = checkXGMBattery.ForeColor,
+                BackColor = checkXGMBattery.BackColor,
+                Text = "Independent XGM Fan Curve",
+                Checked = XGM.IsIndependentFanEnabled()
+            };
+            checkXGMIndepFan.CheckedChanged += (s, e) =>
+            {
+                AppConfig.Set("xgm_independent_fan", checkXGMIndepFan.Checked ? 1 : 0);
+                Program.modeControl?.AutoFans();
+                if (Program.settingsForm?.fansForm is { Text.Length: > 0 } ff) ff.InitFans();
+            };
+
+            var checkXGMShowFan = new RCheckBox
+            {
+                AutoSize = true,
+                Location = new Point(checkXGMMidBoost.Left, checkXGMMidBoost.Bottom + 4),
+                Margin = checkXGMMidBoost.Margin,
+                Padding = checkXGMMidBoost.Padding,
+                Font = checkXGMMidBoost.Font,
+                ForeColor = checkXGMMidBoost.ForeColor,
+                BackColor = checkXGMMidBoost.BackColor,
+                Text = "Always show XGM Fan Curve",
+                Checked = XGM.AlwaysShowFanCurve()
+            };
+            checkXGMShowFan.CheckedChanged += (s, e) =>
+            {
+                AppConfig.Set("show_xgm_fan", checkXGMShowFan.Checked ? 1 : 0);
+                if (Program.settingsForm?.fansForm is { Text.Length: > 0 } ff) ff.InitFans();
+            };
+
+            panelXGM.Controls.Add(checkXGMIndepFan);
+            panelXGM.Controls.Add(checkXGMShowFan);
+            panelXGM.Height = checkXGMIndepFan.Bottom + 8;
 
             numericBacklightTime.Value = AppConfig.Get("keyboard_timeout", 60);
             numericBacklightPluggedTime.Value = AppConfig.Get("keyboard_ac_timeout", 0);
@@ -523,10 +598,76 @@ namespace GHelper
             checkKeystoneSound.Checked = Keystone.IsEnabled();
             checkKeystoneSound.CheckedChanged += CheckKeystoneSoundCheckedChanged;
 
+            // Add Convertible, Stylus & Smart Battery Automation checkboxes to panelSettings
+            RCheckBox CreateExtraCheckBox(string text, bool isChecked, EventHandler onChanged, string tip)
+            {
+                var cb = new RCheckBox
+                {
+                    AutoSize = true,
+                    Dock = DockStyle.Top,
+                    Margin = checkTopmost.Margin,
+                    Padding = checkTopmost.Padding,
+                    Font = checkTopmost.Font,
+                    ForeColor = checkTopmost.ForeColor,
+                    BackColor = checkTopmost.BackColor,
+                    Text = text,
+                    Checked = isChecked
+                };
+                cb.CheckedChanged += onChanged;
+                toolTip.SetToolTip(cb, tip);
+                panelSettings.Controls.Add(cb);
+                return cb;
+            }
+
+            CreateExtraCheckBox(
+                "Auto Windows Power Saver at ≤ 20% battery",
+                AppConfig.Get("auto_low_battery_saver", 1) == 1,
+                (s, e) => AppConfig.Set("auto_low_battery_saver", ((RCheckBox)s!).Checked ? 1 : 0),
+                "Automatically enables Windows Power Saver & Energy Saver when battery drops to 20% or below while discharging."
+            );
+
+            CreateExtraCheckBox(
+                "Auto Pen-Only (palm rejection) in Drawing & Note apps",
+                AppConfig.Is("auto_pen_drawing_apps"),
+                (s, e) =>
+                {
+                    bool en = ((RCheckBox)s!).Checked;
+                    GameWatcher.TogglePenDrawingApps(en);
+                },
+                "Automatically switches touchscreen to Pen-Only Mode (disables finger touch, keeps stylus active) when OneNote, Drawboard PDF, Krita, Photoshop, or Journal is in the foreground."
+            );
+
+            if (AppConfig.HasTabletMode() || AutoRotationControl.IsSupported())
+            {
+                CreateExtraCheckBox(
+                    "Auto-unlock Screen Rotation in Tablet / Tent posture",
+                    AppConfig.Get("auto_tablet_rotation", 1) == 1,
+                    (s, e) => AppConfig.Set("auto_tablet_rotation", ((RCheckBox)s!).Checked ? 1 : 0),
+                    "Automatically unlocks screen auto-rotation when folded into Tablet or Tent mode, and locks rotation in Laptop mode."
+                );
+
+                CreateExtraCheckBox(
+                    "Auto-Silent performance mode in Tablet posture",
+                    AppConfig.Get("auto_tablet_silent", 1) == 1,
+                    (s, e) => AppConfig.Set("auto_tablet_silent", ((RCheckBox)s!).Checked ? 1 : 0),
+                    "Automatically switches to Silent mode when folded into Tablet mode to keep the chassis cool and quiet in your hands, and restores your previous mode in Laptop posture."
+                );
+            }
+
             toolTip.SetToolTip(checkAutoToggleClamshellMode, Properties.Strings.ClamshellModeTooltip);
             toolTip.SetToolTip(checkNVPlatform, Properties.Strings.NVPlatformTooltip);
             toolTip.SetToolTip(checkAspm, Properties.Strings.DisablePCIeASPMTooltip);
             toolTip.SetToolTip(checkStandbyNetworking, Properties.Strings.DisableStandbyNetworkingTooltip);
+            toolTip.SetToolTip(checkTopmost, "Keeps the G-Helper main window pinned above other desktop windows.");
+            toolTip.SetToolTip(checkNoOverdrive, "Keeps panel Overdrive disabled even at high refresh rates on AC power.");
+            toolTip.SetToolTip(checkUSBC, "Prevents the discrete NVIDIA/AMD GPU from automatically waking up in Optimized mode when powered via a lower-wattage USB-C PD charger.");
+            toolTip.SetToolTip(checkGpuApps, "Automatically terminates non-essential background apps holding onto the discrete GPU before switching to Eco mode.");
+            toolTip.SetToolTip(checkBootSound, "Enables or disables the ASUS ROG startup sound effect in BIOS.");
+            toolTip.SetToolTip(checkXGMBattery, "Automatically caps laptop battery charge at 80% while docked to the ROG XG Mobile to prevent heat/voltage wear.");
+            toolTip.SetToolTip(checkXGMMidBoost, "Syncs the laptop's 3rd (Middle/System) fan curve to match the CPU fan curve while the XG Mobile is docked.");
+            toolTip.SetToolTip(checkXGMIndepFan, "Applies your custom XG Mobile fan curve whenever the XG Mobile is connected, even if laptop BIOS custom fan curves are unchecked.");
+            toolTip.SetToolTip(checkXGMShowFan, "Always displays the XG Mobile fan curve chart in Fans & Power so you can pre-configure curves while unplugged.");
+            toolTip.SetToolTip(checkAutoBacklight, "Automatically dims the keyboard backlight on battery power to save energy.");
 
             InitCores();
             InitPowerSettings();
