@@ -1,4 +1,4 @@
-﻿using GHelper.Helpers;
+using GHelper.Helpers;
 using Microsoft.Win32.TaskScheduler;
 using System.Diagnostics;
 using System.Reflection;
@@ -182,13 +182,15 @@ public class Startup
 
             td.RegistrationInfo.Description = "G-Helper Auto Start";
             td.Triggers.Add(new LogonTrigger { UserId = WindowsIdentity.GetCurrent().Name, Delay = TimeSpan.FromSeconds(1) });
-            // ConsoleConnect = fast user switch back; no SessionUnlock, it fires on every unlock
-            td.Triggers.Add(new SessionStateChangeTrigger { StateChange = TaskSessionStateChangeType.ConsoleConnect, UserId = WindowsIdentity.GetCurrent().Name, Delay = TimeSpan.FromSeconds(1) });
+            // ConsoleConnect = fast user switch back; requires administrator rights
+            if (ProcessHelper.IsUserAdministrator())
+            {
+                td.Triggers.Add(new SessionStateChangeTrigger { StateChange = TaskSessionStateChangeType.ConsoleConnect, UserId = WindowsIdentity.GetCurrent().Name, Delay = TimeSpan.FromSeconds(1) });
+                td.Principal.RunLevel = TaskRunLevel.Highest;
+            }
             td.Actions.Add(strExeFilePath);
 
             td.Principal.LogonType = TaskLogonType.InteractiveToken;
-            if (ProcessHelper.IsUserAdministrator())
-                td.Principal.RunLevel = TaskRunLevel.Highest;
 
             td.Settings.StopIfGoingOnBatteries = false;
             td.Settings.DisallowStartIfOnBatteries = false;
@@ -205,11 +207,12 @@ public class Startup
                 if (ProcessHelper.IsUserAdministrator())
                     MessageBox.Show("Can't create a start up task. Try running Task Scheduler by hand and manually deleting GHelper task if it exists there.", "Scheduler Error", MessageBoxButtons.OK);
                 else
-                    ProcessHelper.RunAsAdmin();
+                    ProcessHelper.RunAsAdmin("startup");
             }
         }
 
-        ScheduleCharge();
+        if (ProcessHelper.IsUserAdministrator())
+            ScheduleCharge();
 
     }
 
@@ -227,10 +230,11 @@ public class Startup
                 if (ProcessHelper.IsUserAdministrator())
                     MessageBox.Show("Can't remove task. Try running Task Scheduler by hand and manually deleting GHelper task if it exists there.", "Scheduler Error", MessageBoxButtons.OK);
                 else
-                    ProcessHelper.RunAsAdmin();
+                    ProcessHelper.RunAsAdmin("unstartup");
             }
         }
 
-        UnscheduleCharge();
+        if (ProcessHelper.IsUserAdministrator())
+            UnscheduleCharge();
     }
 }

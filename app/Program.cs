@@ -213,6 +213,12 @@ namespace GHelper
 
             switch (action)
             {
+                case "startup":
+                    Startup.Schedule();
+                    break;
+                case "unstartup":
+                    Startup.UnSchedule();
+                    break;
                 case "cpu":
                     Startup.ReScheduleAdmin();
                     settingsForm.FansToggle();
