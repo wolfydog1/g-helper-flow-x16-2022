@@ -612,6 +612,18 @@ namespace GHelper
             UpdateKeyboardLabel();
             labelMatrix.Text = Properties.Strings.AnimeMatrix;
             labelBatteryTitle.Text = Properties.Strings.BatteryChargeLimit;
+            labelBatteryTitle.Cursor = Cursors.Hand;
+            pictureBattery.Cursor = Cursors.Hand;
+            labelBattery.Cursor = Cursors.Hand;
+
+            EventHandler openBatteryHealth = (s, e) =>
+            {
+                new GHelper.Battery.BatteryHealthForm().ShowDialog(this);
+            };
+
+            labelBatteryTitle.Click += openBatteryHealth;
+            pictureBattery.Click += openBatteryHealth;
+            labelBattery.Click += openBatteryHealth;
 
             checkStartup.Text = Properties.Strings.RunOnStartup;
 
@@ -3455,7 +3467,8 @@ namespace GHelper
                         if (toolTip.GetToolTip(labelBattery) != HardwareControl.batteryHealthStr)
                         {
                             toolTip.SetToolTip(labelBattery, HardwareControl.batteryHealthStr);
-                            toolTip.SetToolTip(labelBatteryTitle, HardwareControl.batteryHealthStr);
+                            toolTip.SetToolTip(labelBatteryTitle, HardwareControl.batteryHealthStr + " (Click for Battery Health & Telemetry)");
+                            toolTip.SetToolTip(labelBattery, HardwareControl.batteryHealthStr + " (Click for Battery Health & Telemetry)");
                         }
                     }
 

@@ -447,6 +447,20 @@ namespace GHelper
             Logger.WriteLine($"Power source: {currentSource} -> {source}");
             currentSource = source;
             SetAutoModes(powerChanged: true);
+
+            if (AppConfig.Get("limit_power_usbc", 1) == 1)
+            {
+                if (source == PowerSource.USBC)
+                {
+                    int maxCpu = AppConfig.Get("max_usbc_cpu", 35);
+                    int maxGpu = AppConfig.Get("max_usbc_gpu", 45);
+                    toast?.RunToast($"USB-C PD Connected • Power Limited ({maxCpu}W CPU / {maxGpu}W GPU)", ToastIcon.Charger);
+                }
+                else if (source == PowerSource.Barrel)
+                {
+                    toast?.RunToast("Barrel Charger Connected • Full Power Restored", ToastIcon.Charger);
+                }
+            }
         }
 
         public static void OnChargerEvent() => SchedulePowerCheck();

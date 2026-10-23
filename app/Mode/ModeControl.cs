@@ -414,6 +414,15 @@ namespace GHelper.Mode
 
             if (limit_slow < 0 || allAMD) limit_slow = limit_total;
 
+            if (Program.currentSource == Program.PowerSource.USBC && AppConfig.Get("limit_power_usbc", 1) == 1)
+            {
+                int maxUsbcCpu = AppConfig.Get("max_usbc_cpu", 35);
+                if (limit_total > maxUsbcCpu) limit_total = maxUsbcCpu;
+                if (limit_slow > maxUsbcCpu) limit_slow = maxUsbcCpu;
+                if (limit_fast > maxUsbcCpu + 10) limit_fast = maxUsbcCpu + 10;
+                Logger.WriteLine($"USB-C PD Power Limit active: CPU capped to {limit_total}W (SPL), {limit_slow}W (sPPT), {limit_fast}W (fPPT)");
+            }
+
             if (limit_total > AsusACPI.MaxTotal) return;
             if (limit_total < AsusACPI.MinTotal) return;
 
@@ -516,6 +525,14 @@ namespace GHelper.Mode
             int gpu_boost = AppConfig.GetMode("gpu_boost");
             int gpu_temp = AppConfig.GetMode("gpu_temp");
             int gpu_power = AppConfig.GetMode("gpu_power");
+
+            if (Program.currentSource == Program.PowerSource.USBC && AppConfig.Get("limit_power_usbc", 1) == 1)
+            {
+                int maxUsbcGpu = AppConfig.Get("max_usbc_gpu", 45);
+                if (gpu_power > maxUsbcGpu) gpu_power = maxUsbcGpu;
+                if (gpu_boost > 10) gpu_boost = 5;
+                Logger.WriteLine($"USB-C PD GPU Power Limit active: TGP capped to {gpu_power}W, Boost to {gpu_boost}W");
+            }
 
             int boostResult = -1;
 

@@ -124,6 +124,7 @@ namespace GHelper
             checkBootSound = new CheckBox();
             checkKeystoneSound = new CheckBox();
             checkUSBC = new CheckBox();
+            checkUSBCPowerLimit = new CheckBox();
             checkGpuApps = new CheckBox();
             checkNVPlatform = new CheckBox();
             checkStatusLed = new CheckBox();
@@ -1296,6 +1297,7 @@ namespace GHelper
             panelSettings.Controls.Add(checkNoOverdrive);
             panelSettings.Controls.Add(checkKeystoneSound);
             panelSettings.Controls.Add(checkBootSound);
+            panelSettings.Controls.Add(checkUSBCPowerLimit);
             panelSettings.Controls.Add(checkUSBC);
             panelSettings.Controls.Add(checkGpuApps);
             panelSettings.Controls.Add(checkNVPlatform);
@@ -1425,6 +1427,19 @@ namespace GHelper
             checkKeystoneSound.Text = "Keystone Sound";
             checkKeystoneSound.UseVisualStyleBackColor = true;
             checkKeystoneSound.Visible = false;
+            // 
+            // checkUSBCPowerLimit
+            // 
+            checkUSBCPowerLimit.AutoSize = true;
+            checkUSBCPowerLimit.Dock = DockStyle.Top;
+            checkUSBCPowerLimit.Location = new Point(21, 257);
+            checkUSBCPowerLimit.Margin = new Padding(5, 3, 5, 3);
+            checkUSBCPowerLimit.Name = "checkUSBCPowerLimit";
+            checkUSBCPowerLimit.Padding = new Padding(3);
+            checkUSBCPowerLimit.Size = new Size(917, 42);
+            checkUSBCPowerLimit.TabIndex = 5;
+            checkUSBCPowerLimit.Text = "Auto-limit power on USB-C charger (prevents battery discharge under load)";
+            checkUSBCPowerLimit.UseVisualStyleBackColor = true;
             // 
             // checkUSBC
             // 
@@ -2318,6 +2333,7 @@ namespace GHelper
         private CheckBox checkNoOverdrive;
         private CheckBox checkELMB;
         private CheckBox checkUSBC;
+        private CheckBox checkUSBCPowerLimit;
         private CheckBox checkGpuApps;
         private PictureBox pictureBacklight;
         private Label labelBacklightTitle;

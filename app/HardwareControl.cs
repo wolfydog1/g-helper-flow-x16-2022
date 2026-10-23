@@ -605,6 +605,75 @@ public static class HardwareControl
         batteryHealth = health * 100;
     }
 
+    public static (string Manufacturer, string Chemistry, int VoltageMv) GetBatteryHardwareInfo()
+    {
+        string mfg = "ASUSTeK";
+        string chem = "Li-Ion";
+        int mv = 0;
+        try
+        {
+            using var searcher = new ManagementObjectSearcher("SELECT Manufacturer, Chemistry, DesignVoltage FROM Win32_Battery");
+            foreach (var obj in searcher.Get())
+            {
+                if (obj["Manufacturer"] is string m && !string.IsNullOrWhiteSpace(m)) mfg = m.Trim();
+                if (obj["Chemistry"] != null)
+                {
+                    int c = Convert.ToInt32(obj["Chemistry"]);
+                    chem = c switch
+                    {
+                        1 => "Other",
+                        2 => "Unknown",
+                        3 => "Lead Acid",
+                        4 => "Nickel Cadmium",
+                        5 => "Nickel Metal Hydride",
+                        6 => "Lithium-ion",
+                        7 => "Zinc air",
+                        8 => "Lithium Polymer",
+                        _ => "Li-Ion"
+                    };
+                }
+                if (obj["DesignVoltage"] != null) mv = Convert.ToInt32(obj["DesignVoltage"]);
+                break;
+            }
+        }
+        catch { }
+        return (mfg, chem, mv);
+    }
+
+    public static void GenerateAndOpenBatteryReport()
+    {
+        Task.Run(() =>
+        {
+            try
+            {
+                string reportPath = Path.Combine(Path.GetTempPath(), "ghelper-battery-report.html");
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "powercfg.exe",
+                    Arguments = $"/batteryreport /output \"{reportPath}\"",
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                };
+                using var proc = Process.Start(psi);
+                proc?.WaitForExit(5000);
+
+                if (File.Exists(reportPath))
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = reportPath,
+                        UseShellExecute = true
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.WriteLine($"Failed to generate battery report: {ex.Message}");
+            }
+        });
+    }
+
 
     public static float? GetCPUTemp()
     {

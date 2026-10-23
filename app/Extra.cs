@@ -208,6 +208,7 @@ namespace GHelper
             checkELMB.Text = Properties.Strings.ExtremeLowMotionBlur;
             checkTopmost.Text = Properties.Strings.WindowTop;
             checkUSBC.Text = Properties.Strings.OptimizedUSBC;
+            checkUSBCPowerLimit.Text = "Auto-limit power on USB-C charger (prevents battery discharge under load)";
             checkAutoToggleClamshellMode.Text = Properties.Strings.ToggleClamshellMode;
 
             labelBacklightKeyboard.Text = Properties.Strings.Keyboard;
@@ -472,6 +473,14 @@ namespace GHelper
             checkUSBC.Checked = AppConfig.Is("optimized_usbc");
             checkUSBC.CheckedChanged += CheckUSBC_CheckedChanged;
 
+            checkUSBCPowerLimit.Checked = AppConfig.Get("limit_power_usbc", 1) == 1;
+            checkUSBCPowerLimit.CheckedChanged += (s, e) =>
+            {
+                AppConfig.Set("limit_power_usbc", checkUSBCPowerLimit.Checked ? 1 : 0);
+                Program.modeControl?.SetPower(false);
+                Program.modeControl?.SetGPUClocks(false);
+            };
+
             sliderBrightness.Value = InputDispatcher.GetBacklight();
             sliderBrightness.AccessibleName = Properties.Strings.LaptopBacklight + ": " + sliderBrightness.Value;
             sliderBrightness.ValueChanged += SliderBrightness_ValueChanged;
@@ -661,6 +670,7 @@ namespace GHelper
             toolTip.SetToolTip(checkTopmost, "Keeps the G-Helper main window pinned above other desktop windows.");
             toolTip.SetToolTip(checkNoOverdrive, "Keeps panel Overdrive disabled even at high refresh rates on AC power.");
             toolTip.SetToolTip(checkUSBC, "Prevents the discrete NVIDIA/AMD GPU from automatically waking up in Optimized mode when powered via a lower-wattage USB-C PD charger.");
+            toolTip.SetToolTip(checkUSBCPowerLimit, "When connected to a 65W or 100W USB-C charger, automatically limits CPU power to 35W and GPU boost to 45W so total power draw does not exceed charger capacity, preventing the battery from discharging while plugged in.");
             toolTip.SetToolTip(checkGpuApps, "Automatically terminates non-essential background apps holding onto the discrete GPU before switching to Eco mode.");
             toolTip.SetToolTip(checkBootSound, "Enables or disables the ASUS ROG startup sound effect in BIOS.");
             toolTip.SetToolTip(checkXGMBattery, "Automatically caps laptop battery charge at 80% while docked to the ROG XG Mobile to prevent heat/voltage wear.");
