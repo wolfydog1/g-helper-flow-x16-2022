@@ -410,8 +410,8 @@ namespace GHelper
             tableBatteryOptions.Margin = new Padding(8, 2, 8, 2);
             tableBatteryOptions.Name = "tableBatteryOptions";
             tableBatteryOptions.RowCount = 1;
-            tableBatteryOptions.RowStyles.Add(new RowStyle(SizeType.Absolute, 76F));
-            tableBatteryOptions.Size = new Size(787, 76);
+            tableBatteryOptions.RowStyles.Add(new RowStyle(SizeType.Absolute, 48F));
+            tableBatteryOptions.Size = new Size(787, 48);
             tableBatteryOptions.TabIndex = 43;
             // 
             // buttonPauseCharge
@@ -428,9 +428,9 @@ namespace GHelper
             buttonPauseCharge.Margin = new Padding(4);
             buttonPauseCharge.Name = "buttonPauseCharge";
             buttonPauseCharge.Secondary = false;
-            buttonPauseCharge.Size = new Size(149, 68);
+            buttonPauseCharge.Size = new Size(149, 40);
             buttonPauseCharge.TabIndex = 0;
-            buttonPauseCharge.Text = "Pause Charge";
+            buttonPauseCharge.Text = "Pause";
             buttonPauseCharge.UseVisualStyleBackColor = false;
             // 
             // buttonSmartCharge
@@ -447,9 +447,9 @@ namespace GHelper
             buttonSmartCharge.Margin = new Padding(4);
             buttonSmartCharge.Name = "buttonSmartCharge";
             buttonSmartCharge.Secondary = false;
-            buttonSmartCharge.Size = new Size(149, 68);
+            buttonSmartCharge.Size = new Size(149, 40);
             buttonSmartCharge.TabIndex = 1;
-            buttonSmartCharge.Text = "Smart <60%";
+            buttonSmartCharge.Text = "Smart";
             buttonSmartCharge.UseVisualStyleBackColor = false;
             // 
             // buttonBatteryBoost
@@ -466,9 +466,9 @@ namespace GHelper
             buttonBatteryBoost.Margin = new Padding(4);
             buttonBatteryBoost.Name = "buttonBatteryBoost";
             buttonBatteryBoost.Secondary = false;
-            buttonBatteryBoost.Size = new Size(188, 68);
+            buttonBatteryBoost.Size = new Size(188, 40);
             buttonBatteryBoost.TabIndex = 1;
-            buttonBatteryBoost.Text = "No Boost on Battery";
+            buttonBatteryBoost.Text = "No Boost";
             buttonBatteryBoost.UseVisualStyleBackColor = false;
             // 
             // buttonBatteryMiniled
@@ -485,9 +485,9 @@ namespace GHelper
             buttonBatteryMiniled.Margin = new Padding(4);
             buttonBatteryMiniled.Name = "buttonBatteryMiniled";
             buttonBatteryMiniled.Secondary = false;
-            buttonBatteryMiniled.Size = new Size(188, 68);
+            buttonBatteryMiniled.Size = new Size(188, 40);
             buttonBatteryMiniled.TabIndex = 2;
-            buttonBatteryMiniled.Text = "1-Zone on Battery";
+            buttonBatteryMiniled.Text = "1-Zone Bat";
             buttonBatteryMiniled.UseVisualStyleBackColor = false;
             // 
             // buttonBatteryHDR
@@ -504,9 +504,9 @@ namespace GHelper
             buttonBatteryHDR.Margin = new Padding(4);
             buttonBatteryHDR.Name = "buttonBatteryHDR";
             buttonBatteryHDR.Secondary = false;
-            buttonBatteryHDR.Size = new Size(191, 68);
+            buttonBatteryHDR.Size = new Size(191, 40);
             buttonBatteryHDR.TabIndex = 3;
-            buttonBatteryHDR.Text = "HDR Off on Battery";
+            buttonBatteryHDR.Text = "No HDR Bat";
             buttonBatteryHDR.UseVisualStyleBackColor = false;
             // 
             // panelBatteryTitle
@@ -1375,8 +1375,8 @@ namespace GHelper
             tableScreenSwitches.Margin = new Padding(8, 2, 8, 2);
             tableScreenSwitches.Name = "tableScreenSwitches";
             tableScreenSwitches.RowCount = 1;
-            tableScreenSwitches.RowStyles.Add(new RowStyle(SizeType.Absolute, 76F));
-            tableScreenSwitches.Size = new Size(787, 76);
+            tableScreenSwitches.RowStyles.Add(new RowStyle(SizeType.Absolute, 48F));
+            tableScreenSwitches.Size = new Size(787, 48);
             tableScreenSwitches.TabIndex = 26;
             // 
             // buttonTouchscreen
@@ -1393,9 +1393,9 @@ namespace GHelper
             buttonTouchscreen.Margin = new Padding(4);
             buttonTouchscreen.Name = "buttonTouchscreen";
             buttonTouchscreen.Secondary = false;
-            buttonTouchscreen.Size = new Size(149, 68);
+            buttonTouchscreen.Size = new Size(149, 40);
             buttonTouchscreen.TabIndex = 0;
-            buttonTouchscreen.Text = "Touchscreen";
+            buttonTouchscreen.Text = "Touch";
             buttonTouchscreen.UseVisualStyleBackColor = false;
             // 
             // buttonRotation
@@ -1412,9 +1412,9 @@ namespace GHelper
             buttonRotation.Margin = new Padding(4);
             buttonRotation.Name = "buttonRotation";
             buttonRotation.Secondary = false;
-            buttonRotation.Size = new Size(149, 68);
+            buttonRotation.Size = new Size(149, 40);
             buttonRotation.TabIndex = 1;
-            buttonRotation.Text = "Rotation";
+            buttonRotation.Text = "Rotate";
             buttonRotation.UseVisualStyleBackColor = false;
             // 
             // buttonHDR
@@ -1431,7 +1431,7 @@ namespace GHelper
             buttonHDR.Margin = new Padding(4);
             buttonHDR.Name = "buttonHDR";
             buttonHDR.Secondary = false;
-            buttonHDR.Size = new Size(149, 68);
+            buttonHDR.Size = new Size(149, 40);
             buttonHDR.TabIndex = 2;
             buttonHDR.Text = "HDR";
             buttonHDR.UseVisualStyleBackColor = false;
@@ -1450,7 +1450,7 @@ namespace GHelper
             buttonAutoHDR.Margin = new Padding(4);
             buttonAutoHDR.Name = "buttonAutoHDR";
             buttonAutoHDR.Secondary = false;
-            buttonAutoHDR.Size = new Size(149, 68);
+            buttonAutoHDR.Size = new Size(149, 40);
             buttonAutoHDR.TabIndex = 3;
             buttonAutoHDR.Text = "Auto HDR";
             buttonAutoHDR.UseVisualStyleBackColor = false;
@@ -2641,7 +2641,6 @@ namespace GHelper
         private System.Windows.Forms.Label labelKeyboardBrightness;
         private System.Windows.Forms.Label labelXGMFan;
         private System.Windows.Forms.TableLayoutPanel tableFans;
-        private System.Windows.Forms.CheckBox checkLimitCpuBoost;
     }
 }
 

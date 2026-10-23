@@ -182,43 +182,49 @@ namespace GHelper
                 _smoothedLux = (_smoothedLux * 0.65f) + (rawLux * 0.35f);
 
             float lux = _smoothedLux;
-            if (!IsHandleCreated) return;
+            if (!IsHandleCreated || IsDisposed || Disposing) return;
 
-            this.BeginInvoke(new Action(() =>
+            try
             {
-                if (AppConfig.Get("auto_screen_brightness") == 1)
+                this.BeginInvoke(new Action(() =>
                 {
-                    int newScreenBright = Math.Clamp(InterpolateCurve("screen_curve", lux, 100), 0, 100);
-                    int diff = Math.Abs(trackScreenBrightness.Value - newScreenBright);
-                    // Require >= 2% change (hysteresis) unless forced or hitting 0%/100% endpoints
-                    if (force || diff >= 2 || (diff >= 1 && (newScreenBright == 0 || newScreenBright == 100)))
+                    if (IsDisposed || Disposing) return;
+                    if (AppConfig.Get("auto_screen_brightness") == 1)
                     {
-                        UpdateBrightnessSlider(newScreenBright);
-                        ScreenBrightness.SetAsync(newScreenBright);
-                    }
-                }
-                if (AppConfig.Get("auto_keyboard_brightness") == 1)
-                {
-                    // Do not turn keyboard backlight back on when folded in Tablet/Tent mode, lid closed, or idle-off
-                    if (!InputDispatcher.tabletMode && !InputDispatcher.tentMode && !InputDispatcher.lidClose && InputDispatcher.backlightActivity)
-                    {
-                        int newKbBright = Math.Clamp(InterpolateCurve("keyboard_curve", lux, 3), 0, 3);
-                        if (trackKeyboardBrightness.Value != newKbBright)
+                        int newScreenBright = Math.Clamp(InterpolateCurve("screen_curve", lux, 100), 0, 100);
+                        int diff = Math.Abs(trackScreenBrightness.Value - newScreenBright);
+                        // Require >= 2% change (hysteresis) unless forced or hitting 0%/100% endpoints
+                        if (force || diff >= 2 || (diff >= 1 && (newScreenBright == 0 || newScreenBright == 100)))
                         {
-                            try
+                            UpdateBrightnessSlider(newScreenBright);
+                            ScreenBrightness.SetAsync(newScreenBright);
+                        }
+                    }
+                    if (AppConfig.Get("auto_keyboard_brightness") == 1)
+                    {
+                        // Do not turn keyboard backlight back on when folded in Tablet/Tent mode, lid closed, or idle-off
+                        if (!InputDispatcher.tabletMode && !InputDispatcher.tentMode && !InputDispatcher.lidClose && InputDispatcher.backlightActivity)
+                        {
+                            int newKbBright = Math.Clamp(InterpolateCurve("keyboard_curve", lux, 3), 0, 3);
+                            if (trackKeyboardBrightness.Value != newKbBright)
                             {
-                                isProgrammaticBrightnessChange = true;
-                                trackKeyboardBrightness.Value = newKbBright;
-                            }
-                            finally
-                            {
-                                isProgrammaticBrightnessChange = false;
+                                try
+                                {
+                                    isProgrammaticBrightnessChange = true;
+                                    trackKeyboardBrightness.Value = newKbBright;
+                                }
+                                finally
+                                {
+                                    isProgrammaticBrightnessChange = false;
+                                }
                             }
                         }
                     }
-                }
-                UpdateScreenHeaderLabel();
-            }));
+                    UpdateScreenHeaderLabel();
+                }));
+            }
+            catch (ObjectDisposedException) { }
+            catch (InvalidOperationException) { }
         }
 
         private string _baseScreenTitle = "";
@@ -258,7 +264,6 @@ namespace GHelper
             this.labelScreenBrightness = new System.Windows.Forms.Label();
             this.trackKeyboardBrightness = new GHelper.UI.Slider();
             this.labelKeyboardBrightness = new System.Windows.Forms.Label();
-            this.checkLimitCpuBoost = new System.Windows.Forms.CheckBox() { Visible = false };
 
             this.trackScreenBrightness.Max = 100;
             this.trackScreenBrightness.Step = 1;
@@ -414,7 +419,7 @@ namespace GHelper
             panelScreenBrightnessContainer.Controls.Add(trackScreenBrightness, 3, 0);
 
             this.panelScreen.Controls.Add(panelScreenBrightnessContainer);
-            this.panelScreen.Controls.SetChildIndex(panelScreenBrightnessContainer, 0);
+            this.panelScreen.Controls.SetChildIndex(panelScreenBrightnessContainer, 1);
 
             // ==== Keyboard Brightness Layout ====
             TableLayoutPanel panelKeyboardBrightnessContainer = new TableLayoutPanel();
@@ -1021,7 +1026,9 @@ namespace GHelper
 
                 VisualiseBrightness();
 
+                sliderGamma.ValueChanged -= SliderGamma_ValueChanged;
                 sliderGamma.ValueChanged += SliderGamma_ValueChanged;
+                sliderGamma.MouseUp -= SliderGamma_ValueChanged;
                 sliderGamma.MouseUp += SliderGamma_ValueChanged;
 
             }
@@ -1048,6 +1055,7 @@ namespace GHelper
 
                     buttonInstallColor.Text = Properties.Strings.DownloadColorProfiles;
                     buttonInstallColor.Visible = true;
+                    buttonInstallColor.Click -= ButtonInstallColorProfile_Click;
                     buttonInstallColor.Click += ButtonInstallColorProfile_Click;
 
                     panelGamma.Visible = true;
@@ -1077,10 +1085,12 @@ namespace GHelper
 
             VisualControl.SetVisual(visualValue, colorTempValue, true);
 
+            comboVisual.SelectedValueChanged -= ComboVisual_SelectedValueChanged;
             comboVisual.SelectedValueChanged += ComboVisual_SelectedValueChanged;
             comboVisual.Visible = true;
             VisualiseDisabled();
 
+            comboColorTemp.SelectedValueChanged -= ComboVisual_SelectedValueChanged;
             comboColorTemp.SelectedValueChanged += ComboVisual_SelectedValueChanged;
             comboColorTemp.Visible = true;
 
@@ -1092,6 +1102,7 @@ namespace GHelper
             comboGamut.ValueMember = "Key";
             comboGamut.SelectedValue = (SplendidGamut)AppConfig.Get("gamut", (int)VisualControl.GetDefaultGamut());
 
+            comboGamut.SelectedValueChanged -= ComboGamut_SelectedValueChanged;
             comboGamut.SelectedValueChanged += ComboGamut_SelectedValueChanged;
             comboGamut.Visible = true;
 
@@ -3411,6 +3422,10 @@ namespace GHelper
                         xgmHeader = "XGM: " + (xgmTempStr.Length > 0 ? xgmTempStr : "--") + (xgmFanStr.Length > 0 ? " " + xgmFanStr : "");
                         if (!labelXGMFan.Visible) labelXGMFan.Visible = true;
                     }
+                    else
+                    {
+                        if (labelXGMFan.Visible) labelXGMFan.Visible = false;
+                    }
                     SetLabelText(labelXGMFan, xgmHeader);
 
                     SetLabelText(labelBattery, battery);
@@ -3852,6 +3867,7 @@ namespace GHelper
             if (InvokeRequired) { Invoke(VisualiseBatteryOptions); return; }
             if (buttonPauseCharge == null) return;
 
+            buttonPauseCharge.Text = "Pause";
             buttonPauseCharge.Activated = BatteryControl.chargePaused;
             if (buttonSmartCharge != null)
             {
@@ -3863,15 +3879,17 @@ namespace GHelper
             {
                 buttonBatteryBoost.Activated = true;
                 buttonBatteryBoost.BorderColor = colorStandard;
-                buttonBatteryBoost.Text = "Travel Mode: On";
+                buttonBatteryBoost.Text = "Travel";
             }
             else
             {
                 buttonBatteryBoost.Activated = AppConfig.Is("limit_cpu_boost_battery");
                 buttonBatteryBoost.BorderColor = colorEco;
-                buttonBatteryBoost.Text = "No Boost on Bat";
+                buttonBatteryBoost.Text = "No Boost";
             }
+            buttonBatteryMiniled.Text = "1-Zone Bat";
             buttonBatteryMiniled.Activated = AppConfig.Is("auto_miniled");
+            buttonBatteryHDR.Text = "No HDR Bat";
             buttonBatteryHDR.Activated = AppConfig.Is("hdr_battery_off");
             VisualiseBatteryTitle(sliderBattery.Value);
         }
@@ -3914,7 +3932,7 @@ namespace GHelper
             switch (mode)
             {
                 case TouchPenMode.TouchAndPen:
-                    buttonTouchscreen.Text = "Touch: On";
+                    buttonTouchscreen.Text = "Touch";
                     buttonTouchscreen.BorderColor = colorEco;
                     buttonTouchscreen.Activated = true;
                     break;
@@ -3924,7 +3942,7 @@ namespace GHelper
                     buttonTouchscreen.Activated = true;
                     break;
                 default:
-                    buttonTouchscreen.Text = "Touch: Off";
+                    buttonTouchscreen.Text = "Touch";
                     buttonTouchscreen.BorderColor = colorEco;
                     buttonTouchscreen.Activated = false;
                     break;
@@ -3940,7 +3958,7 @@ namespace GHelper
             bool autoTablet = AppConfig.Get("auto_tablet_rotation", 1) == 1;
             buttonRotation.Activated = unlocked;
             buttonRotation.BorderColor = autoTablet ? colorStandard : colorGray;
-            buttonRotation.Text = unlocked ? "Rotate: On" : "Rotate: Lock";
+            buttonRotation.Text = "Rotate";
         }
 
         public void VisualiseScreenSwitches(bool hdr)
@@ -3948,11 +3966,11 @@ namespace GHelper
             if (InvokeRequired) { Invoke(() => VisualiseScreenSwitches(hdr)); return; }
             if (buttonHDR == null) return;
 
-            buttonHDR.Text = hdr ? "HDR: On" : "HDR: Off";
+            buttonHDR.Text = "HDR";
             buttonHDR.Activated = hdr;
 
             bool autoHdr = ScreenCCD.GetAutoHDR();
-            buttonAutoHDR.Text = autoHdr ? "Auto HDR: On" : "Auto HDR: Off";
+            buttonAutoHDR.Text = "Auto HDR";
             buttonAutoHDR.Activated = autoHdr;
 
             VisualiseRotation();

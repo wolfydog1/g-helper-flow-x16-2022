@@ -47,6 +47,10 @@ namespace GHelper
 
             InitializeComponent();
 
+            panelFans.AutoScroll = true;
+            panelSliders.AutoScroll = true;
+            AutoScroll = true;
+
             fanSensorControl = new FanSensorControl(this);
 
             //float dpi = ControlHelper.GetDpiScale(this).Value;
@@ -959,6 +963,11 @@ namespace GHelper
 
         public void FormPosition()
         {
+            int maxWorkingHeight = (Screen.FromControl(this)?.WorkingArea.Height ?? 1000) - 50;
+            if (Height > maxWorkingHeight)
+            {
+                Height = maxWorkingHeight;
+            }
 
             if (Height > Program.settingsForm.Height)
             {
@@ -971,7 +980,7 @@ namespace GHelper
                 Top = Program.settingsForm.Top;
             }
 
-            Left = Program.settingsForm.Left - Width - 5;
+            Left = Math.Max(0, Program.settingsForm.Left - Width - 5);
         }
 
         private void Fans_Shown(object? sender, EventArgs e)
@@ -1406,8 +1415,12 @@ namespace GHelper
             try
             {
                 if (chartCount > 2)
-                    Size = MinimumSize = new Size(Size.Width, Math.Max(MinimumSize.Height, (int)(ControlHelper.GetDpiScale(this).Value * (chartCount * 200 + 100))));
-
+                {
+                    int maxWorkingHeight = (Screen.FromControl(this)?.WorkingArea.Height ?? 1000) - 50;
+                    int calculatedHeight = (int)(ControlHelper.GetDpiScale(this).Value * (chartCount * 200 + 100));
+                    int finalHeight = Math.Min(maxWorkingHeight, Math.Max(MinimumSize.Height, calculatedHeight));
+                    Size = MinimumSize = new Size(Size.Width, finalHeight);
+                }
             }
             catch (Exception ex)
             {

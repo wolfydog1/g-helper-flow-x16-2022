@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using GHelper.Helpers;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -145,6 +146,28 @@ public static class TouchscreenHelper
         return GetMode() == TouchPenMode.TouchAndPen;
     }
 
+    private static void RunPnpCommand(string script)
+    {
+        try
+        {
+            ProcessStartInfo psi = new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
+                CreateNoWindow = true,
+                UseShellExecute = !ProcessHelper.IsUserAdministrator(),
+                Verb = ProcessHelper.IsUserAdministrator() ? "" : "runas",
+                WindowStyle = ProcessWindowStyle.Hidden
+            };
+            using var proc = Process.Start(psi);
+            proc?.WaitForExit(3000);
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteLine($"Fallback PnP execution error: {ex.Message}");
+        }
+    }
+
     public static void SetMode(TouchPenMode mode)
     {
         bool enableTouch = mode == TouchPenMode.TouchAndPen;
@@ -155,28 +178,12 @@ public static class TouchscreenHelper
 
         if (!nativeTouchSuccess)
         {
-            try
-            {
-                ProcessHelper.RunAsAdmin();
-                ProcessHelper.RunCMD("powershell", (enableTouch ? "Enable-PnpDevice" : "Disable-PnpDevice") + " -InstanceId (Get-PnpDevice -FriendlyName '*touch*screen*').InstanceId -Confirm:$false");
-            }
-            catch (Exception ex)
-            {
-                Logger.WriteLine($"Fallback touchscreen toggle error: {ex.Message}");
-            }
+            RunPnpCommand((enableTouch ? "Enable-PnpDevice" : "Disable-PnpDevice") + " -InstanceId (Get-PnpDevice -FriendlyName '*touch*screen*').InstanceId -Confirm:$false");
         }
 
         if (!nativePenSuccess && mode != TouchPenMode.TouchAndPen)
         {
-            try
-            {
-                ProcessHelper.RunAsAdmin();
-                ProcessHelper.RunCMD("powershell", (enablePen ? "Enable-PnpDevice" : "Disable-PnpDevice") + " -InstanceId (Get-PnpDevice -FriendlyName '*compliant*pen*').InstanceId -Confirm:$false");
-            }
-            catch (Exception ex)
-            {
-                Logger.WriteLine($"Fallback pen toggle error: {ex.Message}");
-            }
+            RunPnpCommand((enablePen ? "Enable-PnpDevice" : "Disable-PnpDevice") + " -InstanceId (Get-PnpDevice -FriendlyName '*compliant*pen*').InstanceId -Confirm:$false");
         }
 
         AppConfig.Set("touch_pen_mode", (int)mode);
