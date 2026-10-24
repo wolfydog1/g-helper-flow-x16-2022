@@ -29,6 +29,10 @@ namespace GHelper
             checkUsage.Text = Properties.Strings.OverlayLoad;
             checkBattery.Text = Properties.Strings.Battery;
             checkLabels.Text = Properties.Strings.OverlayLabels;
+            check1PercentLow.Text = "1% Low FPS";
+            checkJitter.Text = "Frame Pacing";
+            checkShadow.Text = "Text Shadow";
+            checkHdrBadge.Text = "HDR / 512Z Badge";
             labelSizeTitle.Text = Properties.Strings.OverlaySize;
             labelAlphaTitle.Text = Properties.Strings.OverlayTransparency;
             labelHotkeys.Text = "•  Ctrl + Shift + Alt + O - Toggle overlay\n•  Ctrl + Shift + Alt + Mouse Drag - Move overlay\n•  Ctrl + Shift + Alt + Mouse Click - Switch mode\n•  Ctrl + Shift + Alt + Wheel - Resize overlay\n•  Ctrl + Shift + Alt + Wheel Click - Reset size";
@@ -36,7 +40,18 @@ namespace GHelper
             buttonGpuColor.Text = "GPU " + Properties.Strings.Color;
             buttonReset.Text = Properties.Strings.Reset;
 
-            modeButtons = new[] { buttonDefault, buttonLight, buttonFull, buttonComplete };
+            buttonTopLeft.Text = "↖ Top-Left";
+            buttonTopRight.Text = "↗ Top-Right";
+            buttonBottomLeft.Text = "↙ Bottom-Left";
+            buttonBottomRight.Text = "↘ Bottom-Right";
+
+            buttonTopLeft.Click += (s, e) => { Program.hardwareOverlay?.SnapToCorner(OverlayCorner.TopLeft); UpdateCornerButtons(); };
+            buttonTopRight.Click += (s, e) => { Program.hardwareOverlay?.SnapToCorner(OverlayCorner.TopRight); UpdateCornerButtons(); };
+            buttonBottomLeft.Click += (s, e) => { Program.hardwareOverlay?.SnapToCorner(OverlayCorner.BottomLeft); UpdateCornerButtons(); };
+            buttonBottomRight.Click += (s, e) => { Program.hardwareOverlay?.SnapToCorner(OverlayCorner.BottomRight); UpdateCornerButtons(); };
+
+            modeButtons = new[] { buttonDefault, buttonLight, buttonFull, buttonComplete, buttonBar };
+            buttonBar.Text = "Strip";
 
             blocks = new[] {
                 (checkFps, "overlay_show_fps"),
@@ -47,6 +62,10 @@ namespace GHelper
                 (checkUsage, "overlay_show_usage"),
                 (checkRam, "overlay_show_ram"),
                 (checkLabels, "overlay_names"),
+                (check1PercentLow, "overlay_show_1pct_low"),
+                (checkJitter, "overlay_show_jitter"),
+                (checkShadow, "overlay_text_shadow"),
+                (checkHdrBadge, "overlay_show_hdr_badge"),
             };
 
             checkEnable.Checked = AppConfig.IsOverlay();
@@ -54,6 +73,7 @@ namespace GHelper
 
             mode = Math.Clamp(AppConfig.Get("overlay_mode", 0), 0, modeButtons.Length - 1);
             VisualiseBlocks();
+            UpdateCornerButtons();
 
             trackScale.Value = Math.Clamp(AppConfig.Get("overlay_scale_percent", 100), trackScale.Minimum, trackScale.Maximum);
             trackAlpha.Value = Math.Clamp(AppConfig.Get("overlay_alpha", 128), trackAlpha.Minimum, trackAlpha.Maximum);
@@ -70,6 +90,7 @@ namespace GHelper
             buttonDefault.BorderColor = colorStandard;
             buttonFull.BorderColor = colorTurbo;
             buttonComplete.BorderColor = colorCustom;
+            buttonBar.BorderColor = colorStandard;
 
             foreach (var button in modeButtons) button.Click += ButtonMode_Click;
             foreach (var (box, _) in blocks) box.CheckedChanged += Block_CheckedChanged;
@@ -82,13 +103,22 @@ namespace GHelper
             buttonGpuColor.Click += (s, e) => PickColor("overlay_color_gpu", buttonGpuColor, HardwareOverlay.GpuColor);
             buttonReset.Click += ButtonReset_Click;
 
-            Shown += (s, e) => FormPosition();
+            Shown += (s, e) => { FormPosition(); UpdateCornerButtons(); };
         }
 
         public void FormPosition()
         {
             Top = Program.settingsForm.Top;
             Left = Program.settingsForm.Left - Width - 5;
+        }
+
+        private void UpdateCornerButtons()
+        {
+            var current = HardwareOverlay.CurrentCorner;
+            buttonTopLeft.Activated = current == OverlayCorner.TopLeft;
+            buttonTopRight.Activated = current == OverlayCorner.TopRight;
+            buttonBottomLeft.Activated = current == OverlayCorner.BottomLeft;
+            buttonBottomRight.Activated = current == OverlayCorner.BottomRight;
         }
 
         private string AlphaText() => Math.Round(trackAlpha.Value * 100.0 / 255) + "%";

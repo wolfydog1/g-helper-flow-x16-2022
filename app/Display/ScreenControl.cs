@@ -22,6 +22,13 @@ namespace GHelper.Display
             bool online = SystemInformation.PowerStatus.PowerLineStatus == PowerLineStatus.Online;
             int autoMiniled = AppConfig.Is("auto_miniled") ? (online ? 1 : 0) : -1;
 
+            if (AppConfig.Is("auto_hdr_miniled"))
+            {
+                bool isHdr = ScreenCCD.GetHDRStatus();
+                if (isHdr) autoMiniled = 1;
+                else if (AppConfig.IsNotFalse("auto_miniled_sdr_single")) autoMiniled = 0;
+            }
+
             if (AppConfig.Is("hdr_battery_off"))
             {
                 if (!online && ScreenCCD.GetHDRStatus())
@@ -356,6 +363,28 @@ namespace GHelper.Display
             if (miniled >= 0)
             {
                 Logger.WriteLine($"Miniled: {miniled1} {miniled2}");
+                if (AppConfig.Is("auto_hdr_miniled"))
+                {
+                    if (hdr && miniled != 1)
+                    {
+                        Logger.WriteLine("Auto Multi-Zone on HDR: Engaging Multi-Zone");
+                        SetMiniled(1);
+                        miniled = 1;
+                        if (miniled1 >= 0) miniled1 = 1;
+                        else if (miniled2 >= 0) miniled2 = 1;
+                        AppConfig.Set("miniled", 1);
+                    }
+                    else if (!hdr && miniled == 1 && AppConfig.IsNotFalse("auto_miniled_sdr_single"))
+                    {
+                        Logger.WriteLine("Auto Multi-Zone on HDR: Reverting to Single-Zone for SDR");
+                        SetMiniled(0);
+                        miniled = 0;
+                        if (miniled1 >= 0) miniled1 = 0;
+                        else if (miniled2 >= 0) miniled2 = 0;
+                        AppConfig.Set("miniled", 0);
+                    }
+                }
+
                 int savedMiniled = AppConfig.Get("miniled", -1);
                 if (hdr && savedMiniled >= 0 && savedMiniled != miniled)
                 {

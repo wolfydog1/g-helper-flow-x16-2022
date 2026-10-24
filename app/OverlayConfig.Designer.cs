@@ -37,6 +37,7 @@ namespace GHelper
             buttonDefault = new GHelper.UI.RButton();
             buttonFull = new GHelper.UI.RButton();
             buttonComplete = new GHelper.UI.RButton();
+            buttonBar = new GHelper.UI.RButton();
             tableBlocks = new TableLayoutPanel();
             checkFps = new GHelper.UI.RCheckBox();
             checkTemp = new GHelper.UI.RCheckBox();
@@ -47,6 +48,10 @@ namespace GHelper
             checkRam = new GHelper.UI.RCheckBox();
             checkBattery = new GHelper.UI.RCheckBox();
             checkLabels = new GHelper.UI.RCheckBox();
+            check1PercentLow = new GHelper.UI.RCheckBox();
+            checkJitter = new GHelper.UI.RCheckBox();
+            checkShadow = new GHelper.UI.RCheckBox();
+            checkHdrBadge = new GHelper.UI.RCheckBox();
             panelSliders = new Panel();
             labelSizeTitle = new Label();
             labelSize = new Label();
@@ -58,6 +63,11 @@ namespace GHelper
             buttonCpuColor = new GHelper.UI.RColorButton();
             buttonGpuColor = new GHelper.UI.RColorButton();
             buttonReset = new GHelper.UI.RButton();
+            tableCorners = new TableLayoutPanel();
+            buttonTopLeft = new GHelper.UI.RButton();
+            buttonTopRight = new GHelper.UI.RButton();
+            buttonBottomLeft = new GHelper.UI.RButton();
+            buttonBottomRight = new GHelper.UI.RButton();
             panelHotkeys = new Panel();
             labelHotkeys = new Label();
             panelToggles.SuspendLayout();
@@ -67,6 +77,7 @@ namespace GHelper
             ((System.ComponentModel.ISupportInitialize)trackScale).BeginInit();
             ((System.ComponentModel.ISupportInitialize)trackAlpha).BeginInit();
             tableColors.SuspendLayout();
+            tableCorners.SuspendLayout();
             panelHotkeys.SuspendLayout();
             SuspendLayout();
             //
@@ -111,15 +122,17 @@ namespace GHelper
             //
             tableModes.AutoSize = true;
             tableModes.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            tableModes.ColumnCount = 4;
-            tableModes.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
-            tableModes.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
-            tableModes.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
-            tableModes.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+            tableModes.ColumnCount = 5;
+            tableModes.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20F));
+            tableModes.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20F));
+            tableModes.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20F));
+            tableModes.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20F));
+            tableModes.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20F));
             tableModes.Controls.Add(buttonLight, 0, 0);
             tableModes.Controls.Add(buttonDefault, 1, 0);
             tableModes.Controls.Add(buttonFull, 2, 0);
             tableModes.Controls.Add(buttonComplete, 3, 0);
+            tableModes.Controls.Add(buttonBar, 4, 0);
             tableModes.Dock = DockStyle.Top;
             tableModes.Location = new Point(10, 80);
             tableModes.Name = "tableModes";
@@ -142,7 +155,7 @@ namespace GHelper
             buttonLight.Margin = new Padding(4, 2, 4, 2);
             buttonLight.Name = "buttonLight";
             buttonLight.Secondary = true;
-            buttonLight.Size = new Size(212, 58);
+            buttonLight.Size = new Size(168, 58);
             buttonLight.TabIndex = 0;
             buttonLight.Text = "Light";
             buttonLight.UseVisualStyleBackColor = false;
@@ -199,10 +212,29 @@ namespace GHelper
             buttonComplete.Margin = new Padding(4, 2, 4, 2);
             buttonComplete.Name = "buttonComplete";
             buttonComplete.Secondary = true;
-            buttonComplete.Size = new Size(212, 58);
+            buttonComplete.Size = new Size(168, 58);
             buttonComplete.TabIndex = 3;
             buttonComplete.Text = "Complete";
             buttonComplete.UseVisualStyleBackColor = false;
+            //
+            // buttonBar
+            //
+            buttonBar.Activated = false;
+            buttonBar.BackColor = SystemColors.ControlLight;
+            buttonBar.BorderColor = Color.Transparent;
+            buttonBar.BorderRadius = 2;
+            buttonBar.Dock = DockStyle.Fill;
+            buttonBar.FlatAppearance.BorderSize = 0;
+            buttonBar.FlatStyle = FlatStyle.Flat;
+            buttonBar.ForeColor = SystemColors.ControlText;
+            buttonBar.Location = new Point(704, 4);
+            buttonBar.Margin = new Padding(4, 2, 4, 2);
+            buttonBar.Name = "buttonBar";
+            buttonBar.Secondary = true;
+            buttonBar.Size = new Size(168, 58);
+            buttonBar.TabIndex = 4;
+            buttonBar.Text = "Strip";
+            buttonBar.UseVisualStyleBackColor = false;
             //
             // tableBlocks
             //
@@ -221,14 +253,20 @@ namespace GHelper
             tableBlocks.Controls.Add(checkRam, 0, 2);
             tableBlocks.Controls.Add(checkBattery, 1, 2);
             tableBlocks.Controls.Add(checkLabels, 2, 2);
+            tableBlocks.Controls.Add(check1PercentLow, 0, 3);
+            tableBlocks.Controls.Add(checkJitter, 1, 3);
+            tableBlocks.Controls.Add(checkShadow, 2, 3);
+            tableBlocks.Controls.Add(checkHdrBadge, 0, 4);
             tableBlocks.Dock = DockStyle.Top;
             tableBlocks.Location = new Point(10, 160);
             tableBlocks.Name = "tableBlocks";
-            tableBlocks.RowCount = 3;
-            tableBlocks.RowStyles.Add(new RowStyle(SizeType.Absolute, 48F));
-            tableBlocks.RowStyles.Add(new RowStyle(SizeType.Absolute, 48F));
-            tableBlocks.RowStyles.Add(new RowStyle(SizeType.Absolute, 48F));
-            tableBlocks.Size = new Size(880, 144);
+            tableBlocks.RowCount = 5;
+            tableBlocks.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));
+            tableBlocks.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));
+            tableBlocks.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));
+            tableBlocks.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));
+            tableBlocks.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));
+            tableBlocks.Size = new Size(880, 230);
             tableBlocks.TabIndex = 2;
             //
             // checkFps
@@ -330,6 +368,50 @@ namespace GHelper
             checkLabels.Size = new Size(130, 48);
             checkLabels.TabIndex = 8;
             checkLabels.Text = "Labels";
+            //
+            // check1PercentLow
+            //
+            check1PercentLow.Anchor = AnchorStyles.Left;
+            check1PercentLow.AutoSize = true;
+            check1PercentLow.Location = new Point(10, 142);
+            check1PercentLow.Margin = new Padding(10, 2, 4, 2);
+            check1PercentLow.Name = "check1PercentLow";
+            check1PercentLow.Size = new Size(160, 44);
+            check1PercentLow.TabIndex = 9;
+            check1PercentLow.Text = "1% Low FPS";
+            //
+            // checkJitter
+            //
+            checkJitter.Anchor = AnchorStyles.Left;
+            checkJitter.AutoSize = true;
+            checkJitter.Location = new Point(303, 142);
+            checkJitter.Margin = new Padding(10, 2, 4, 2);
+            checkJitter.Name = "checkJitter";
+            checkJitter.Size = new Size(160, 44);
+            checkJitter.TabIndex = 10;
+            checkJitter.Text = "Frame Pacing";
+            //
+            // checkShadow
+            //
+            checkShadow.Anchor = AnchorStyles.Left;
+            checkShadow.AutoSize = true;
+            checkShadow.Location = new Point(596, 142);
+            checkShadow.Margin = new Padding(10, 2, 4, 2);
+            checkShadow.Name = "checkShadow";
+            checkShadow.Size = new Size(160, 44);
+            checkShadow.TabIndex = 11;
+            checkShadow.Text = "Text Shadow";
+            //
+            // checkHdrBadge
+            //
+            checkHdrBadge.Anchor = AnchorStyles.Left;
+            checkHdrBadge.AutoSize = true;
+            checkHdrBadge.Location = new Point(10, 188);
+            checkHdrBadge.Margin = new Padding(10, 2, 4, 2);
+            checkHdrBadge.Name = "checkHdrBadge";
+            checkHdrBadge.Size = new Size(200, 44);
+            checkHdrBadge.TabIndex = 12;
+            checkHdrBadge.Text = "HDR / Mini-LED Badge";
             //
             // panelSliders
             //
@@ -492,6 +574,103 @@ namespace GHelper
             buttonReset.Text = "Reset";
             buttonReset.UseVisualStyleBackColor = false;
             //
+            // tableCorners
+            //
+            tableCorners.AutoSize = true;
+            tableCorners.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            tableCorners.ColumnCount = 4;
+            tableCorners.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+            tableCorners.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+            tableCorners.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+            tableCorners.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+            tableCorners.Controls.Add(buttonTopLeft, 0, 0);
+            tableCorners.Controls.Add(buttonTopRight, 1, 0);
+            tableCorners.Controls.Add(buttonBottomLeft, 2, 0);
+            tableCorners.Controls.Add(buttonBottomRight, 3, 0);
+            tableCorners.Dock = DockStyle.Top;
+            tableCorners.Location = new Point(10, 525);
+            tableCorners.Name = "tableCorners";
+            tableCorners.RowCount = 1;
+            tableCorners.RowStyles.Add(new RowStyle(SizeType.Absolute, 58F));
+            tableCorners.Size = new Size(880, 58);
+            tableCorners.TabIndex = 5;
+            //
+            // buttonTopLeft
+            //
+            buttonTopLeft.Activated = false;
+            buttonTopLeft.BackColor = SystemColors.ControlLight;
+            buttonTopLeft.BorderColor = Color.Transparent;
+            buttonTopLeft.BorderRadius = 2;
+            buttonTopLeft.Dock = DockStyle.Fill;
+            buttonTopLeft.FlatAppearance.BorderSize = 0;
+            buttonTopLeft.FlatStyle = FlatStyle.Flat;
+            buttonTopLeft.ForeColor = SystemColors.ControlText;
+            buttonTopLeft.Location = new Point(4, 4);
+            buttonTopLeft.Margin = new Padding(4);
+            buttonTopLeft.Name = "buttonTopLeft";
+            buttonTopLeft.Secondary = true;
+            buttonTopLeft.Size = new Size(212, 50);
+            buttonTopLeft.TabIndex = 0;
+            buttonTopLeft.Text = "↖ Top-Left";
+            buttonTopLeft.UseVisualStyleBackColor = false;
+            //
+            // buttonTopRight
+            //
+            buttonTopRight.Activated = false;
+            buttonTopRight.BackColor = SystemColors.ControlLight;
+            buttonTopRight.BorderColor = Color.Transparent;
+            buttonTopRight.BorderRadius = 2;
+            buttonTopRight.Dock = DockStyle.Fill;
+            buttonTopRight.FlatAppearance.BorderSize = 0;
+            buttonTopRight.FlatStyle = FlatStyle.Flat;
+            buttonTopRight.ForeColor = SystemColors.ControlText;
+            buttonTopRight.Location = new Point(224, 4);
+            buttonTopRight.Margin = new Padding(4);
+            buttonTopRight.Name = "buttonTopRight";
+            buttonTopRight.Secondary = true;
+            buttonTopRight.Size = new Size(212, 50);
+            buttonTopRight.TabIndex = 1;
+            buttonTopRight.Text = "↗ Top-Right";
+            buttonTopRight.UseVisualStyleBackColor = false;
+            //
+            // buttonBottomLeft
+            //
+            buttonBottomLeft.Activated = false;
+            buttonBottomLeft.BackColor = SystemColors.ControlLight;
+            buttonBottomLeft.BorderColor = Color.Transparent;
+            buttonBottomLeft.BorderRadius = 2;
+            buttonBottomLeft.Dock = DockStyle.Fill;
+            buttonBottomLeft.FlatAppearance.BorderSize = 0;
+            buttonBottomLeft.FlatStyle = FlatStyle.Flat;
+            buttonBottomLeft.ForeColor = SystemColors.ControlText;
+            buttonBottomLeft.Location = new Point(444, 4);
+            buttonBottomLeft.Margin = new Padding(4);
+            buttonBottomLeft.Name = "buttonBottomLeft";
+            buttonBottomLeft.Secondary = true;
+            buttonBottomLeft.Size = new Size(212, 50);
+            buttonBottomLeft.TabIndex = 2;
+            buttonBottomLeft.Text = "↙ Bottom-Left";
+            buttonBottomLeft.UseVisualStyleBackColor = false;
+            //
+            // buttonBottomRight
+            //
+            buttonBottomRight.Activated = false;
+            buttonBottomRight.BackColor = SystemColors.ControlLight;
+            buttonBottomRight.BorderColor = Color.Transparent;
+            buttonBottomRight.BorderRadius = 2;
+            buttonBottomRight.Dock = DockStyle.Fill;
+            buttonBottomRight.FlatAppearance.BorderSize = 0;
+            buttonBottomRight.FlatStyle = FlatStyle.Flat;
+            buttonBottomRight.ForeColor = SystemColors.ControlText;
+            buttonBottomRight.Location = new Point(664, 4);
+            buttonBottomRight.Margin = new Padding(4);
+            buttonBottomRight.Name = "buttonBottomRight";
+            buttonBottomRight.Secondary = true;
+            buttonBottomRight.Size = new Size(212, 50);
+            buttonBottomRight.TabIndex = 3;
+            buttonBottomRight.Text = "↘ Bottom-Right";
+            buttonBottomRight.UseVisualStyleBackColor = false;
+            //
             // panelHotkeys
             //
             panelHotkeys.Controls.Add(labelHotkeys);
@@ -499,7 +678,7 @@ namespace GHelper
             panelHotkeys.Location = new Point(10, 425);
             panelHotkeys.Name = "panelHotkeys";
             panelHotkeys.Size = new Size(880, 180);
-            panelHotkeys.TabIndex = 5;
+            panelHotkeys.TabIndex = 6;
             //
             // labelHotkeys
             //
@@ -516,9 +695,10 @@ namespace GHelper
             //
             AutoScaleDimensions = new SizeF(192F, 192F);
             AutoScaleMode = AutoScaleMode.Dpi;
-            ClientSize = new Size(900, 675);
+            ClientSize = new Size(900, 780);
             Controls.Add(panelToggles);
             Controls.Add(panelHotkeys);
+            Controls.Add(tableCorners);
             Controls.Add(tableColors);
             Controls.Add(panelSliders);
             Controls.Add(tableBlocks);
@@ -541,6 +721,7 @@ namespace GHelper
             ((System.ComponentModel.ISupportInitialize)trackScale).EndInit();
             ((System.ComponentModel.ISupportInitialize)trackAlpha).EndInit();
             tableColors.ResumeLayout(false);
+            tableCorners.ResumeLayout(false);
             panelHotkeys.ResumeLayout(false);
             panelHotkeys.PerformLayout();
             ResumeLayout(false);
@@ -557,6 +738,7 @@ namespace GHelper
         private UI.RButton buttonDefault;
         private UI.RButton buttonFull;
         private UI.RButton buttonComplete;
+        private UI.RButton buttonBar;
         private TableLayoutPanel tableBlocks;
         private UI.RCheckBox checkFps;
         private UI.RCheckBox checkTemp;
@@ -567,6 +749,10 @@ namespace GHelper
         private UI.RCheckBox checkRam;
         private UI.RCheckBox checkBattery;
         private UI.RCheckBox checkLabels;
+        private UI.RCheckBox check1PercentLow;
+        private UI.RCheckBox checkJitter;
+        private UI.RCheckBox checkShadow;
+        private UI.RCheckBox checkHdrBadge;
         private Panel panelSliders;
         private Label labelSizeTitle;
         private Label labelSize;
@@ -578,6 +764,11 @@ namespace GHelper
         private UI.RColorButton buttonCpuColor;
         private UI.RColorButton buttonGpuColor;
         private UI.RButton buttonReset;
+        private TableLayoutPanel tableCorners;
+        private UI.RButton buttonTopLeft;
+        private UI.RButton buttonTopRight;
+        private UI.RButton buttonBottomLeft;
+        private UI.RButton buttonBottomRight;
         private Panel panelHotkeys;
         private Label labelHotkeys;
     }

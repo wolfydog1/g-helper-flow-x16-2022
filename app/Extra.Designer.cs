@@ -32,6 +32,11 @@ namespace GHelper
         private void InitializeComponent()
         {
             components = new System.ComponentModel.Container();
+            tableTabs = new TableLayoutPanel();
+            buttonTabKeyboard = new RButton();
+            buttonTabLighting = new RButton();
+            buttonTabPower = new RButton();
+            buttonTabSystem = new RButton();
             panelServices = new Panel();
             pictureService = new PictureBox();
             labelServices = new Label();
@@ -214,6 +219,85 @@ namespace GHelper
             panelOptimalBrightness.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)pictureOptimalBrightness).BeginInit();
             SuspendLayout();
+            // 
+            // tableTabs
+            // 
+            tableTabs.ColumnCount = 4;
+            tableTabs.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+            tableTabs.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+            tableTabs.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+            tableTabs.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+            tableTabs.Controls.Add(buttonTabKeyboard, 0, 0);
+            tableTabs.Controls.Add(buttonTabLighting, 1, 0);
+            tableTabs.Controls.Add(buttonTabPower, 2, 0);
+            tableTabs.Controls.Add(buttonTabSystem, 3, 0);
+            tableTabs.Dock = DockStyle.Top;
+            tableTabs.Location = new Point(15, 15);
+            tableTabs.Margin = new Padding(0, 0, 0, 10);
+            tableTabs.Padding = new Padding(0, 0, 0, 8);
+            tableTabs.Name = "tableTabs";
+            tableTabs.RowCount = 1;
+            tableTabs.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));
+            tableTabs.Size = new Size(949, 54);
+            tableTabs.TabIndex = 0;
+            // 
+            // buttonTabKeyboard
+            // 
+            buttonTabKeyboard.Activated = true;
+            buttonTabKeyboard.BorderColor = Color.FromArgb(230, 0, 35);
+            buttonTabKeyboard.Dock = DockStyle.Fill;
+            buttonTabKeyboard.FlatStyle = FlatStyle.Flat;
+            buttonTabKeyboard.FlatAppearance.BorderSize = 0;
+            buttonTabKeyboard.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            buttonTabKeyboard.Margin = new Padding(3, 2, 3, 2);
+            buttonTabKeyboard.Name = "buttonTabKeyboard";
+            buttonTabKeyboard.Size = new Size(231, 42);
+            buttonTabKeyboard.TabIndex = 0;
+            buttonTabKeyboard.Text = "⌨ Keyboard";
+            buttonTabKeyboard.UseVisualStyleBackColor = false;
+            // 
+            // buttonTabLighting
+            // 
+            buttonTabLighting.BorderColor = Color.FromArgb(230, 0, 35);
+            buttonTabLighting.Dock = DockStyle.Fill;
+            buttonTabLighting.FlatStyle = FlatStyle.Flat;
+            buttonTabLighting.FlatAppearance.BorderSize = 0;
+            buttonTabLighting.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            buttonTabLighting.Margin = new Padding(3, 2, 3, 2);
+            buttonTabLighting.Name = "buttonTabLighting";
+            buttonTabLighting.Size = new Size(231, 42);
+            buttonTabLighting.TabIndex = 1;
+            buttonTabLighting.Text = "💡 Lighting";
+            buttonTabLighting.UseVisualStyleBackColor = false;
+            // 
+            // buttonTabPower
+            // 
+            buttonTabPower.BorderColor = Color.FromArgb(230, 0, 35);
+            buttonTabPower.Dock = DockStyle.Fill;
+            buttonTabPower.FlatStyle = FlatStyle.Flat;
+            buttonTabPower.FlatAppearance.BorderSize = 0;
+            buttonTabPower.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            buttonTabPower.Margin = new Padding(3, 2, 3, 2);
+            buttonTabPower.Name = "buttonTabPower";
+            buttonTabPower.Size = new Size(231, 42);
+            buttonTabPower.TabIndex = 2;
+            buttonTabPower.Text = "⚡ Power";
+            buttonTabPower.UseVisualStyleBackColor = false;
+            // 
+            // buttonTabSystem
+            // 
+            buttonTabSystem.BorderColor = Color.FromArgb(230, 0, 35);
+            buttonTabSystem.Dock = DockStyle.Fill;
+            buttonTabSystem.FlatStyle = FlatStyle.Flat;
+            buttonTabSystem.FlatAppearance.BorderSize = 0;
+            buttonTabSystem.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            buttonTabSystem.Margin = new Padding(3, 2, 3, 2);
+            buttonTabSystem.Name = "buttonTabSystem";
+            buttonTabSystem.Size = new Size(231, 42);
+            buttonTabSystem.TabIndex = 3;
+            buttonTabSystem.Text = "⚙ System";
+            buttonTabSystem.UseVisualStyleBackColor = false;
+            
             // 
             // panelServices
             // 
@@ -2179,7 +2263,7 @@ namespace GHelper
             AutoScroll = true;
             AutoSize = true;
             AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            ClientSize = new Size(1013, 1759);
+            ClientSize = new Size(1013, 720);
             Controls.Add(panelServices);
             Controls.Add(panelPower);
             Controls.Add(panelSettings);
@@ -2192,6 +2276,7 @@ namespace GHelper
             Controls.Add(panelBacklightHeader);
             Controls.Add(panelBindings);
             Controls.Add(panelBindingsHeader);
+            Controls.Add(tableTabs);
             FormBorderStyle = FormBorderStyle.FixedSingle;
             Margin = new Padding(5, 3, 5, 3);
             MaximizeBox = false;
@@ -2203,6 +2288,7 @@ namespace GHelper
             ShowIcon = false;
             ShowInTaskbar = false;
             Text = "Extra Settings";
+            tableTabs.ResumeLayout(false);
             panelServices.ResumeLayout(false);
             panelServices.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)pictureService).EndInit();
@@ -2257,6 +2343,11 @@ namespace GHelper
         }
 
         #endregion
+        private TableLayoutPanel tableTabs;
+        private RButton buttonTabKeyboard;
+        private RButton buttonTabLighting;
+        private RButton buttonTabPower;
+        private RButton buttonTabSystem;
         private Panel panelServices;
         private RButton buttonServices;
         private Label labelServices;

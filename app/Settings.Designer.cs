@@ -1233,8 +1233,8 @@ namespace GHelper
             tableScreen.Margin = new Padding(8, 2, 8, 2);
             tableScreen.Name = "tableScreen";
             tableScreen.RowCount = 1;
-            tableScreen.RowStyles.Add(new RowStyle(SizeType.Absolute, 76F));
-            tableScreen.Size = new Size(787, 76);
+            tableScreen.RowStyles.Add(new RowStyle(SizeType.Absolute, 48F));
+            tableScreen.Size = new Size(787, 48);
             tableScreen.TabIndex = 23;
             // 
             // buttonScreenAuto
@@ -1251,7 +1251,7 @@ namespace GHelper
             buttonScreenAuto.Margin = new Padding(4);
             buttonScreenAuto.Name = "buttonScreenAuto";
             buttonScreenAuto.Secondary = false;
-            buttonScreenAuto.Size = new Size(149, 68);
+            buttonScreenAuto.Size = new Size(149, 40);
             buttonScreenAuto.TabIndex = 9;
             buttonScreenAuto.Text = Properties.Strings.AutoMode;
             buttonScreenAuto.UseVisualStyleBackColor = false;
@@ -1271,7 +1271,7 @@ namespace GHelper
             button60Hz.Margin = new Padding(4);
             button60Hz.Name = "button60Hz";
             button60Hz.Secondary = false;
-            button60Hz.Size = new Size(149, 68);
+            button60Hz.Size = new Size(149, 40);
             button60Hz.TabIndex = 10;
             button60Hz.Text = "60Hz";
             button60Hz.UseVisualStyleBackColor = false;
@@ -1290,7 +1290,7 @@ namespace GHelper
             button120Hz.Margin = new Padding(4);
             button120Hz.Name = "button120Hz";
             button120Hz.Secondary = false;
-            button120Hz.Size = new Size(149, 68);
+            button120Hz.Size = new Size(149, 40);
             button120Hz.TabIndex = 11;
             button120Hz.Text = "165Hz";
             button120Hz.UseVisualStyleBackColor = false;
@@ -1309,7 +1309,7 @@ namespace GHelper
             buttonOverdrive.Margin = new Padding(4);
             buttonOverdrive.Name = "buttonOverdrive";
             buttonOverdrive.Secondary = false;
-            buttonOverdrive.Size = new Size(149, 68);
+            buttonOverdrive.Size = new Size(149, 40);
             buttonOverdrive.TabIndex = 12;
             buttonOverdrive.Text = "Overdrive";
             buttonOverdrive.UseVisualStyleBackColor = false;
@@ -1329,7 +1329,7 @@ namespace GHelper
             buttonMiniled.Margin = new Padding(4);
             buttonMiniled.Name = "buttonMiniled";
             buttonMiniled.Secondary = false;
-            buttonMiniled.Size = new Size(151, 68);
+            buttonMiniled.Size = new Size(151, 40);
             buttonMiniled.TabIndex = 13;
             buttonMiniled.Text = Properties.Strings.Multizone;
             buttonMiniled.UseVisualStyleBackColor = false;

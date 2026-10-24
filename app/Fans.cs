@@ -814,8 +814,8 @@ namespace GHelper
             int up = AppConfig.GetMode("hysteresis_up");
             int down = AppConfig.GetMode("hysteresis_down");
 
-            if (up < 0) up = defaults.up > 0 ? defaults.up : 3;
-            if (down < 0) down = defaults.down > 0 ? defaults.down : 3;
+            if (up < 0) up = AppConfig.IsNotFalse("smart_fan_hysteresis") ? 4 : (defaults.up > 0 ? defaults.up : 3);
+            if (down < 0) down = AppConfig.IsNotFalse("smart_fan_hysteresis") ? 4 : (defaults.down > 0 ? defaults.down : 3);
 
             trackHysteresisUp.Value = Math.Clamp(up, trackHysteresisUp.Minimum, trackHysteresisUp.Maximum);
             trackHysteresisDown.Value = Math.Clamp(down, trackHysteresisDown.Minimum, trackHysteresisDown.Maximum);

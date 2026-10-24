@@ -21,6 +21,12 @@ namespace GHelper
 
         const string EMPTY = "--------------";
 
+        private bool _hasPower = true;
+        private bool _hasAPU = false;
+        private bool _hasCores = false;
+        private bool _hasACPI = false;
+        private bool _hasOptimalBrightness = false;
+
 
         private void SetKeyCombo(ComboBox combo, TextBox txbox, string name)
         {
@@ -581,6 +587,7 @@ namespace GHelper
             var optimalBrightness = ScreenControl.GetOptimalBrightness();
             if (optimalBrightness >= 0)
             {
+                _hasOptimalBrightness = true;
                 panelOptimalBrightness.Visible = true;
                 comboOptimalBrightness.DropDownStyle = ComboBoxStyle.DropDownList;
                 comboOptimalBrightness.SelectedIndex = AppConfig.Get("optimal_brightness", optimalBrightness);
@@ -685,6 +692,44 @@ namespace GHelper
 
             InitACPITesting();
 
+            buttonTabKeyboard.Click += (s, e) => ShowTab(0);
+            buttonTabLighting.Click += (s, e) => ShowTab(1);
+            buttonTabPower.Click += (s, e) => ShowTab(2);
+            buttonTabSystem.Click += (s, e) => ShowTab(3);
+
+            int savedTab = Math.Clamp(AppConfig.Get("extra_tab", 0), 0, 3);
+            ShowTab(savedTab);
+        }
+
+        public void ShowTab(int index)
+        {
+            AppConfig.Set("extra_tab", index);
+
+            buttonTabKeyboard.Activated = (index == 0);
+            buttonTabLighting.Activated = (index == 1);
+            buttonTabPower.Activated = (index == 2);
+            buttonTabSystem.Activated = (index == 3);
+
+            // Tab 0: Keyboard
+            panelBindingsHeader.Visible = (index == 0);
+            panelBindings.Visible = (index == 0);
+
+            // Tab 1: Lighting
+            panelBacklightHeader.Visible = (index == 1);
+            panelBacklight.Visible = (index == 1);
+
+            // Tab 2: Power
+            panelPowerHeader.Visible = (index == 2);
+            panelPower.Visible = (index == 2 && _hasPower);
+            panelAPU.Visible = (index == 2 && _hasAPU);
+            panelCores.Visible = (index == 2 && _hasCores);
+            panelACPI.Visible = (index == 2 && _hasACPI);
+
+            // Tab 3: System
+            panelSettingsHeader.Visible = (index == 3);
+            panelSettings.Visible = (index == 3);
+            panelOptimalBrightness.Visible = (index == 3 && _hasOptimalBrightness);
+            panelServices.Visible = (index == 3);
         }
 
         private void ComboTheme_SelectedIndexChanged(object? sender, EventArgs e)
@@ -743,6 +788,7 @@ namespace GHelper
 
             if (!AppConfig.Is("debug")) return;
 
+            _hasACPI = true;
             panelACPI.Visible = true;
             textACPICommand.Text = "110034";
             textACPIParam.Text = "0x0303";
@@ -771,6 +817,7 @@ namespace GHelper
 
             if (eCores < 0 || pCores < 0 || eCoresMax < 0 || pCoresMax < 0)
             {
+                _hasCores = false;
                 panelCores.Visible = false;
                 return;
             }
@@ -789,6 +836,7 @@ namespace GHelper
                 coresMinE = Math.Min(eMin, eCoresMax);
             }
 
+            _hasCores = true;
             panelCores.Visible = true;
 
             comboCoresE.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -854,6 +902,7 @@ namespace GHelper
                 comboAPU.SelectedIndex = apuMem;
             }
 
+            _hasAPU = true;
             panelAPU.Visible = true;
             comboAPU.DropDownStyle = ComboBoxStyle.DropDownList;
             comboAPU.SelectedIndexChanged += ComboAPU_SelectedIndexChanged;
@@ -1052,6 +1101,7 @@ namespace GHelper
             }
             catch (Exception ex)
             {
+                _hasPower = false;
                 panelPower.Visible = false;
                 Logger.WriteLine("InitPowerSettings error: " + ex);
             }

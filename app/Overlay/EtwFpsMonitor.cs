@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace GHelper.Overlay
@@ -389,6 +389,93 @@ namespace GHelper.Overlay
             double elapsed = (double)(newest - oldest) / freq;
             if (elapsed <= 0) return 0;
             return (count - 1) / elapsed;
+        }
+
+        // 1% Low FPS (99th percentile slowest frame interval over the last 2 seconds).
+        public double Sample1PercentLowFps()
+        {
+            int filled = _framesFilled;
+            if (filled < 4) return 0;
+
+            long freq = Stopwatch.Frequency;
+            int head = _frameHead;
+            long newest = _frameTimes[(head - 1 + RollingWindowSize) % RollingWindowSize];
+
+            if (Stopwatch.GetTimestamp() - newest > 4 * freq) return 0;
+
+            long cutoff = newest - 2 * freq;
+            Span<double> deltas = stackalloc double[RollingWindowSize];
+            int deltaCount = 0;
+
+            long prev = newest;
+            for (int i = 2; i <= filled; i++)
+            {
+                long t = _frameTimes[(head - i + RollingWindowSize) % RollingWindowSize];
+                if (t < cutoff) break;
+                long diff = prev - t;
+                if (diff > 0)
+                {
+                    deltas[deltaCount++] = (double)diff / freq;
+                }
+                prev = t;
+            }
+
+            if (deltaCount < 4) return 0;
+
+            deltas.Slice(0, deltaCount).Sort();
+
+            int p99Index = (int)Math.Floor(deltaCount * 0.99);
+            if (p99Index >= deltaCount) p99Index = deltaCount - 1;
+
+            double p99Duration = deltas[p99Index];
+            if (p99Duration <= 0) return 0;
+
+            return 1.0 / p99Duration;
+        }
+
+        // Frame time jitter (standard deviation of frame intervals over the last 1 second, in milliseconds).
+        public double SampleJitterMs()
+        {
+            int filled = _framesFilled;
+            if (filled < 4) return 0;
+
+            long freq = Stopwatch.Frequency;
+            int head = _frameHead;
+            long newest = _frameTimes[(head - 1 + RollingWindowSize) % RollingWindowSize];
+
+            if (Stopwatch.GetTimestamp() - newest > 4 * freq) return 0;
+
+            long cutoff = newest - freq;
+            Span<double> deltas = stackalloc double[RollingWindowSize];
+            int deltaCount = 0;
+            double sum = 0;
+
+            long prev = newest;
+            for (int i = 2; i <= filled; i++)
+            {
+                long t = _frameTimes[(head - i + RollingWindowSize) % RollingWindowSize];
+                if (t < cutoff) break;
+                long diff = prev - t;
+                if (diff > 0)
+                {
+                    double ms = (double)diff * 1000.0 / freq;
+                    deltas[deltaCount++] = ms;
+                    sum += ms;
+                }
+                prev = t;
+            }
+
+            if (deltaCount < 4) return 0;
+
+            double mean = sum / deltaCount;
+            double varSum = 0;
+            for (int i = 0; i < deltaCount; i++)
+            {
+                double d = deltas[i] - mean;
+                varSum += d * d;
+            }
+
+            return Math.Sqrt(varSum / deltaCount);
         }
 
         private static EVENT_TRACE_PROPERTIES BuildSessionProperties() => new()

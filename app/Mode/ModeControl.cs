@@ -261,6 +261,24 @@ namespace GHelper.Mode
             return curve;
         }
 
+        public void ApplyHysteresis()
+        {
+            if (!Program.acpi.IsSupported(AsusACPI.FanHysteresis)) return;
+
+            int hystUp = AppConfig.GetMode("hysteresis_up");
+            int hystDown = AppConfig.GetMode("hysteresis_down");
+            if (hystUp > 0 && hystDown > 0)
+            {
+                Program.acpi.SetFanHysteresis(hystUp, hystDown);
+            }
+            else if (AppConfig.IsNotFalse("smart_fan_hysteresis"))
+            {
+                int smartUp = AppConfig.Get("smart_hysteresis_up", 4);
+                int smartDown = AppConfig.Get("smart_hysteresis_down", 4);
+                Program.acpi.SetFanHysteresis(smartUp, smartDown);
+            }
+        }
+
         public void AutoFans(bool force = false)
         {
             customFans = false;

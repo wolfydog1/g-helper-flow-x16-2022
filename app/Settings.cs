@@ -2291,7 +2291,53 @@ namespace GHelper
                 };
                 menuMiniled.DropDownItems.Add(menuAutoMiniled);
 
+                var menuAutoHdrMiniled = new ToolStripMenuItem("Auto Multi-Zone on HDR (Nebula Sync)") { Checked = AppConfig.Is("auto_hdr_miniled"), Margin = padding };
+                menuAutoHdrMiniled.Click += (s, e) =>
+                {
+                    menuAutoHdrMiniled.Checked = !menuAutoHdrMiniled.Checked;
+                    AppConfig.Set("auto_hdr_miniled", menuAutoHdrMiniled.Checked ? 1 : 0);
+                    ScreenControl.AutoScreen(true);
+                    Program.toast?.RunToast(menuAutoHdrMiniled.Checked ? "Auto Multi-Zone on HDR: Enabled" : "Auto Multi-Zone on HDR: Disabled");
+                    SetContextMenu();
+                };
+                menuMiniled.DropDownItems.Add(menuAutoHdrMiniled);
+
                 contextMenuStrip.Items.Add(menuMiniled);
+            }
+
+            if (VisualControl.IsEnabled())
+            {
+                var gamuts = VisualControl.GetGamutModes();
+                if (gamuts.Count > 1)
+                {
+                    var menuGamut = new ToolStripMenuItem("Display Color Gamut");
+                    menuGamut.Margin = padding;
+                    menuGamut.DropDown.BackColor = this.BackColor;
+                    menuGamut.DropDown.ForeColor = this.ForeColor;
+
+                    int currentGamut = AppConfig.Get("gamut", (int)VisualControl.GetDefaultGamut());
+                    foreach (var g in gamuts)
+                    {
+                        int gVal = (int)g.Key;
+                        string gName = g.Value.Replace("Gamut: ", "");
+                        var itemG = new ToolStripMenuItem(gName) { Checked = (currentGamut == gVal), Margin = padding };
+                        itemG.Click += (s, e) =>
+                        {
+                            AppConfig.Set("gamut", gVal);
+                            VisualControl.SetGamut(gVal);
+                            if (comboGamut != null && comboGamut.Visible)
+                            {
+                                comboGamut.SelectedValueChanged -= ComboGamut_SelectedValueChanged;
+                                comboGamut.SelectedValue = (SplendidGamut)gVal;
+                                comboGamut.SelectedValueChanged += ComboGamut_SelectedValueChanged;
+                            }
+                            Program.toast?.RunToast($"Gamut: {gName}", ToastIcon.BrightnessUp);
+                            SetContextMenu();
+                        };
+                        menuGamut.DropDownItems.Add(itemG);
+                    }
+                    contextMenuStrip.Items.Add(menuGamut);
+                }
             }
 
             if (PawnIO.CpuInfo.IsAMD)
@@ -2357,6 +2403,24 @@ namespace GHelper
                 }
 
                 contextMenuStrip.Items.Add(menuUV);
+            }
+
+            if (Program.acpi.IsSupported(AsusACPI.FanHysteresis))
+            {
+                var menuHyst = new ToolStripMenuItem("Smart Fan Hysteresis (Anti-Revving)")
+                {
+                    Checked = AppConfig.IsNotFalse("smart_fan_hysteresis"),
+                    Margin = padding
+                };
+                menuHyst.Click += (s, e) =>
+                {
+                    bool next = !AppConfig.IsNotFalse("smart_fan_hysteresis");
+                    AppConfig.Set("smart_fan_hysteresis", next ? 1 : 0);
+                    Program.modeControl?.ApplyHysteresis();
+                    Program.toast?.RunToast(next ? "Smart Fan Hysteresis: Anti-Revving Enabled" : "Smart Fan Hysteresis: Stock (EC Default)");
+                    SetContextMenu();
+                };
+                contextMenuStrip.Items.Add(menuHyst);
             }
 
             var curTouchMode = _cachedTouchPenMode ?? TouchPenMode.TouchAndPen;
