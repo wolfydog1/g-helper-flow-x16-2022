@@ -48,7 +48,10 @@ namespace GHelper.UI
             get
             {
                 var parms = base.CreateParams;
-                parms.Style &= ~0x02000000;  // Turn off WS_CLIPCHILDREN
+                if (!AutoScroll)
+                {
+                    parms.Style &= ~0x02000000;  // Turn off WS_CLIPCHILDREN only for non-scrolling forms
+                }
                 parms.ClassStyle &= ~0x00020000;
                 return parms;
             }

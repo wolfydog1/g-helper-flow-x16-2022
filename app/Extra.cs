@@ -125,14 +125,14 @@ namespace GHelper
             }
 
             combo.DropDownStyle = ComboBoxStyle.DropDownList;
-            combo.DataSource = new BindingSource(customActions, null);
-            combo.DisplayMember = "Value";
-            combo.ValueMember = "Key";
+            combo.Items.Clear();
+            foreach (var kv in customActions)
+            {
+                combo.Items.Add(new ComboOption(kv.Key, kv.Value));
+            }
 
-            string action = AppConfig.GetString(name);
-
-            combo.SelectedValue = (action is not null) ? action : "";
-            if (combo.SelectedValue is null) combo.SelectedValue = "";
+            string action = AppConfig.GetString(name) ?? "";
+            SelectComboKey(combo, action);
 
             void SyncCustomBoxVisibility()
             {
@@ -141,7 +141,8 @@ namespace GHelper
                     txbox.Visible = false;
                     return;
                 }
-                bool isCustom = string.Equals(combo.SelectedValue?.ToString(), "custom", StringComparison.OrdinalIgnoreCase);
+                string selectedKey = (combo.SelectedItem as ComboOption)?.Key ?? "";
+                bool isCustom = string.Equals(selectedKey, "custom", StringComparison.OrdinalIgnoreCase);
                 txbox.Visible = isCustom;
                 if (combo.Parent is TableLayoutPanel tlp)
                 {
@@ -149,10 +150,10 @@ namespace GHelper
                 }
             }
 
-            combo.SelectedValueChanged += delegate
+            combo.SelectionChangeCommitted += delegate
             {
-                if (combo.SelectedValue is not null)
-                    AppConfig.Set(name, combo.SelectedValue.ToString());
+                if (combo.SelectedItem is ComboOption opt)
+                    AppConfig.Set(name, opt.Key);
 
                 SyncCustomBoxVisibility();
 
@@ -376,11 +377,13 @@ namespace GHelper
             Shown += Keyboard_Shown;
 
             comboKeyboardSpeed.DropDownStyle = ComboBoxStyle.DropDownList;
-            comboKeyboardSpeed.DataSource = new BindingSource(Aura.GetSpeeds(), null);
-            comboKeyboardSpeed.DisplayMember = "Value";
-            comboKeyboardSpeed.ValueMember = "Key";
-            comboKeyboardSpeed.SelectedValue = Aura.Speed;
-            comboKeyboardSpeed.SelectedValueChanged += ComboKeyboardSpeed_SelectedValueChanged;
+            comboKeyboardSpeed.Items.Clear();
+            foreach (var kv in Aura.GetSpeeds())
+            {
+                comboKeyboardSpeed.Items.Add(new ComboOption(kv.Key.ToString(), kv.Value));
+            }
+            SelectComboKey(comboKeyboardSpeed, Aura.Speed.ToString());
+            comboKeyboardSpeed.SelectionChangeCommitted += ComboKeyboardSpeed_SelectedValueChanged;
 
             // Keyboard
             checkAwake.Checked = AppConfig.IsNotFalse("keyboard_awake");
@@ -786,35 +789,149 @@ namespace GHelper
             ControlHelper.Adjust(this);
         }
 
+        private sealed class ComboOption
+        {
+            public string Key { get; }
+            public string Label { get; }
+            public ComboOption(string key, string label) { Key = key; Label = label; }
+            public override string ToString() => Label;
+        }
+
+        private static void SelectComboKey(ComboBox cb, string key)
+        {
+            for (int i = 0; i < cb.Items.Count; i++)
+            {
+                if (cb.Items[i] is ComboOption opt && string.Equals(opt.Key, key, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (cb.SelectedIndex != i) cb.SelectedIndex = i;
+                    return;
+                }
+            }
+            if (cb.Items.Count > 0 && cb.SelectedIndex < 0) cb.SelectedIndex = 0;
+        }
+
+        private Action? _syncAppearanceCombos;
+        private int _baseFormClientWidth = 0;
+
         public void ShowTab(int index)
         {
             AppConfig.Set("extra_tab", index);
 
-            buttonTabKeyboard.Activated = (index == 0);
-            buttonTabLighting.Activated = (index == 1);
-            buttonTabPower.Activated = (index == 2);
-            buttonTabSystem.Activated = (index == 3);
+            SuspendLayout();
+            try
+            {
+                AutoScrollPosition = new Point(0, 0);
 
-            // Tab 0: Keyboard
-            panelBindingsHeader.Visible = (index == 0);
-            panelBindings.Visible = (index == 0);
+                buttonTabKeyboard.Activated = (index == 0);
+                buttonTabLighting.Activated = (index == 1);
+                buttonTabPower.Activated = (index == 2);
+                buttonTabSystem.Activated = (index == 3);
 
-            // Tab 1: Lighting
-            panelBacklightHeader.Visible = (index == 1);
-            panelBacklight.Visible = (index == 1);
+                buttonTabKeyboard.BorderColor = RForm.colorStandard;
+                buttonTabLighting.BorderColor = RForm.colorStandard;
+                buttonTabPower.BorderColor = RForm.colorEco;
+                buttonTabSystem.BorderColor = RForm.colorTurbo;
 
-            // Tab 2: Power
-            panelPowerHeader.Visible = (index == 2);
-            panelPower.Visible = (index == 2 && _hasPower);
-            panelAPU.Visible = (index == 2 && _hasAPU);
-            panelCores.Visible = (index == 2 && _hasCores);
-            panelACPI.Visible = (index == 2 && _hasACPI);
+                // Tab 0: Keyboard
+                panelBindingsHeader.Visible = (index == 0);
+                panelBindings.Visible = (index == 0);
 
-            // Tab 3: System
-            panelSettingsHeader.Visible = (index == 3);
-            panelSettings.Visible = (index == 3);
-            panelOptimalBrightness.Visible = (index == 3 && _hasOptimalBrightness);
-            panelServices.Visible = (index == 3);
+                // Tab 1: Lighting
+                panelBacklightHeader.Visible = (index == 1);
+                panelBacklight.Visible = (index == 1);
+
+                // Tab 2: Power
+                panelPowerHeader.Visible = (index == 2);
+                panelPower.Visible = (index == 2 && _hasPower);
+                panelAPU.Visible = (index == 2 && _hasAPU);
+                panelCores.Visible = (index == 2 && _hasCores);
+                panelACPI.Visible = (index == 2 && _hasACPI);
+
+                // Tab 3: System
+                panelSettingsHeader.Visible = (index == 3);
+                panelSettings.Visible = (index == 3);
+                panelOptimalBrightness.Visible = (index == 3 && _hasOptimalBrightness);
+                panelServices.Visible = (index == 3);
+
+                if (index == 3)
+                {
+                    _syncAppearanceCombos?.Invoke();
+                }
+            }
+            finally
+            {
+                ResumeLayout(true);
+            }
+
+            if (IsHandleCreated && Visible)
+            {
+                UpdateTabWindowSize();
+                Invalidate(true);
+            }
+        }
+
+        private void UpdateTabWindowSize()
+        {
+            if (Program.settingsForm == null || Program.settingsForm.IsDisposed) return;
+
+            Rectangle workArea = Screen.FromControl(Program.settingsForm).WorkingArea;
+            int maxAllowedHeight = workArea.Height - 20;
+
+            int borderChromeHeight = Height - ClientSize.Height;
+            int borderChromeWidth = Width - ClientSize.Width;
+
+            if (_baseFormClientWidth <= 0)
+            {
+                _baseFormClientWidth = Math.Max(tableTabs.Width + Padding.Horizontal, ClientSize.Width);
+            }
+
+            AutoSize = false;
+            MaximumSize = Size.Empty;
+            MinimumSize = new Size(300, 180);
+
+            // Reset scroll state and client width first so DockStyle.Top AutoSize panels measure accurately
+            AutoScrollPosition = new Point(0, 0);
+            AutoScroll = false;
+            ClientSize = new Size(_baseFormClientWidth, ClientSize.Height);
+            PerformLayout();
+
+            int contentHeight = Padding.Top + Padding.Bottom;
+            int maxBottom = 0;
+            foreach (Control ctrl in Controls)
+            {
+                if (!ctrl.Visible) continue;
+                ctrl.PerformLayout();
+                contentHeight += ctrl.Height + ctrl.Margin.Vertical;
+                if (ctrl.Bottom + ctrl.Margin.Bottom > maxBottom)
+                    maxBottom = ctrl.Bottom + ctrl.Margin.Bottom;
+            }
+
+            int measuredClientHeight = Math.Max(contentHeight, maxBottom + Padding.Bottom) + 6;
+            int desiredTotalHeight = measuredClientHeight + borderChromeHeight;
+
+            if (desiredTotalHeight > maxAllowedHeight)
+            {
+                int scrollPad = SystemInformation.VerticalScrollBarWidth + 6;
+                AutoScroll = true;
+                Size = new Size(_baseFormClientWidth + borderChromeWidth + scrollPad, maxAllowedHeight);
+                Top = workArea.Top + 10;
+            }
+            else
+            {
+                AutoScroll = false;
+                Size = new Size(_baseFormClientWidth + borderChromeWidth, desiredTotalHeight);
+                if (Height > Program.settingsForm.Height)
+                {
+                    int top = Program.settingsForm.Top + Program.settingsForm.Height - Height;
+                    Top = Math.Max(workArea.Top + 10, top);
+                }
+                else
+                {
+                    Top = Math.Clamp(Program.settingsForm.Top, workArea.Top + 10, Math.Max(workArea.Top + 10, workArea.Bottom - Height - 10));
+                }
+            }
+
+            Left = Math.Max(workArea.Left + 10, Program.settingsForm.Left - Width - 5);
         }
 
         private void InitAppearanceAndBackupCard()
@@ -861,14 +978,15 @@ namespace GHelper
                     Margin = new Padding(3, 4, 3, 4),
                     NativeHeight = true
                 };
-                cb.DataSource = new BindingSource(items, null);
-                cb.DisplayMember = "Value";
-                cb.ValueMember = "Key";
-                cb.SelectedValue = items.ContainsKey(selectedKey) ? selectedKey : items.Keys.First();
-                cb.SelectedValueChanged += (s, e) =>
+                foreach (var kv in items)
                 {
-                    if (cb.SelectedValue is string val)
-                        onSelect(val);
+                    cb.Items.Add(new ComboOption(kv.Key, kv.Value));
+                }
+                SelectComboKey(cb, selectedKey);
+                cb.SelectionChangeCommitted += (s, e) =>
+                {
+                    if (cb.SelectedItem is ComboOption opt)
+                        onSelect(opt.Key);
                 };
                 toolTip.SetToolTip(cb, tip);
                 return cb;
@@ -1019,6 +1137,15 @@ namespace GHelper
 
             table.Controls.Add(MakeRowLabel("💾 Settings & Profiles Backup:", "Export or restore your complete G-Helper configuration."), 0, 5);
             table.Controls.Add(panelBackupBtns, 1, 5);
+
+            _syncAppearanceCombos = () =>
+            {
+                SelectComboKey(cbStyle, AppConfig.GetString("theme")?.ToLower() ?? "default");
+                SelectComboKey(cbFont, AppConfig.GetString("ui_font_family") ?? "Segoe UI");
+                SelectComboKey(cbScale, AppConfig.Get("ui_font_scale", 100).ToString());
+                SelectComboKey(cbRadius, AppConfig.Get("ui_button_radius", 8).ToString());
+                SelectComboKey(cbTray, ((int)FlowFeaturesHelper.GetTrayMode()).ToString());
+            };
 
             panelTheme.Controls.Add(table);
             panelTheme.ResumeLayout(true);
@@ -1253,21 +1380,17 @@ namespace GHelper
                 list.Sort();
             }
 
-            var dict = new Dictionary<int, string>();
+            combo.DropDownStyle = ComboBoxStyle.DropDownList;
+            combo.Items.Clear();
             foreach (var m in list)
             {
-                dict[m] = FormatTimeout(m);
+                combo.Items.Add(new ComboOption(m.ToString(), FormatTimeout(m)));
             }
+            SelectComboKey(combo, currentValue.ToString());
 
-            combo.DropDownStyle = ComboBoxStyle.DropDownList;
-            combo.DisplayMember = "Value";
-            combo.ValueMember = "Key";
-            combo.DataSource = new BindingSource(dict, null);
-            combo.SelectedValue = currentValue;
-
-            combo.SelectedValueChanged += (s, e) =>
+            combo.SelectionChangeCommitted += (s, e) =>
             {
-                if (combo.SelectedValue is int val)
+                if (combo.SelectedItem is ComboOption opt && int.TryParse(opt.Key, out int val))
                 {
                     onSelect(val);
                 }
@@ -1277,15 +1400,17 @@ namespace GHelper
         private void PopulateLidCombo(RComboBox combo, int currentValue, Action<int> onSelect)
         {
             combo.DropDownStyle = ComboBoxStyle.DropDownList;
-            combo.DisplayMember = "Value";
-            combo.ValueMember = "Key";
-            combo.DataSource = new BindingSource(LidActionOptions, null);
-            if (!LidActionOptions.ContainsKey(currentValue)) currentValue = 1;
-            combo.SelectedValue = currentValue;
-
-            combo.SelectedValueChanged += (s, e) =>
+            combo.Items.Clear();
+            foreach (var kv in LidActionOptions)
             {
-                if (combo.SelectedValue is int val)
+                combo.Items.Add(new ComboOption(kv.Key.ToString(), kv.Value));
+            }
+            if (!LidActionOptions.ContainsKey(currentValue)) currentValue = 1;
+            SelectComboKey(combo, currentValue.ToString());
+
+            combo.SelectionChangeCommitted += (s, e) =>
+            {
+                if (combo.SelectedItem is ComboOption opt && int.TryParse(opt.Key, out int val))
                 {
                     onSelect(val);
                 }
@@ -1295,15 +1420,17 @@ namespace GHelper
         private void PopulatePowerButtonCombo(RComboBox combo, int currentValue, Action<int> onSelect)
         {
             combo.DropDownStyle = ComboBoxStyle.DropDownList;
-            combo.DisplayMember = "Value";
-            combo.ValueMember = "Key";
-            combo.DataSource = new BindingSource(PowerButtonOptions, null);
-            if (!PowerButtonOptions.ContainsKey(currentValue)) currentValue = 1;
-            combo.SelectedValue = currentValue;
-
-            combo.SelectedValueChanged += (s, e) =>
+            combo.Items.Clear();
+            foreach (var kv in PowerButtonOptions)
             {
-                if (combo.SelectedValue is int val)
+                combo.Items.Add(new ComboOption(kv.Key.ToString(), kv.Value));
+            }
+            if (!PowerButtonOptions.ContainsKey(currentValue)) currentValue = 1;
+            SelectComboKey(combo, currentValue.ToString());
+
+            combo.SelectionChangeCommitted += (s, e) =>
+            {
+                if (combo.SelectedItem is ComboOption opt && int.TryParse(opt.Key, out int val))
                 {
                     onSelect(val);
                 }
@@ -1319,14 +1446,16 @@ namespace GHelper
         private void PopulateAdaptiveBrightnessCombo(RComboBox combo, bool currentValue, Action<bool> onSelect)
         {
             combo.DropDownStyle = ComboBoxStyle.DropDownList;
-            combo.DisplayMember = "Value";
-            combo.ValueMember = "Key";
-            combo.DataSource = new BindingSource(AdaptiveBrightnessOptions, null);
-            combo.SelectedValue = currentValue;
-
-            combo.SelectedValueChanged += (s, e) =>
+            combo.Items.Clear();
+            foreach (var kv in AdaptiveBrightnessOptions)
             {
-                if (combo.SelectedValue is bool val)
+                combo.Items.Add(new ComboOption(kv.Key.ToString(), kv.Value));
+            }
+            SelectComboKey(combo, currentValue.ToString());
+
+            combo.SelectionChangeCommitted += (s, e) =>
+            {
+                if (combo.SelectedItem is ComboOption opt && bool.TryParse(opt.Key, out bool val))
                 {
                     onSelect(val);
                 }
@@ -1573,11 +1702,11 @@ namespace GHelper
 
         private void ButtonResetBindings_Click(object? sender, EventArgs e)
         {
-            comboM1.SelectedValue = "";
-            comboM2.SelectedValue = "";
-            comboM3.SelectedValue = "";
-            comboM4.SelectedValue = "";
-            comboM5.SelectedValue = "";
+            SelectComboKey(comboM1, "");
+            SelectComboKey(comboM2, "");
+            SelectComboKey(comboM3, "");
+            SelectComboKey(comboM4, "");
+            SelectComboKey(comboM5, "");
 
             textM1.Text = textM2.Text = textM3.Text = textM4.Text = textM5.Text = "";
 
@@ -1635,36 +1764,17 @@ namespace GHelper
 
         private void ComboKeyboardSpeed_SelectedValueChanged(object? sender, EventArgs e)
         {
-            AppConfig.Set("aura_speed", (int)comboKeyboardSpeed.SelectedValue);
-            Aura.ApplyAura();
+            if (comboKeyboardSpeed.SelectedItem is ComboOption opt && int.TryParse(opt.Key, out int speed))
+            {
+                AppConfig.Set("aura_speed", speed);
+                Aura.ApplyAura();
+            }
         }
 
 
         private void Keyboard_Shown(object? sender, EventArgs e)
         {
-            Rectangle workArea = Screen.FromControl(Program.settingsForm).WorkingArea;
-            int maxAllowedHeight = workArea.Height - 20;
-
-            if (Height > maxAllowedHeight)
-            {
-                int scrollPad = SystemInformation.VerticalScrollBarWidth + 6;
-                AutoSize = false;
-                Width += scrollPad;
-                Height = maxAllowedHeight;
-                MaximumSize = new Size(Width, maxAllowedHeight);
-                Top = workArea.Top + 10;
-            }
-            else if (Height > Program.settingsForm.Height)
-            {
-                var top = Program.settingsForm.Top + Program.settingsForm.Height - Height;
-                Top = Math.Max(workArea.Top + 10, top);
-            }
-            else
-            {
-                Top = Program.settingsForm.Top;
-            }
-
-            Left = Math.Max(workArea.Left + 10, Program.settingsForm.Left - Width - 5);
+            UpdateTabWindowSize();
             InitServices();
         }
 

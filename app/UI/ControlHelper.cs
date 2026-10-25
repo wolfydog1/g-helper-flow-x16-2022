@@ -199,11 +199,17 @@ public static class ControlHelper
             if (chk != null)
             {
                 chk.ForeColor = RForm.foreMain;
-                if (chk.BackColor != RForm.formBack)
+                if (chk.Parent is Panel parentPn && parentPn.Name.Contains("Header"))
                 {
                     chk.BackColor = RForm.buttonSecond;
                     if (chk is RCheckBox)
                         chk.FlatAppearance.BorderColor = RForm.borderSecond;
+                }
+                else
+                {
+                    chk.BackColor = RForm.formBack;
+                    if (chk is RCheckBox)
+                        chk.FlatAppearance.BorderColor = RForm.borderMain;
                 }
                 if (chk.IsHandleCreated)
                     SetWindowTheme(chk.Handle, _darkMode ? "DarkMode_Explorer" : "Explorer", null);
