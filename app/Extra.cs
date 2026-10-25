@@ -702,6 +702,42 @@ namespace GHelper
             );
 
             CreateExtraCheckBox(
+                "Wi-Fi Low-Latency Gaming Mode (eliminates MediaTek/Intel Wi-Fi power-saving ping spikes)",
+                WifiLatencyHelper.IsLowLatencyActive(),
+                (s, e) =>
+                {
+                    bool en = ((RCheckBox)s!).Checked;
+                    WifiLatencyHelper.SetLowLatency(en, true);
+                    Program.settingsForm?.SetContextMenu();
+                },
+                "Forces Wireless Adapter Power Saving Mode to Maximum Performance (0) and enables WLAN Media Streaming Mode to prevent packet latency spikes."
+            );
+
+            CreateExtraCheckBox(
+                "Auto Low-Latency Wi-Fi when a game is running",
+                AppConfig.Is("auto_wifi_gaming"),
+                (s, e) =>
+                {
+                    bool en = ((RCheckBox)s!).Checked;
+                    AppConfig.Set("auto_wifi_gaming", en ? 1 : 0);
+                    Program.settingsForm?.SetContextMenu();
+                },
+                "Automatically switches Wi-Fi to Low-Latency Maximum Performance mode while gaming and restores Eco power saving afterwards."
+            );
+
+            CreateExtraCheckBox(
+                "Show Convertible Posture Touch Bar when folded into Tablet or Tent mode",
+                AppConfig.IsNotFalse("posture_osd_enabled"),
+                (s, e) =>
+                {
+                    bool en = ((RCheckBox)s!).Checked;
+                    AppConfig.Set("posture_osd_enabled", en ? 1 : 0);
+                    Program.settingsForm?.SetContextMenu();
+                },
+                "Displays a sleek, touch-friendly floating mini bar for 6 seconds when folding into Tablet or Tent mode with 1-tap Touch/Pen, Rotate, Silent, 1Z/512Z, and Brightness controls."
+            );
+
+            CreateExtraCheckBox(
                 "Show Live 60s Sensor Sparkline Graph in Main Window",
                 AppConfig.Is("show_main_sparkline"),
                 (s, e) =>

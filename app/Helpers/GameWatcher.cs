@@ -25,6 +25,7 @@ namespace GHelper.Helpers
         private static bool _gameModeActive = false;
         private static int _savedMode = -1;
         private static int _savedGameMiniled = -1;
+        private static bool _savedWifiLowLatency = false;
         private static int _lastGamePid = 0;
         private static int _nonGameStreak = 0;
 
@@ -140,11 +141,17 @@ namespace GHelper.Helpers
 
             int revertMode = _savedMode >= 0 ? _savedMode : AsusACPI.PerformanceBalanced;
             int revertMiniled = _savedGameMiniled;
+            bool restoreWifi = _savedWifiLowLatency;
             Logger.WriteLine($"AutoGameMode: Reverting to mode {revertMode}.");
             _gameModeActive = false;
             _savedMode = -1;
             _savedGameMiniled = -1;
             _lastGamePid = 0;
+
+            if (AppConfig.Is("auto_wifi_gaming") && !restoreWifi)
+            {
+                WifiLatencyHelper.SetLowLatency(false, false);
+            }
 
             if (Program.settingsForm != null && !Program.settingsForm.IsDisposed && Program.settingsForm.IsHandleCreated)
             {
@@ -331,9 +338,15 @@ namespace GHelper.Helpers
                         {
                             _savedMode = Modes.GetCurrent();
                             _savedGameMiniled = AppConfig.Get("miniled", 1);
+                            _savedWifiLowLatency = WifiLatencyHelper.IsLowLatencyActive();
                             _lastGamePid = pid;
                             _gameModeActive = true;
                             Logger.WriteLine($"AutoGameMode: Detected game '{procName}' (PID {pid}, Title: '{windowTitle}'). Activating Turbo.");
+
+                            if (AppConfig.Is("auto_wifi_gaming") && !_savedWifiLowLatency)
+                            {
+                                WifiLatencyHelper.SetLowLatency(true, false);
+                            }
 
                             // Automatically trim standby memory to optimize physical RAM headroom for the incoming game
                             Task.Run(() => MemoryCleaner.TrimWorkingSet(pid));

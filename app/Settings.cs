@@ -66,6 +66,39 @@ namespace GHelper
         private GHelper.UI.RButton? buttonAutoScreen;
         private GHelper.UI.RButton? buttonAutoKeyboard;
         private MainSparklinePanel? _mainSparkline;
+        private TableLayoutPanel? _panelExtBrightness;
+        private GHelper.UI.Slider? _trackExtBrightness;
+        private Label? _labelExtBrightness;
+        private GHelper.UI.RButton? _buttonSyncExtBrightness;
+        private bool _isProgrammaticExtBrightness = false;
+
+        public void RefreshExternalDisplayVisibility()
+        {
+            if (_panelExtBrightness == null) return;
+            if (InvokeRequired) { BeginInvoke(RefreshExternalDisplayVisibility); return; }
+            bool extConnected = ExternalDisplayBrightness.HasExternalDisplayConnected();
+            if (_panelExtBrightness.Visible != extConnected)
+            {
+                _panelExtBrightness.Visible = extConnected;
+            }
+            if (extConnected)
+            {
+                Task.Run(() =>
+                {
+                    int extB = ExternalDisplayBrightness.Get();
+                    if (extB >= 0 && IsHandleCreated)
+                    {
+                        BeginInvoke(() =>
+                        {
+                            _isProgrammaticExtBrightness = true;
+                            if (_trackExtBrightness != null) _trackExtBrightness.Value = extB;
+                            if (_labelExtBrightness != null) _labelExtBrightness.Text = $"External: {extB}%";
+                            _isProgrammaticExtBrightness = false;
+                        });
+                    }
+                });
+            }
+        }
 
         public void SetMainSparklineVisible(bool visible)
         {
@@ -429,6 +462,93 @@ namespace GHelper
 
             this.panelScreen.Controls.Add(panelScreenBrightnessContainer);
             this.panelScreen.Controls.SetChildIndex(panelScreenBrightnessContainer, 1);
+
+            // ==== External Monitor DDC/CI Brightness Layout (ONLY shown when an external display is connected) ====
+            _panelExtBrightness = new TableLayoutPanel
+            {
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Dock = DockStyle.Top,
+                Margin = new Padding(0),
+                Padding = new Padding(4, 0, 4, 0),
+                ColumnCount = 3,
+                RowCount = 1,
+                Visible = ExternalDisplayBrightness.HasExternalDisplayConnected()
+            };
+            _panelExtBrightness.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            _panelExtBrightness.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            _panelExtBrightness.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            _panelExtBrightness.RowStyles.Add(new RowStyle(SizeType.Absolute, sliderRowHeight));
+
+            _labelExtBrightness = new Label
+            {
+                AutoSize = true,
+                MinimumSize = new Size(minLabelWidth, smallBtnHeight),
+                Dock = DockStyle.Fill,
+                Margin = new Padding(4, 0, 6, 0),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Text = "External: 80%"
+            };
+
+            _buttonSyncExtBrightness = new GHelper.UI.RButton
+            {
+                Text = "Sync",
+                Size = new Size(smallBtnWidth, smallBtnHeight),
+                Margin = new Padding(2, 2, 6, 2),
+                BorderRadius = 4,
+                Secondary = true,
+                BorderColor = colorStandard,
+                Activated = AppConfig.Is("sync_ext_brightness")
+            };
+            toolTip.SetToolTip(_buttonSyncExtBrightness, "Sync external monitor DDC/CI brightness automatically with the laptop screen brightness slider");
+
+            _trackExtBrightness = new GHelper.UI.Slider
+            {
+                Min = 0,
+                Max = 100,
+                Step = 1,
+                Value = AppConfig.Get("ext_brightness", 80),
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0, 1, 0, 1),
+                Size = new Size(200, sliderRowHeight - 2),
+                accentColor = _buttonSyncExtBrightness.Activated ? colorEco : colorStandard
+            };
+
+            _buttonSyncExtBrightness.Click += (s, e) =>
+            {
+                bool next = !AppConfig.Is("sync_ext_brightness");
+                AppConfig.Set("sync_ext_brightness", next ? 1 : 0);
+                _buttonSyncExtBrightness.Activated = next;
+                _buttonSyncExtBrightness.Invalidate();
+                _trackExtBrightness.accentColor = next ? colorEco : colorStandard;
+                _trackExtBrightness.Invalidate();
+                if (next)
+                {
+                    int b = trackScreenBrightness.Value;
+                    _isProgrammaticExtBrightness = true;
+                    _trackExtBrightness.Value = b;
+                    _labelExtBrightness.Text = $"External: {b}%";
+                    _isProgrammaticExtBrightness = false;
+                    ExternalDisplayBrightness.SetAsync(b);
+                }
+            };
+
+            _trackExtBrightness.ValueChanged += (s, e) =>
+            {
+                if (_isProgrammaticExtBrightness) return;
+                int v = _trackExtBrightness.Value;
+                _labelExtBrightness.Text = $"External: {v}%";
+                ExternalDisplayBrightness.SetAsync(v);
+            };
+
+            _panelExtBrightness.Controls.Add(_labelExtBrightness, 0, 0);
+            _panelExtBrightness.Controls.Add(_buttonSyncExtBrightness, 1, 0);
+            _panelExtBrightness.Controls.Add(_trackExtBrightness, 2, 0);
+
+            this.panelScreen.Controls.Add(_panelExtBrightness);
+            this.panelScreen.Controls.SetChildIndex(_panelExtBrightness, 1);
+
+            Microsoft.Win32.SystemEvents.DisplaySettingsChanged += (s, e) => RefreshExternalDisplayVisibility();
 
             // ==== Keyboard Brightness Layout ====
             TableLayoutPanel panelKeyboardBrightnessContainer = new TableLayoutPanel();
@@ -960,7 +1080,7 @@ namespace GHelper
             {
                 Visible = AppConfig.Is("show_main_sparkline")
             };
-            toolTip.SetToolTip(_mainSparkline, "Left-click: Toggle CPU/GPU Temps vs Battery Wattage  |  Right-click: Hide Sparkline");
+            toolTip.SetToolTip(_mainSparkline, "Left-click: Cycle CPU/GPU Temps → Power Draw → Session Battery Estimator  |  Right-click: Hide Sparkline");
             panelPerformance.Controls.Add(_mainSparkline);
             panelPerformance.Controls.SetChildIndex(_mainSparkline, 0);
 
@@ -1392,6 +1512,14 @@ namespace GHelper
             int val = trackScreenBrightness.Value;
             labelScreenBrightness.Text = $"{Properties.Strings.Brightness}: {val}%";
             ScreenBrightness.SetAsync(val);
+            if (AppConfig.Is("sync_ext_brightness") && _panelExtBrightness != null && _panelExtBrightness.Visible)
+            {
+                _isProgrammaticExtBrightness = true;
+                if (_trackExtBrightness != null) _trackExtBrightness.Value = val;
+                if (_labelExtBrightness != null) _labelExtBrightness.Text = $"External: {val}%";
+                _isProgrammaticExtBrightness = false;
+                ExternalDisplayBrightness.SetAsync(val);
+            }
         }
 
         public void VisualiseFPSLimit(int limit)
@@ -1493,6 +1621,7 @@ namespace GHelper
                         HardwareControl.RefreshBatteryHealth();
                     }
                 });
+                RefreshExternalDisplayVisibility();
                 VisualiseScreenSwitches(ScreenCCD.GetHDRStatus());
                 VisualiseBatteryOptions();
                 Task.Run((Action)RefreshPeripheralsBattery);
@@ -1644,6 +1773,8 @@ namespace GHelper
                 {
                     BeginInvoke(() =>
                     {
+                        RefreshExternalDisplayVisibility();
+                        SetContextMenu();
                         VisualizeXGM();
                         
                         bool isXgm = Program.acpi.IsXGConnected() || XGM.IsConnected();
@@ -2262,6 +2393,15 @@ namespace GHelper
                 Program.toast?.RunToast($"Battery Limit: {limit}%", ToastIcon.Battery);
             };
 
+            var itemBatSessionEst = new ToolStripMenuItem(BatterySessionTracker.GetSparklineSummaryLine1())
+            {
+                Margin = padding,
+                ToolTipText = BatterySessionTracker.GetSparklineSummaryLine2() + " (Click to open Battery Health & Telemetry)"
+            };
+            itemBatSessionEst.Click += (s, e) => new GHelper.Battery.BatteryHealthForm().ShowDialog(this);
+            menuBatteryLimit.DropDownItems.Add(itemBatSessionEst);
+            menuBatteryLimit.DropDownItems.Add("-");
+
             var limitFullOnce = new ToolStripMenuItem("One-Time Full Charge (until unplugged)") { Checked = isFullCharge, Margin = padding };
             limitFullOnce.Click += (s, e) =>
             {
@@ -2591,6 +2731,110 @@ namespace GHelper
                 SetContextMenu();
             };
             contextMenuStrip.Items.Add(menuCreatorAuto);
+
+            // External Monitor DDC/CI Brightness (ONLY shown when an external display is connected)
+            if (ExternalDisplayBrightness.HasExternalDisplayConnected())
+            {
+                int curExtB = AppConfig.Get("ext_brightness", 80);
+                var menuExtDisplay = new ToolStripMenuItem($"External Monitor Brightness ({curExtB}%)") { Margin = padding };
+                menuExtDisplay.DropDown.BackColor = this.BackColor;
+                menuExtDisplay.DropDown.ForeColor = this.ForeColor;
+
+                foreach (int pct in new[] { 100, 80, 60, 40, 20, 0 })
+                {
+                    int p = pct;
+                    var itemExtP = new ToolStripMenuItem($"{p}% Brightness") { Checked = (curExtB == p), Margin = padding };
+                    itemExtP.Click += (s, e) =>
+                    {
+                        ExternalDisplayBrightness.SetAsync(p);
+                        if (_trackExtBrightness != null && _labelExtBrightness != null)
+                        {
+                            _isProgrammaticExtBrightness = true;
+                            _trackExtBrightness.Value = p;
+                            _labelExtBrightness.Text = $"External: {p}%";
+                            _isProgrammaticExtBrightness = false;
+                        }
+                        Program.toast?.RunToast($"External Display Brightness: {p}%", ToastIcon.BrightnessUp);
+                        SetContextMenu();
+                    };
+                    menuExtDisplay.DropDownItems.Add(itemExtP);
+                }
+
+                menuExtDisplay.DropDownItems.Add("-");
+                var itemSyncExt = new ToolStripMenuItem("Sync with Laptop Screen Brightness")
+                {
+                    Checked = AppConfig.Is("sync_ext_brightness"),
+                    Margin = padding
+                };
+                itemSyncExt.Click += (s, e) =>
+                {
+                    bool next = !AppConfig.Is("sync_ext_brightness");
+                    AppConfig.Set("sync_ext_brightness", next ? 1 : 0);
+                    if (_buttonSyncExtBrightness != null) _buttonSyncExtBrightness.Activated = next;
+                    if (next) ExternalDisplayBrightness.SetAsync(trackScreenBrightness.Value);
+                    Program.toast?.RunToast(next ? "External Brightness Sync: Enabled" : "External Brightness Sync: Disabled");
+                    SetContextMenu();
+                };
+                menuExtDisplay.DropDownItems.Add(itemSyncExt);
+                contextMenuStrip.Items.Add(menuExtDisplay);
+            }
+
+            // Wi-Fi Low-Latency Gaming & Anti-Ping-Spike Submenu
+            bool wifiLowLat = WifiLatencyHelper.IsLowLatencyActive();
+            var menuWifi = new ToolStripMenuItem(wifiLowLat ? "Wi-Fi: Low-Latency Gaming (Active)" : "Wi-Fi Latency & Power Saving") { Margin = padding };
+            menuWifi.DropDown.BackColor = this.BackColor;
+            menuWifi.DropDown.ForeColor = this.ForeColor;
+
+            var itemWifiToggle = new ToolStripMenuItem("Low-Latency Gaming Mode (Max Wi-Fi Performance / Anti-Ping Spike)")
+            {
+                Checked = wifiLowLat,
+                Margin = padding
+            };
+            itemWifiToggle.Click += (s, e) =>
+            {
+                WifiLatencyHelper.Toggle(true);
+                SetContextMenu();
+            };
+            menuWifi.DropDownItems.Add(itemWifiToggle);
+
+            var itemWifiAutoGame = new ToolStripMenuItem("Auto Low-Latency Wi-Fi in Games")
+            {
+                Checked = AppConfig.Is("auto_wifi_gaming"),
+                Margin = padding
+            };
+            itemWifiAutoGame.Click += (s, e) =>
+            {
+                bool next = !AppConfig.Is("auto_wifi_gaming");
+                AppConfig.Set("auto_wifi_gaming", next ? 1 : 0);
+                Program.toast?.RunToast(next ? "Auto Low-Latency Wi-Fi in Games: On" : "Auto Low-Latency Wi-Fi in Games: Off");
+                SetContextMenu();
+            };
+            menuWifi.DropDownItems.Add(itemWifiAutoGame);
+            contextMenuStrip.Items.Add(menuWifi);
+
+            // Convertible Posture OSD Pill Submenu
+            var menuPosture = new ToolStripMenuItem("Convertible Posture Touch Bar") { Margin = padding };
+            menuPosture.DropDown.BackColor = this.BackColor;
+            menuPosture.DropDown.ForeColor = this.ForeColor;
+
+            var itemShowPostureNow = new ToolStripMenuItem("Show Floating Posture Touch Bar Now") { Margin = padding };
+            itemShowPostureNow.Click += (s, e) => PostureOsdForm.ShowPostureBar();
+            menuPosture.DropDownItems.Add(itemShowPostureNow);
+
+            var itemAutoPostureOsd = new ToolStripMenuItem("Auto-Popup Bar when Folded into Tablet / Tent Mode")
+            {
+                Checked = AppConfig.IsNotFalse("posture_osd_enabled"),
+                Margin = padding
+            };
+            itemAutoPostureOsd.Click += (s, e) =>
+            {
+                bool next = !AppConfig.IsNotFalse("posture_osd_enabled");
+                AppConfig.Set("posture_osd_enabled", next ? 1 : 0);
+                Program.toast?.RunToast(next ? "Convertible Posture Touch Bar: Auto-Popup On" : "Convertible Posture Touch Bar: Auto-Popup Off");
+                SetContextMenu();
+            };
+            menuPosture.DropDownItems.Add(itemAutoPostureOsd);
+            contextMenuStrip.Items.Add(menuPosture);
 
             // --- Appearance, Tray Telemetry, Smart Alerts & Backup Submenu ---
             var menuAppearance = new ToolStripMenuItem("Appearance, Tray & Smart Alerts") { Margin = padding };
@@ -3791,11 +4035,11 @@ namespace GHelper
                     if (!batteryMouseOver && !batteryFullMouseOver) SetLabelText(labelCharge, charge);
                     if (!string.IsNullOrEmpty(HardwareControl.batteryHealthStr))
                     {
-                        if (toolTip.GetToolTip(labelBattery) != HardwareControl.batteryHealthStr)
+                        string richBatTip = HardwareControl.batteryHealthStr + "\n" + BatterySessionTracker.GetSparklineSummaryLine1() + " • " + BatterySessionTracker.GetSparklineSummaryLine2() + " (Click for Battery Health & Telemetry)";
+                        if (toolTip.GetToolTip(labelBattery) != richBatTip)
                         {
-                            toolTip.SetToolTip(labelBattery, HardwareControl.batteryHealthStr);
-                            toolTip.SetToolTip(labelBatteryTitle, HardwareControl.batteryHealthStr + " (Click for Battery Health & Telemetry)");
-                            toolTip.SetToolTip(labelBattery, HardwareControl.batteryHealthStr + " (Click for Battery Health & Telemetry)");
+                            toolTip.SetToolTip(labelBatteryTitle, richBatTip);
+                            toolTip.SetToolTip(labelBattery, richBatTip);
                         }
                     }
 

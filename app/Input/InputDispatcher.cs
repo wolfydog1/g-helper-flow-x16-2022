@@ -1098,7 +1098,8 @@ namespace GHelper.Input
                     if (switchedSilent || Modes.GetCurrent() == AsusACPI.PerformanceSilent) summaryParts.Add("Silent Cooling");
                     summaryParts.Add("Kbd Off");
 
-                    Program.toast?.RunToast($"Tablet Mode: {string.Join(" • ", summaryParts)}", ToastIcon.Touchpad);
+                    Program.toast?.RunToast($"Tablet Mode: {string.Join(" • ", summaryParts)}", ToastIcon.Touchpad);
+                    if (AppConfig.IsNotFalse("posture_osd_enabled")) PostureOsdForm.ShowPostureBar("Tablet Mode");
                 }
                 else
                 {
@@ -1174,7 +1175,8 @@ namespace GHelper.Input
                 if (tentMode)
                 {
                     string rotPart = AppConfig.Get("auto_tablet_rotation", 1) == 1 ? " • Rotation Unlocked" : "";
-                    Program.toast?.RunToast($"Tent Mode: Open Airflow{rotPart} • Touchpad Off", ToastIcon.Touchpad);
+                    Program.toast?.RunToast($"Tent Mode: Open Airflow{rotPart} • Touchpad Off", ToastIcon.Touchpad);
+                    if (AppConfig.IsNotFalse("posture_osd_enabled")) PostureOsdForm.ShowPostureBar("Tent Mode");
                 }
                 else if (!tabletMode)
                 {

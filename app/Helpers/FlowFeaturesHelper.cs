@@ -1,7 +1,9 @@
 using GHelper.Battery;
 using GHelper.Display;
+using GHelper.Input;
 using GHelper.Mode;
 using GHelper.UI;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
@@ -111,6 +113,8 @@ namespace GHelper.Helpers
                 _histHead = (_histHead + 1) % HistoryLength;
                 if (_histCount < HistoryLength) _histCount++;
             }
+
+            BatterySessionTracker.RecordSample();
 
             if (GetTrayMode() != TrayTelemetryMode.DefaultLogo)
             {
@@ -433,9 +437,737 @@ namespace GHelper.Helpers
         }
     }
 
+    // =========================================================================
+    // FEATURE 1: External Monitor DDC/CI Brightness Control & Sync
+    // Strict constraint: ONLY visible in UI/menus when an external display is connected
+    // =========================================================================
+    public static class ExternalDisplayBrightness
+    {
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct PHYSICAL_MONITOR
+        {
+            public IntPtr hPhysicalMonitor;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+            public string szPhysicalMonitorDescription;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+        private struct MONITORINFOEX
+        {
+            public int cbSize;
+            public RECT rcMonitor;
+            public RECT rcWork;
+            public uint dwFlags;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+            public string szDevice;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct RECT
+        {
+            public int Left, Top, Right, Bottom;
+        }
+
+        private delegate bool MonitorEnumProc(IntPtr hMonitor, IntPtr hdcMonitor, ref RECT lprcMonitor, IntPtr dwData);
+
+        [DllImport("user32.dll")]
+        private static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr lprcClip, MonitorEnumProc lpfnEnum, IntPtr dwData);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFOEX lpmi);
+
+        [DllImport("dxva2.dll", SetLastError = true)]
+        private static extern bool GetNumberOfPhysicalMonitorsFromHMONITOR(IntPtr hMonitor, out uint pdwNumberOfPhysicalMonitors);
+
+        [DllImport("dxva2.dll", SetLastError = true)]
+        private static extern bool GetPhysicalMonitorsFromHMONITOR(IntPtr hMonitor, uint dwPhysicalMonitorArraySize, [Out] PHYSICAL_MONITOR[] pPhysicalMonitorArray);
+
+        [DllImport("dxva2.dll", SetLastError = true)]
+        private static extern bool DestroyPhysicalMonitors(uint dwPhysicalMonitorArraySize, [In] PHYSICAL_MONITOR[] pPhysicalMonitorArray);
+
+        [DllImport("dxva2.dll", SetLastError = true)]
+        private static extern bool GetMonitorBrightness(IntPtr hMonitor, out uint pdwMinimumBrightness, out uint pdwCurrentBrightness, out uint pdwMaximumBrightness);
+
+        [DllImport("dxva2.dll", SetLastError = true)]
+        private static extern bool SetMonitorBrightness(IntPtr hMonitor, uint dwNewBrightness);
+
+        private static int _lastKnownBrightness = -1;
+        private static long _lastSetTick = 0;
+
+        /// <summary>
+        /// Returns true ONLY when an external display is connected (either multiple displays active,
+        /// or external display active while internal laptop panel is turned off / in clamshell mode).
+        /// </summary>
+        public static bool HasExternalDisplayConnected()
+        {
+            try
+            {
+                var screens = Screen.AllScreens;
+                if (screens.Length > 1) return true;
+                if (screens.Length == 1)
+                {
+                    string? internalScreen = ScreenNative.FindLaptopScreen(true);
+                    if (!string.IsNullOrEmpty(internalScreen) &&
+                        !string.Equals(screens[0].DeviceName, internalScreen, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch { }
+            return false;
+        }
+
+        private static List<IntPtr> GetExternalHMonitors()
+        {
+            var result = new List<IntPtr>();
+            string? internalDevice = null;
+            try { internalDevice = ScreenNative.FindLaptopScreen(true); } catch { }
+
+            var allMonitors = new List<(IntPtr hMon, string device, bool isPrimary)>();
+            EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (IntPtr hMon, IntPtr hdc, ref RECT rc, IntPtr data) =>
+            {
+                var mi = new MONITORINFOEX { cbSize = Marshal.SizeOf<MONITORINFOEX>() };
+                if (GetMonitorInfo(hMon, ref mi))
+                {
+                    bool primary = (mi.dwFlags & 1) != 0;
+                    allMonitors.Add((hMon, mi.szDevice ?? "", primary));
+                }
+                return true;
+            }, IntPtr.Zero);
+
+            foreach (var m in allMonitors)
+            {
+                if (!string.IsNullOrEmpty(internalDevice))
+                {
+                    if (!string.Equals(m.device, internalDevice, StringComparison.OrdinalIgnoreCase))
+                        result.Add(m.hMon);
+                }
+                else if (allMonitors.Count > 1 && !m.isPrimary)
+                {
+                    result.Add(m.hMon);
+                }
+            }
+
+            if (result.Count == 0 && allMonitors.Count > 1)
+            {
+                foreach (var m in allMonitors)
+                {
+                    if (!m.isPrimary) result.Add(m.hMon);
+                }
+            }
+
+            return result;
+        }
+
+        public static int Get()
+        {
+            if (!HasExternalDisplayConnected()) return -1;
+            if (Environment.TickCount64 - _lastSetTick < 1200 && _lastKnownBrightness >= 0)
+                return _lastKnownBrightness;
+
+            try
+            {
+                foreach (IntPtr hMon in GetExternalHMonitors())
+                {
+                    if (!GetNumberOfPhysicalMonitorsFromHMONITOR(hMon, out uint count) || count == 0)
+                        continue;
+
+                    var phys = new PHYSICAL_MONITOR[count];
+                    if (GetPhysicalMonitorsFromHMONITOR(hMon, count, phys))
+                    {
+                        try
+                        {
+                            for (int i = 0; i < count; i++)
+                            {
+                                if (GetMonitorBrightness(phys[i].hPhysicalMonitor, out uint min, out uint cur, out uint max) && max > min)
+                                {
+                                    int pct = (int)Math.Round((double)(cur - min) / (max - min) * 100.0);
+                                    _lastKnownBrightness = Math.Clamp(pct, 0, 100);
+                                    return _lastKnownBrightness;
+                                }
+                            }
+                        }
+                        finally
+                        {
+                            DestroyPhysicalMonitors(count, phys);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("ExternalDisplayBrightness.Get error: " + ex.Message);
+            }
+
+            return _lastKnownBrightness >= 0 ? _lastKnownBrightness : AppConfig.Get("ext_brightness", 80);
+        }
+
+        public static bool Set(int percent)
+        {
+            if (!HasExternalDisplayConnected()) return false;
+            percent = Math.Clamp(percent, 0, 100);
+            _lastKnownBrightness = percent;
+            _lastSetTick = Environment.TickCount64;
+            AppConfig.Set("ext_brightness", percent);
+
+            bool anySuccess = false;
+            try
+            {
+                foreach (IntPtr hMon in GetExternalHMonitors())
+                {
+                    if (!GetNumberOfPhysicalMonitorsFromHMONITOR(hMon, out uint count) || count == 0)
+                        continue;
+
+                    var phys = new PHYSICAL_MONITOR[count];
+                    if (GetPhysicalMonitorsFromHMONITOR(hMon, count, phys))
+                    {
+                        try
+                        {
+                            for (int i = 0; i < count; i++)
+                            {
+                                uint min = 0, cur = 0, max = 100;
+                                GetMonitorBrightness(phys[i].hPhysicalMonitor, out min, out cur, out max);
+                                if (max <= min) { min = 0; max = 100; }
+                                uint target = (uint)Math.Round(min + (percent / 100.0) * (max - min));
+                                if (SetMonitorBrightness(phys[i].hPhysicalMonitor, target))
+                                {
+                                    anySuccess = true;
+                                }
+                            }
+                        }
+                        finally
+                        {
+                            DestroyPhysicalMonitors(count, phys);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("ExternalDisplayBrightness.Set error: " + ex.Message);
+            }
+            return anySuccess;
+        }
+
+        public static void SetAsync(int percent)
+        {
+            int target = Math.Clamp(percent, 0, 100);
+            _lastKnownBrightness = target;
+            _lastSetTick = Environment.TickCount64;
+            Task.Run(() => Set(target));
+        }
+    }
+
+    // =========================================================================
+    // FEATURE 4: Wi-Fi Power-Saving & Low-Latency Gaming Toggle
+    // Eliminates MediaTek / Intel Wi-Fi ping spikes by setting Wireless Adapter
+    // Power Saving Mode to Maximum Performance (0) + WLAN Media Streaming Mode
+    // =========================================================================
+    public static class WifiLatencyHelper
+    {
+        // Wireless Adapter Settings Subgroup: 19cbb8fa-5279-450e-9fac-8a3d5fedd0c1
+        private static readonly Guid GUID_WIRELESS_SUBGROUP = new("19cbb8fa-5279-450e-9fac-8a3d5fedd0c1");
+        // Power Saving Mode Setting: 12bbebe6-58d6-4636-95bb-3217ef867c1a
+        // 0 = Maximum Performance (Low Latency), 1 = Low Power Saving, 2 = Medium Power Saving, 3 = Maximum Power Saving
+        private static readonly Guid GUID_WIRELESS_POWERMODE = new("12bbebe6-58d6-4636-95bb-3217ef867c1a");
+
+        [DllImport("PowrProf.dll", CharSet = CharSet.Unicode)]
+        private static extern uint PowerGetActiveScheme(IntPtr UserPowerKey, out IntPtr ActivePolicyGuid);
+
+        [DllImport("PowrProf.dll", CharSet = CharSet.Unicode)]
+        private static extern uint PowerReadACValueIndex(IntPtr RootPowerKey, [MarshalAs(UnmanagedType.LPStruct)] Guid SchemeGuid, [MarshalAs(UnmanagedType.LPStruct)] Guid SubGroupGuid, [MarshalAs(UnmanagedType.LPStruct)] Guid SettingGuid, out IntPtr AcValueIndex);
+
+        [DllImport("PowrProf.dll", CharSet = CharSet.Unicode)]
+        private static extern uint PowerReadDCValueIndex(IntPtr RootPowerKey, [MarshalAs(UnmanagedType.LPStruct)] Guid SchemeGuid, [MarshalAs(UnmanagedType.LPStruct)] Guid SubGroupGuid, [MarshalAs(UnmanagedType.LPStruct)] Guid SettingGuid, out IntPtr DcValueIndex);
+
+        [DllImport("PowrProf.dll", CharSet = CharSet.Unicode)]
+        private static extern uint PowerWriteACValueIndex(IntPtr RootPowerKey, [MarshalAs(UnmanagedType.LPStruct)] Guid SchemeGuid, [MarshalAs(UnmanagedType.LPStruct)] Guid SubGroupGuid, [MarshalAs(UnmanagedType.LPStruct)] Guid SettingGuid, int AcValueIndex);
+
+        [DllImport("PowrProf.dll", CharSet = CharSet.Unicode)]
+        private static extern uint PowerWriteDCValueIndex(IntPtr RootPowerKey, [MarshalAs(UnmanagedType.LPStruct)] Guid SchemeGuid, [MarshalAs(UnmanagedType.LPStruct)] Guid SubGroupGuid, [MarshalAs(UnmanagedType.LPStruct)] Guid SettingGuid, int DcValueIndex);
+
+        [DllImport("PowrProf.dll", CharSet = CharSet.Unicode)]
+        private static extern uint PowerSetActiveScheme(IntPtr RootPowerKey, [MarshalAs(UnmanagedType.LPStruct)] Guid SchemeGuid);
+
+        [DllImport("wlanapi.dll", SetLastError = true)]
+        private static extern uint WlanOpenHandle(uint dwClientVersion, IntPtr pReserved, out uint pdwNegotiatedVersion, out IntPtr phClientHandle);
+
+        [DllImport("wlanapi.dll", SetLastError = true)]
+        private static extern uint WlanCloseHandle(IntPtr hClientHandle, IntPtr pReserved);
+
+        [DllImport("wlanapi.dll", SetLastError = true)]
+        private static extern uint WlanEnumInterfaces(IntPtr hClientHandle, IntPtr pReserved, out IntPtr ppInterfaceList);
+
+        [DllImport("wlanapi.dll", SetLastError = true)]
+        private static extern void WlanFreeMemory(IntPtr pMemory);
+
+        [DllImport("wlanapi.dll", SetLastError = true)]
+        private static extern uint WlanSetInterface(IntPtr hClientHandle, [MarshalAs(UnmanagedType.LPStruct)] Guid pInterfaceGuid, uint OpCode, uint dwDataSize, ref int pData, IntPtr pReserved);
+
+        private const uint wlan_intf_opcode_media_streaming_mode = 3;
+
+        private static Guid GetActiveSchemeGuid()
+        {
+            if (PowerGetActiveScheme(IntPtr.Zero, out IntPtr ptr) == 0 && ptr != IntPtr.Zero)
+            {
+                try
+                {
+                    return Marshal.PtrToStructure<Guid>(ptr);
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(ptr);
+                }
+            }
+            return new Guid("381b4222-f694-41f0-9685-ff5bb260df2e");
+        }
+
+        public static bool IsLowLatencyActive()
+        {
+            try
+            {
+                Guid scheme = GetActiveSchemeGuid();
+                bool onBattery = SystemInformation.PowerStatus.PowerLineStatus != PowerLineStatus.Online;
+                if (onBattery)
+                {
+                    if (PowerReadDCValueIndex(IntPtr.Zero, scheme, GUID_WIRELESS_SUBGROUP, GUID_WIRELESS_POWERMODE, out IntPtr dcVal) == 0)
+                        return dcVal.ToInt32() == 0;
+                }
+                else
+                {
+                    if (PowerReadACValueIndex(IntPtr.Zero, scheme, GUID_WIRELESS_SUBGROUP, GUID_WIRELESS_POWERMODE, out IntPtr acVal) == 0)
+                        return acVal.ToInt32() == 0;
+                }
+            }
+            catch { }
+            return AppConfig.Is("wifi_low_latency");
+        }
+
+        public static void SetLowLatency(bool enable, bool showToast = false)
+        {
+            AppConfig.Set("wifi_low_latency", enable ? 1 : 0);
+            try
+            {
+                Guid scheme = GetActiveSchemeGuid();
+                // 0 = Maximum Performance (no power-saving ping spikes)
+                // 2 = Medium Power Saving on battery when disabled
+                int acMode = enable ? 0 : 0;
+                int dcMode = enable ? 0 : 2;
+                if (!enable) acMode = 1; // Low Power Saving when user explicitly turns off Low-Latency mode
+
+                PowerWriteACValueIndex(IntPtr.Zero, scheme, GUID_WIRELESS_SUBGROUP, GUID_WIRELESS_POWERMODE, acMode);
+                PowerWriteDCValueIndex(IntPtr.Zero, scheme, GUID_WIRELESS_SUBGROUP, GUID_WIRELESS_POWERMODE, dcMode);
+                PowerSetActiveScheme(IntPtr.Zero, scheme);
+            }
+            catch (Exception ex)
+            {
+                Logger.WriteLine("WifiLatencyHelper PowerWrite error: " + ex.Message);
+            }
+
+            // Also toggle WLAN media streaming mode for lowest packet latency on MediaTek/Intel Wi-Fi 6E
+            try
+            {
+                if (WlanOpenHandle(2, IntPtr.Zero, out _, out IntPtr hClient) == 0 && hClient != IntPtr.Zero)
+                {
+                    try
+                    {
+                        if (WlanEnumInterfaces(hClient, IntPtr.Zero, out IntPtr pList) == 0 && pList != IntPtr.Zero)
+                        {
+                            try
+                            {
+                                int count = Marshal.ReadInt32(pList, 0);
+                                for (int i = 0; i < count; i++)
+                                {
+                                    // Each WLAN_INTERFACE_INFO is 532 bytes: 16-byte GUID + 512-byte WCHAR description + 4-byte state
+                                    IntPtr itemPtr = IntPtr.Add(pList, 8 + i * 532);
+                                    Guid ifGuid = Marshal.PtrToStructure<Guid>(itemPtr);
+                                    int streaming = enable ? 1 : 0;
+                                    WlanSetInterface(hClient, ifGuid, wlan_intf_opcode_media_streaming_mode, sizeof(int), ref streaming, IntPtr.Zero);
+                                }
+                            }
+                            finally
+                            {
+                                WlanFreeMemory(pList);
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        WlanCloseHandle(hClient, IntPtr.Zero);
+                    }
+                }
+            }
+            catch { }
+
+            if (showToast)
+            {
+                Program.toast?.RunToast(enable
+                    ? "Wi-Fi: Low-Latency Gaming Mode (Max Performance)"
+                    : "Wi-Fi: Eco Power-Saving Mode");
+            }
+        }
+
+        public static bool Toggle(bool showToast = true)
+        {
+            bool next = !IsLowLatencyActive();
+            SetLowLatency(next, showToast);
+            return next;
+        }
+    }
+
+    // =========================================================================
+    // FEATURE 5: Interactive Battery Charge Estimator & Session Stats
+    // Tracks session Wh used/charged, average session power draw, time-to-target
+    // charge limit, and live runtime comparison (Current vs 60Hz+1Z Eco)
+    // =========================================================================
+    public static class BatterySessionTracker
+    {
+        private static readonly DateTime _sessionStart = DateTime.Now;
+        private static DateTime _lastSampleTime = DateTime.MinValue;
+        private static double _dischargedWh = 0.0;
+        private static double _chargedWh = 0.0;
+        private static double _dischargeSeconds = 0.0;
+        private static double _chargeSeconds = 0.0;
+
+        public static void RecordSample()
+        {
+            DateTime now = DateTime.Now;
+            if (_lastSampleTime == DateTime.MinValue)
+            {
+                _lastSampleTime = now;
+                return;
+            }
+
+            double dtSec = (now - _lastSampleTime).TotalSeconds;
+            _lastSampleTime = now;
+            if (dtSec <= 0.05 || dtSec > 30.0) return;
+
+            double rateW = (double)(HardwareControl.batteryRate ?? 0m);
+            if (rateW < -0.3)
+            {
+                double absW = -rateW;
+                _dischargedWh += absW * (dtSec / 3600.0);
+                _dischargeSeconds += dtSec;
+            }
+            else if (rateW > 0.3)
+            {
+                _chargedWh += rateW * (dtSec / 3600.0);
+                _chargeSeconds += dtSec;
+            }
+        }
+
+        public static string GetSparklineSummaryLine1()
+        {
+            decimal rate = HardwareControl.batteryRate ?? 0m;
+            decimal pct = HardwareControl.batteryCapacity;
+            int limit = BatteryControl.chargeFull ? 100 : AppConfig.Get("charge_limit", 85);
+
+            if (rate > 0.4m && HardwareControl.fullCapacity > 0 && HardwareControl.chargeCapacity > 0)
+            {
+                decimal targetWh = ((decimal)HardwareControl.fullCapacity / 1000m) * (limit / 100m);
+                decimal curWh = (decimal)HardwareControl.chargeCapacity / 1000m;
+                decimal remWh = Math.Max(0m, targetWh - curWh);
+                if (remWh > 0.1m)
+                {
+                    int mins = (int)Math.Round((double)(remWh / rate * 60m));
+                    string eta = mins >= 60 ? $"~{mins / 60}h {mins % 60}m" : $"~{mins}m";
+                    return $"Charging (+{rate:0.0}W)  •  {eta} to {limit}% target";
+                }
+                return $"Target {limit}% Reached (+{rate:0.0}W)";
+            }
+
+            if (rate < -0.4m && HardwareControl.chargeCapacity > 0)
+            {
+                decimal absW = -rate;
+                decimal curWh = (decimal)HardwareControl.chargeCapacity / 1000m;
+                int nowMins = (int)Math.Round((double)(curWh / absW * 60m));
+                string nowStr = nowMins >= 60 ? $"~{nowMins / 60}h {nowMins % 60}m" : $"~{nowMins}m";
+
+                // Estimate savings if switching to 60Hz + 1-Zone Mini-LED
+                decimal potSavingsW = 0m;
+                if (AppConfig.Get("frequency", 165) > 60) potSavingsW += 2.2m;
+                if (AppConfig.Get("miniled", 1) == 1) potSavingsW += 3.3m;
+
+                if (potSavingsW > 0.5m && absW > potSavingsW + 4m)
+                {
+                    decimal ecoW = absW - potSavingsW;
+                    int ecoMins = (int)Math.Round((double)(curWh / ecoW * 60m));
+                    string ecoStr = ecoMins >= 60 ? $"~{ecoMins / 60}h {ecoMins % 60}m" : $"~{ecoMins}m";
+                    return $"Est: {nowStr} now  •  {ecoStr} in 60Hz+1Z";
+                }
+                return $"Est Runtime: {nowStr} left at -{absW:0.0}W";
+            }
+
+            return $"Battery {Math.Round(pct)}% (AC Bypass • Target {limit}%)";
+        }
+
+        public static string GetSparklineSummaryLine2()
+        {
+            TimeSpan up = DateTime.Now - _sessionStart;
+            string upStr = up.TotalHours >= 1 ? $"{(int)up.TotalHours}h {up.Minutes}m" : $"{Math.Max(1, up.Minutes)}m";
+
+            if (_dischargeSeconds > 10 && _dischargedWh > 0.01)
+            {
+                double avgW = _dischargedWh / (_dischargeSeconds / 3600.0);
+                return $"Session ({upStr}): {_dischargedWh:0.1} Wh used  •  Avg Draw: {avgW:0.1}W";
+            }
+            if (_chargeSeconds > 10 && _chargedWh > 0.01)
+            {
+                double avgW = _chargedWh / (_chargeSeconds / 3600.0);
+                return $"Session ({upStr}): +{_chargedWh:0.1} Wh charged  •  Avg Rate: +{avgW:0.1}W";
+            }
+            return $"Session ({upStr}): AC Bypass Active (0.0 Wh cycled)";
+        }
+
+        public static string GetMenuStatusSummary()
+        {
+            return $"{GetSparklineSummaryLine1()}  |  {GetSparklineSummaryLine2()}";
+        }
+    }
+
+    // =========================================================================
+    // FEATURE 6: Convertible Posture OSD Pill (PostureOsdForm)
+    // Sleek, non-activating touch bar that pops up when folding into Tablet/Tent
+    // mode (or on demand) with 1-tap controls for Touch/Pen, Rotate, Mode, 1Z/512Z, Brightness
+    // =========================================================================
+    public class PostureOsdForm : Form
+    {
+        private static PostureOsdForm? _instance;
+        private readonly System.Windows.Forms.Timer _hideTimer;
+        private readonly Label _titleLabel;
+        private readonly RButton _btnTouch;
+        private readonly RButton _btnRotate;
+        private readonly RButton _btnMode;
+        private readonly RButton _btnMiniled;
+        private readonly RButton _btnBrightDown;
+        private readonly RButton _btnBrightUp;
+        private readonly RButton _btnClose;
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+        private const int SW_SHOWNOACTIVATE = 4;
+
+        protected override bool ShowWithoutActivation => true;
+
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                var cp = base.CreateParams;
+                const int WS_EX_NOACTIVATE = 0x08000000;
+                const int WS_EX_TOOLWINDOW = 0x00000080;
+                const int WS_EX_TOPMOST = 0x00000008;
+                cp.ExStyle |= WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST;
+                return cp;
+            }
+        }
+
+        public static void ShowPostureBar(string postureName = "")
+        {
+            if (Program.settingsForm == null || Program.settingsForm.IsDisposed) return;
+            if (Program.settingsForm.InvokeRequired)
+            {
+                Program.settingsForm.BeginInvoke(() => ShowPostureBar(postureName));
+                return;
+            }
+
+            if (_instance == null || _instance.IsDisposed)
+            {
+                _instance = new PostureOsdForm();
+            }
+            _instance.PresentBar(postureName);
+        }
+
+        private PostureOsdForm()
+        {
+            FormBorderStyle = FormBorderStyle.None;
+            StartPosition = FormStartPosition.Manual;
+            ShowInTaskbar = false;
+            TopMost = true;
+            DoubleBuffered = true;
+            BackColor = Color.FromArgb(24, 26, 32);
+            ForeColor = Color.White;
+            Size = new Size(650, 52);
+            Padding = new Padding(10, 6, 10, 6);
+
+            _hideTimer = new System.Windows.Forms.Timer { Interval = 6500 };
+            _hideTimer.Tick += (s, e) =>
+            {
+                _hideTimer.Stop();
+                Hide();
+            };
+
+            var layout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 8,
+                RowCount = 1,
+                BackColor = Color.Transparent,
+                Margin = new Padding(0)
+            };
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 23F));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 21F));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 21F));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 21F));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 44F));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 44F));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 36F));
+
+            _titleLabel = new Label
+            {
+                AutoSize = true,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Font = new Font(RForm.CurrentFontFamily, 9.5f, FontStyle.Bold),
+                ForeColor = Color.FromArgb(80, 210, 255),
+                Margin = new Padding(4, 0, 8, 0),
+                Text = "Posture"
+            };
+
+            RButton MakeBtn(string text, EventHandler onClick)
+            {
+                var btn = new RButton
+                {
+                    Text = text,
+                    Dock = DockStyle.Fill,
+                    Margin = new Padding(3, 2, 3, 2),
+                    Secondary = true,
+                    BorderRadius = 8,
+                    BackColor = Color.FromArgb(38, 42, 50),
+                    ForeColor = Color.White,
+                    BorderColor = Color.FromArgb(58, 174, 239),
+                    Font = new Font(RForm.CurrentFontFamily, 8.5f, FontStyle.Bold)
+                };
+                btn.Click += (s, e) =>
+                {
+                    ResetAutoHide();
+                    onClick(s, e);
+                    RefreshButtonStates();
+                };
+                return btn;
+            }
+
+            _btnTouch = MakeBtn("Touch + Pen", (s, e) =>
+            {
+                var cur = TouchscreenHelper.GetMode();
+                var next = cur == TouchPenMode.PenOnly ? TouchPenMode.TouchAndPen : TouchPenMode.PenOnly;
+                TouchscreenHelper.SetMode(next);
+                Program.settingsForm?.SyncTouchPenMode(next);
+            });
+
+            _btnRotate = MakeBtn("Rotate", (s, e) =>
+            {
+                AutoRotationControl.Toggle();
+                Program.settingsForm?.VisualiseRotation();
+            });
+
+            _btnMode = MakeBtn("Mode", (s, e) =>
+            {
+                int cur = Modes.GetCurrent();
+                int next = cur == AsusACPI.PerformanceSilent ? AsusACPI.PerformanceBalanced : AsusACPI.PerformanceSilent;
+                Program.modeControl?.SetPerformanceMode(next);
+            });
+
+            _btnMiniled = MakeBtn("Mini-LED", (s, e) =>
+            {
+                int cur = AppConfig.Get("miniled", 1);
+                int next = cur == 1 ? 0 : 1;
+                AppConfig.Set("miniled", next);
+                ScreenControl.SetMiniled(next);
+                ScreenControl.InitScreen();
+            });
+
+            _btnBrightDown = MakeBtn("☀️-", (s, e) =>
+            {
+                int b = ScreenBrightness.Adjust(-10);
+                Program.settingsForm?.UpdateBrightnessSlider(b);
+            });
+
+            _btnBrightUp = MakeBtn("☀️+", (s, e) =>
+            {
+                int b = ScreenBrightness.Adjust(10);
+                Program.settingsForm?.UpdateBrightnessSlider(b);
+            });
+
+            _btnClose = MakeBtn("✕", (s, e) =>
+            {
+                _hideTimer.Stop();
+                Hide();
+            });
+            _btnClose.BorderColor = Color.FromArgb(120, 120, 130);
+
+            layout.Controls.Add(_titleLabel, 0, 0);
+            layout.Controls.Add(_btnTouch, 1, 0);
+            layout.Controls.Add(_btnRotate, 2, 0);
+            layout.Controls.Add(_btnMode, 3, 0);
+            layout.Controls.Add(_btnMiniled, 4, 0);
+            layout.Controls.Add(_btnBrightDown, 5, 0);
+            layout.Controls.Add(_btnBrightUp, 6, 0);
+            layout.Controls.Add(_btnClose, 7, 0);
+
+            Controls.Add(layout);
+        }
+
+        private void ResetAutoHide()
+        {
+            _hideTimer.Stop();
+            _hideTimer.Start();
+        }
+
+        public void PresentBar(string postureName)
+        {
+            if (string.IsNullOrEmpty(postureName))
+            {
+                postureName = InputDispatcher.tabletMode ? "Tablet" : (InputDispatcher.tentMode ? "Tent" : "Convertible");
+            }
+            _titleLabel.Text = $"🔄 {postureName}";
+            RefreshButtonStates();
+
+            Rectangle workArea = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1920, 1080);
+            Left = workArea.Left + (workArea.Width - Width) / 2;
+            Top = workArea.Top + 18;
+
+            ShowWindow(Handle, SW_SHOWNOACTIVATE);
+            Invalidate();
+            ResetAutoHide();
+        }
+
+        private void RefreshButtonStates()
+        {
+            var touch = TouchscreenHelper.GetMode();
+            _btnTouch.Text = touch == TouchPenMode.PenOnly ? "✍️ Pen Only" : "👆 Touch+Pen";
+            _btnTouch.Activated = touch == TouchPenMode.PenOnly;
+
+            bool rot = AutoRotationControl.IsEnabled();
+            _btnRotate.Text = rot ? "🔓 Rotate On" : "🔒 Rotate Lock";
+            _btnRotate.Activated = rot;
+
+            int mode = Modes.GetCurrent();
+            _btnMode.Text = mode == AsusACPI.PerformanceSilent ? "🍃 Silent" : $"⚡ {Modes.GetCurrentName()}";
+            _btnMode.Activated = mode == AsusACPI.PerformanceSilent;
+
+            int mled = AppConfig.Get("miniled", 1);
+            _btnMiniled.Text = mled == 1 ? "🔆 512-Zone" : "🔅 1-Zone";
+            _btnMiniled.Activated = mled == 1;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            var rect = new Rectangle(1, 1, Width - 3, Height - 3);
+            using var pen = new Pen(Color.FromArgb(58, 174, 239), 1.8f);
+            using var path = RComboBox.RoundedRect(rect, 12, 12);
+            e.Graphics.DrawPath(pen, path);
+        }
+    }
+
     public class MainSparklinePanel : Panel
     {
-        private int _displayMode = 0; // 0 = CPU & GPU Temps, 1 = Battery Wattage
+        // 0 = CPU & GPU Temps, 1 = Battery Wattage, 2 = Session Battery Estimator & Stats
+        private int _displayMode = 0;
 
         public MainSparklinePanel()
         {
@@ -455,7 +1187,7 @@ namespace GHelper.Helpers
                     Program.settingsForm?.SetContextMenu();
                     return;
                 }
-                _displayMode = (_displayMode + 1) % 2;
+                _displayMode = (_displayMode + 1) % 3;
                 Invalidate();
             };
         }
@@ -476,6 +1208,17 @@ namespace GHelper.Helpers
             {
                 g.FillPath(bgBrush, path);
                 g.DrawPath(borderPen, path);
+            }
+
+            if (_displayMode == 2)
+            {
+                using var f1 = new Font(RForm.CurrentFontFamily, 7.8f, FontStyle.Bold);
+                using var f2 = new Font(RForm.CurrentFontFamily, 7.4f, FontStyle.Regular);
+                using var b1 = new SolidBrush(RForm.foreMain);
+                using var b2 = new SolidBrush(Color.FromArgb(190, RForm.foreMain));
+                g.DrawString(BatterySessionTracker.GetSparklineSummaryLine1(), f1, b1, new PointF(8f, 3f));
+                g.DrawString(BatterySessionTracker.GetSparklineSummaryLine2(), f2, b2, new PointF(8f, 18f));
+                return;
             }
 
             FlowFeaturesHelper.GetHistorySnapshot(out float[] cpu, out float[] gpu, out float[] bat, out int count);
