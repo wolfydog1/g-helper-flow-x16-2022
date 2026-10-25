@@ -681,6 +681,7 @@ namespace GHelper
                 int gpu_power = AppConfig.GetMode("gpu_power");
                 if (gpu_power < 0) gpu_power = (gpuPowerVar >= 0) ? gpuPowerVar : AsusACPI.MaxGPUPower;
 
+                if (IsDisposed || !IsHandleCreated) return;
                 Invoke(delegate
                 {
                     trackGPUPower.Value = Math.Max(Math.Min(gpu_power, AsusACPI.MaxGPUPower), AsusACPI.MinGPUPower);
@@ -695,7 +696,8 @@ namespace GHelper
             {
                 if (Program.acpi.DeviceGet(AsusACPI.GPUEco) == 1)
                 {
-                    Invoke(delegate { gpuVisible = buttonGPU.Visible = false; });
+                    if (!IsDisposed && IsHandleCreated)
+                        Invoke(delegate { gpuVisible = buttonGPU.Visible = false; });
                     return;
                 }
 
@@ -703,7 +705,8 @@ namespace GHelper
 
                 if (HardwareControl.GpuControl is not NvidiaGpuControl nv)
                 {
-                    Invoke(delegate { gpuVisible = buttonGPU.Visible = false; });
+                    if (!IsDisposed && IsHandleCreated)
+                        Invoke(delegate { gpuVisible = buttonGPU.Visible = false; });
                     return;
                 }
 
@@ -746,6 +749,7 @@ namespace GHelper
                     bool boostVisible = Program.acpi.IsSupported(AsusACPI.PPT_GPUC0);
                     bool tempVisible = Program.acpi.IsSupported(AsusACPI.PPT_GPUC2);
 
+                    if (IsDisposed || !IsHandleCreated) return;
                     Invoke(delegate
                     {
                         gpuVisible = buttonGPU.Visible = true;
@@ -1520,7 +1524,7 @@ namespace GHelper
             if (AppConfig.IsMidFan())
                 LoadProfile(seriesMid, AsusFan.Mid, true);
 
-            if (Program.acpi.IsXGConnected() || XGM.IsConnected())
+            if (chartXGM.Visible || Program.acpi.IsXGConnected() || XGM.IsConnected())
                 LoadProfile(seriesXGM, AsusFan.XGM, true);
 
             checkApplyFans.Checked = false;

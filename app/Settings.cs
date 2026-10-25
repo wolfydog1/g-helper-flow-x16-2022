@@ -1245,13 +1245,13 @@ namespace GHelper
 
             VisualControl.SetVisual(visualValue, colorTempValue, true);
 
-            comboVisual.SelectedValueChanged -= ComboVisual_SelectedValueChanged;
-            comboVisual.SelectedValueChanged += ComboVisual_SelectedValueChanged;
+            comboVisual.SelectionChangeCommitted -= ComboVisual_SelectedValueChanged;
+            comboVisual.SelectionChangeCommitted += ComboVisual_SelectedValueChanged;
             comboVisual.Visible = true;
             VisualiseDisabled();
 
-            comboColorTemp.SelectedValueChanged -= ComboVisual_SelectedValueChanged;
-            comboColorTemp.SelectedValueChanged += ComboVisual_SelectedValueChanged;
+            comboColorTemp.SelectionChangeCommitted -= ComboVisual_SelectedValueChanged;
+            comboColorTemp.SelectionChangeCommitted += ComboVisual_SelectedValueChanged;
             comboColorTemp.Visible = true;
 
             if (gamuts.Count <= 1) return;
@@ -1262,8 +1262,8 @@ namespace GHelper
             comboGamut.ValueMember = "Key";
             comboGamut.SelectedValue = (SplendidGamut)AppConfig.Get("gamut", (int)VisualControl.GetDefaultGamut());
 
-            comboGamut.SelectedValueChanged -= ComboGamut_SelectedValueChanged;
-            comboGamut.SelectedValueChanged += ComboGamut_SelectedValueChanged;
+            comboGamut.SelectionChangeCommitted -= ComboGamut_SelectedValueChanged;
+            comboGamut.SelectionChangeCommitted += ComboGamut_SelectedValueChanged;
             comboGamut.Visible = true;
 
         }
@@ -1288,6 +1288,7 @@ namespace GHelper
                     comboVisual.SelectedIndex = comboVisual.Items.Count - 1;
             }
 
+            ComboVisual_SelectedValueChanged(comboVisual, EventArgs.Empty);
             Program.toast.RunToast(comboVisual.GetItemText(comboVisual.SelectedItem), ToastIcon.BrightnessUp);
         }
 
@@ -1299,12 +1300,16 @@ namespace GHelper
 
         private void ComboGamut_SelectedValueChanged(object? sender, EventArgs e)
         {
-            VisualControl.SetGamut((int)comboGamut.SelectedValue);
+            if (comboGamut.SelectedValue is SplendidGamut gamut)
+                VisualControl.SetGamut((int)gamut);
+            else if (comboGamut.SelectedValue is int gamutInt)
+                VisualControl.SetGamut(gamutInt);
         }
 
         private void ComboVisual_SelectedValueChanged(object? sender, EventArgs e)
         {
-            VisualControl.SetVisual((SplendidCommand)comboVisual.SelectedValue, (int)comboColorTemp.SelectedValue);
+            if (comboVisual.SelectedValue is not SplendidCommand cmd || comboColorTemp.SelectedValue is not int temp) return;
+            VisualControl.SetVisual(cmd, temp);
             VisualiseDisabled();
         }
 
@@ -1841,13 +1846,35 @@ namespace GHelper
             return parts.Count > 0 ? "⚡ " + string.Join("  |  ", parts) : $"⚡ Mode: {Modes.GetCurrentName()}";
         }
 
+        private bool _contextMenuRebuildPending = false;
+
         public void SetContextMenu()
         {
+            if (IsDisposed) return;
+            if (InvokeRequired)
+            {
+                if (IsHandleCreated) BeginInvoke(SetContextMenu);
+                return;
+            }
+            if (contextMenuStrip.Visible)
+            {
+                if (!_contextMenuRebuildPending && IsHandleCreated)
+                {
+                    _contextMenuRebuildPending = true;
+                    BeginInvoke(delegate
+                    {
+                        _contextMenuRebuildPending = false;
+                        SetContextMenu();
+                    });
+                }
+                return;
+            }
+
             var currentMode = Modes.GetCurrent();
 
             foreach (ToolStripItem item in contextMenuStrip.Items.Cast<ToolStripItem>().ToList())
             {
-                if (item is ToolStripMenuItem menuItem) menuItem.Dispose();
+                item.Dispose();
             }
             contextMenuStrip.Items.Clear();
             contextMenuStrip.ShowCheckMargin = true;
@@ -3992,7 +4019,16 @@ namespace GHelper
             {
                 labelVisual.Visible = false;
                 if (comboVisual.Items.Count > 0 || buttonInstallColor.Visible)
+                {
                     tableVisual.Visible = true;
+                    if (comboVisual.Items.Count > 0)
+                        comboVisual.SelectedValue = (SplendidCommand)AppConfig.Get("visual", (int)VisualControl.GetDefaultVisualMode());
+                    if (comboColorTemp.Items.Count > 0)
+                        comboColorTemp.SelectedValue = AppConfig.Get("color_temp", VisualControl.DefaultColorTemp);
+                    if (comboGamut.Items.Count > 0)
+                        comboGamut.SelectedValue = (SplendidGamut)AppConfig.Get("gamut", (int)VisualControl.GetDefaultGamut());
+                    VisualiseDisabled();
+                }
             }
 
 
@@ -4109,20 +4145,6 @@ namespace GHelper
             string charge = "";
 
             await Task.Run(() => HardwareControl.ReadSensors());
-            FlowFeaturesHelper.RecordSensorSampleAndUpdate();
-            if (Visible)
-            {
-                if (DateTimeOffset.Now.ToUnixTimeMilliseconds() - lastPeripheralCheck > 30000)
-                {
-                    lastPeripheralCheck = DateTimeOffset.Now.ToUnixTimeMilliseconds();
-                    _ = Task.Run((Action)PeripheralsProvider.RefreshBatteryForAllDevices);
-                }
-                bool xgmConnected = HardwareControl.IsXGConnectedCached();
-                if (buttonXGM.Visible != xgmConnected)
-                {
-                    VisualizeXGM();
-                }
-            }
 
             string pctPrefix = HardwareControl.batteryCapacity > 0
                 ? Math.Round((decimal)HardwareControl.batteryCapacity, 0) + "% | "
@@ -4192,6 +4214,22 @@ namespace GHelper
             if (Program.settingsForm.IsHandleCreated)
                 Program.settingsForm.BeginInvoke(delegate
                 {
+                    FlowFeaturesHelper.RecordSensorSampleAndUpdate();
+                    if (Visible)
+                    {
+                        if (DateTimeOffset.Now.ToUnixTimeMilliseconds() - lastPeripheralCheck > 30000)
+                        {
+                            lastPeripheralCheck = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+                            _ = Task.Run((Action)PeripheralsProvider.RefreshBatteryForAllDevices);
+                        }
+                        if (buttonXGM.Visible != isXgm)
+                        {
+                            VisualizeXGM();
+                        }
+                    }
+                    if (Program.trayIcon is not null && Program.trayIcon.Text != trayTip)
+                        Program.trayIcon.Text = trayTip;
+
                     string cpuHeader = "CPU: " + (cpuTempStr.Length > 0 ? cpuTempStr : "--") + (cpuFanStr.Length > 0 ? " " + cpuFanStr : "");
                     SetLabelText(labelCPUFan, cpuHeader);
                     Color cpuColor = HardwareControl.cpuTemp >= 85 ? colorTurbo
@@ -4284,8 +4322,6 @@ namespace GHelper
                     if (fansForm != null && !fansForm.IsDisposed && fansForm.Visible)
                         fansForm.UpdateSensors();
                 });
-
-            if (Program.trayIcon is not null && Program.trayIcon.Text != trayTip) Program.trayIcon.Text = trayTip;
         }
 
         public void LabelFansResult(string text)

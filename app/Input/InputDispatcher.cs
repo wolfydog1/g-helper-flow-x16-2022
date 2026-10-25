@@ -1098,7 +1098,8 @@ namespace GHelper.Input
                     if (switchedSilent || Modes.GetCurrent() == AsusACPI.PerformanceSilent) summaryParts.Add("Silent Cooling");
                     summaryParts.Add("Kbd Off");
 
-                    Program.toast?.RunToast($"Tablet Mode: {string.Join(" • ", summaryParts)}", ToastIcon.Touchpad);
+                    Program.toast?.RunToast($"Tablet Mode: {string.Join(" • ", summaryParts)}", ToastIcon.Touchpad);
+
                     if (AppConfig.IsNotFalse("posture_osd_enabled")) PostureOsdForm.ShowPostureBar("Tablet Mode");
                 }
                 else
@@ -1124,7 +1125,8 @@ namespace GHelper.Input
                     Program.toast?.RunToast(restoredPerf ? $"Laptop Mode Restored ({modeName})" : "Laptop Mode Restored", ToastIcon.Touchpad);
                 }
 
-                Program.settingsForm?.BeginInvoke(() => Program.settingsForm.VisualiseScreenSwitches(ScreenCCD.GetHDRStatus()));
+                if (Program.settingsForm is { IsHandleCreated: true, IsDisposed: false })
+                    Program.settingsForm.BeginInvoke(() => Program.settingsForm.VisualiseScreenSwitches(ScreenCCD.GetHDRStatus()));
             }
         }
 
@@ -1170,12 +1172,14 @@ namespace GHelper.Input
                 if (AppConfig.Get("auto_tablet_rotation", 1) == 1)
                 {
                     AutoRotationControl.SetAutoRotation(tentMode || tabletMode);
-                    Program.settingsForm?.BeginInvoke(() => Program.settingsForm.VisualiseScreenSwitches(ScreenCCD.GetHDRStatus()));
+                    if (Program.settingsForm is { IsHandleCreated: true, IsDisposed: false })
+                        Program.settingsForm.BeginInvoke(() => Program.settingsForm.VisualiseScreenSwitches(ScreenCCD.GetHDRStatus()));
                 }
                 if (tentMode)
                 {
                     string rotPart = AppConfig.Get("auto_tablet_rotation", 1) == 1 ? " • Rotation Unlocked" : "";
-                    Program.toast?.RunToast($"Tent Mode: Open Airflow{rotPart} • Touchpad Off", ToastIcon.Touchpad);
+                    Program.toast?.RunToast($"Tent Mode: Open Airflow{rotPart} • Touchpad Off", ToastIcon.Touchpad);
+
                     if (AppConfig.IsNotFalse("posture_osd_enabled")) PostureOsdForm.ShowPostureBar("Tent Mode");
                 }
                 else if (!tabletMode)

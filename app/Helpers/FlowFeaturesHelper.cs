@@ -80,8 +80,8 @@ namespace GHelper.Helpers
             _lastRenderedTrayText = "";
             if (mode == TrayTelemetryMode.DefaultLogo)
             {
-                CleanupCustomIcon();
                 Program.settingsForm?.VisualiseIcon(themeChange: true, force: true);
+                CleanupCustomIcon();
             }
             else
             {
@@ -295,12 +295,15 @@ namespace GHelper.Helpers
 
         public static void ApplyScenario(ScenarioPreset preset)
         {
-            // Capture undo snapshot before applying first scenario
-            _snapMode = Modes.GetCurrent();
-            _snapMiniled = AppConfig.Get("miniled", 1);
-            _snapGamut = AppConfig.Get("gamut", (int)VisualControl.GetDefaultGamut());
-            _snapTouch = TouchscreenHelper.GetMode();
-            _hasSnapshot = true;
+            // Capture undo snapshot before applying first scenario (preserve original baseline across scenario switches)
+            if (!_hasSnapshot)
+            {
+                _snapMode = Modes.GetCurrent();
+                _snapMiniled = AppConfig.Get("miniled", 1);
+                _snapGamut = AppConfig.Get("gamut", (int)VisualControl.GetDefaultGamut());
+                _snapTouch = TouchscreenHelper.GetMode();
+                _hasSnapshot = true;
+            }
 
             switch (preset)
             {
@@ -965,7 +968,7 @@ namespace GHelper.Helpers
 
         public static void ShowPostureBar(string postureName = "")
         {
-            if (Program.settingsForm == null || Program.settingsForm.IsDisposed) return;
+            if (Program.settingsForm == null || Program.settingsForm.IsDisposed || !Program.settingsForm.IsHandleCreated) return;
             if (Program.settingsForm.InvokeRequired)
             {
                 Program.settingsForm.BeginInvoke(() => ShowPostureBar(postureName));
@@ -1035,11 +1038,13 @@ namespace GHelper.Helpers
                     Margin = new Padding(3, 2, 3, 2),
                     Secondary = true,
                     BorderRadius = 8,
+                    FlatStyle = FlatStyle.Flat,
                     BackColor = Color.FromArgb(38, 42, 50),
                     ForeColor = Color.White,
                     BorderColor = Color.FromArgb(58, 174, 239),
                     Font = new Font(RForm.CurrentFontFamily, 8.5f, FontStyle.Bold)
                 };
+                btn.FlatAppearance.BorderSize = 0;
                 btn.Click += (s, e) =>
                 {
                     ResetAutoHide();
@@ -1178,17 +1183,20 @@ namespace GHelper.Helpers
             Margin = new Padding(6, 2, 6, 4);
             Cursor = Cursors.Hand;
 
-            Click += (s, e) =>
+            MouseClick += (s, e) =>
             {
-                if (e is MouseEventArgs me && me.Button == MouseButtons.Right)
+                if (e.Button == MouseButtons.Right)
                 {
                     AppConfig.Set("show_main_sparkline", 0);
-                    Visible = false;
+                    Program.settingsForm?.SetMainSparklineVisible(false);
                     Program.settingsForm?.SetContextMenu();
                     return;
                 }
-                _displayMode = (_displayMode + 1) % 3;
-                Invalidate();
+                if (e.Button == MouseButtons.Left)
+                {
+                    _displayMode = (_displayMode + 1) % 3;
+                    Invalidate();
+                }
             };
         }
 
