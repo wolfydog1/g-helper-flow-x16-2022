@@ -347,21 +347,32 @@ namespace GHelper
 
             buttonRotation.Click += (s, e) =>
             {
-                bool unlocked = AutoRotationControl.Toggle();
+                int nextOrient = AutoRotationControl.CycleOrientation();
                 VisualiseRotation();
-                Program.toast.RunToast(unlocked ? "Screen Rotation: Unlocked" : "Screen Rotation: Locked", ToastIcon.Touchpad);
+                SetContextMenu();
+                Program.toast.RunToast("Screen Rotation: " + AutoRotationControl.GetOrientationLabel(nextOrient), ToastIcon.Touchpad);
             };
             buttonRotation.MouseDown += (s, e) =>
             {
                 if (e.Button == MouseButtons.Right)
                 {
-                    int nextAuto = AppConfig.Get("auto_tablet_rotation", 1) == 1 ? 0 : 1;
-                    AppConfig.Set("auto_tablet_rotation", nextAuto);
-                    VisualiseRotation();
-                    Program.toast.RunToast(nextAuto == 1 ? "Auto Tablet Rotation: On" : "Auto Tablet Rotation: Off", ToastIcon.Touchpad);
+                    if (AutoRotationControl.GetOrientation() != AutoRotationControl.DMDO_DEFAULT)
+                    {
+                        AutoRotationControl.SetOrientation(AutoRotationControl.DMDO_DEFAULT);
+                        VisualiseRotation();
+                        SetContextMenu();
+                        Program.toast.RunToast("Screen Rotation: Reset to Landscape (0°)", ToastIcon.Touchpad);
+                    }
+                    else
+                    {
+                        bool unlocked = AutoRotationControl.Toggle();
+                        VisualiseRotation();
+                        SetContextMenu();
+                        Program.toast.RunToast(unlocked ? "Sensor Auto-Rotation: Unlocked" : "Sensor Auto-Rotation: Locked", ToastIcon.Touchpad);
+                    }
                 }
             };
-            toolTip.SetToolTip(buttonRotation, "Left-click: Toggle Screen Auto-Rotation Lock  |  Right-click: Toggle Auto-Unlock in Tablet/Tent mode");
+            toolTip.SetToolTip(buttonRotation, "Left-click: Rotate Display (0° → 90° → 180° → 270°)  |  Right-click: Reset to 0° or Toggle Sensor Auto-Rotation Lock");
 
 
             buttonHDR.Click += (s, e) =>
@@ -1931,6 +1942,20 @@ namespace GHelper
                 contextMenuStrip.Items.Add(menuMode);
             }
 
+            var itemAutoTabletSilent = new ToolStripMenuItem("Auto-Silent Mode in Tablet Posture")
+            {
+                Margin = padding,
+                Checked = AppConfig.Get("auto_tablet_silent", 1) == 1
+            };
+            itemAutoTabletSilent.Click += (s, e) =>
+            {
+                int next = AppConfig.Get("auto_tablet_silent", 1) == 1 ? 0 : 1;
+                AppConfig.Set("auto_tablet_silent", next);
+                Program.toast?.RunToast(next == 1 ? "Auto Tablet Silent Mode: On" : "Auto Tablet Silent Mode: Off", ToastIcon.Touchpad);
+                SetContextMenu();
+            };
+            contextMenuStrip.Items.Add(itemAutoTabletSilent);
+
             contextMenuStrip.Items.Add("-");
 
             if (isGpuSection)
@@ -2150,6 +2175,23 @@ namespace GHelper
 
             menuPower.DropDownItems.Add("-");
 
+            bool isWinPowerSaver = PowerNative.IsPowerSaverActive();
+            var menuWinPowerSaver = new ToolStripMenuItem("Windows Power Saver Mode")
+            {
+                Margin = padding,
+                Checked = isWinPowerSaver
+            };
+            menuWinPowerSaver.Click += (s, e) =>
+            {
+                Task.Run(() =>
+                {
+                    bool active = PowerNative.TogglePowerSaver();
+                    Program.toast?.RunToast(active ? "Power Saver: On" : "Power Saver: Off", ToastIcon.Battery);
+                    if (IsHandleCreated) BeginInvoke(() => { VisualiseMicAndPowerSaver(); SetContextMenu(); });
+                });
+            };
+            menuPower.DropDownItems.Add(menuWinPowerSaver);
+
             string awakeSuffix = PowerNative.IsKeepAwake ? $" ({PowerNative.GetKeepAwakeShortLabel()})" : "";
             var menuKeepAwake = new ToolStripMenuItem("Keep Awake (Caffeine)" + awakeSuffix)
             {
@@ -2286,6 +2328,33 @@ namespace GHelper
                 SetContextMenu();
             };
             menuPower.DropDownItems.Add(menuAutoKbd);
+
+            // Keyboard Backlight Idle Auto-Off Timer (matches right-clicking Backlight label)
+            bool onBatMenu = SystemInformation.PowerStatus.PowerLineStatus != PowerLineStatus.Online;
+            int curKbdIdle = onBatMenu ? AppConfig.Get("keyboard_timeout", 60) : AppConfig.Get("keyboard_ac_timeout", 0);
+            var menuKbdIdle = new ToolStripMenuItem(curKbdIdle > 0 ? $"Keyboard Backlight Idle Timer ({curKbdIdle}s)" : "Keyboard Backlight Idle Timer (Off)")
+            {
+                Margin = padding
+            };
+            menuKbdIdle.DropDown.BackColor = this.BackColor;
+            menuKbdIdle.DropDown.ForeColor = this.ForeColor;
+            foreach (var kt in new (int sec, string label)[] { (0, "Off (Always Stay Lit)"), (30, "30 Seconds"), (60, "60 Seconds"), (120, "120 Seconds") })
+            {
+                int secVal = kt.sec;
+                string secLbl = kt.label;
+                var itemKt = new ToolStripMenuItem(secLbl) { Checked = (curKbdIdle == secVal), Margin = padding };
+                itemKt.Click += (s, e) =>
+                {
+                    AppConfig.Set("keyboard_timeout", secVal);
+                    AppConfig.Set("keyboard_ac_timeout", secVal);
+                    Program.inputDispatcher?.InitBacklightTimer();
+                    UpdateKeyboardBrightnessLabel(trackKeyboardBrightness.Value);
+                    Program.toast?.RunToast(secVal > 0 ? $"Keyboard Idle Auto-Off: {secVal}s" : "Keyboard Idle Auto-Off: Off", ToastIcon.BacklightUp);
+                    SetContextMenu();
+                };
+                menuKbdIdle.DropDownItems.Add(itemKt);
+            }
+            menuPower.DropDownItems.Add(menuKbdIdle);
 
             // Dim screen inactivity timeouts
             var menuDimScreen = new ToolStripMenuItem("Dim Screen After (Inactivity)") { Margin = padding };
@@ -2424,13 +2493,84 @@ namespace GHelper
             menuBatteryLimit.DropDownItems.Add(menuPauseCharge);
 
             var menuSmartCharge = new ToolStripMenuItem($"Smart Charge (<{BatteryControl.smartChargeMin}%)") { Checked = BatteryControl.smartCharge, Margin = padding };
-            menuSmartCharge.Click += (s, e) =>
+            menuSmartCharge.DropDown.BackColor = this.BackColor;
+            menuSmartCharge.DropDown.ForeColor = this.ForeColor;
+            var itemSmartToggle = new ToolStripMenuItem("Enable Smart Charge Hold") { Checked = BatteryControl.smartCharge, Margin = padding };
+            itemSmartToggle.Click += (s, e) =>
             {
                 BatteryControl.ToggleSmartCharge();
                 VisualiseBatteryOptions();
                 SetContextMenu();
             };
+            menuSmartCharge.DropDownItems.Add(itemSmartToggle);
+            menuSmartCharge.DropDownItems.Add("-");
+            foreach (int scMin in new[] { 50, 60, 70, 80 })
+            {
+                int mVal = scMin;
+                var itemScMin = new ToolStripMenuItem($"Start Charging Below <{mVal}%")
+                {
+                    Checked = BatteryControl.smartCharge && BatteryControl.smartChargeMin == mVal,
+                    Margin = padding
+                };
+                itemScMin.Click += (s, e) =>
+                {
+                    BatteryControl.smartChargeMin = mVal;
+                    BatteryControl.smartCharge = true;
+                    BatteryControl.chargePaused = false;
+                    BatteryControl.SetBatteryChargeLimit();
+                    VisualiseBatteryOptions();
+                    SetContextMenu();
+                    Program.toast?.RunToast($"Smart Charge Threshold: <{mVal}%", ToastIcon.Battery);
+                };
+                menuSmartCharge.DropDownItems.Add(itemScMin);
+            }
             menuBatteryLimit.DropDownItems.Add(menuSmartCharge);
+
+            var itemBatNoBoost = new ToolStripMenuItem("Disable CPU Turbo Boost on Battery")
+            {
+                Checked = AppConfig.Is("limit_cpu_boost_battery"),
+                Margin = padding
+            };
+            itemBatNoBoost.Click += (s, e) =>
+            {
+                int next = AppConfig.Is("limit_cpu_boost_battery") ? 0 : 1;
+                AppConfig.Set("limit_cpu_boost_battery", next);
+                VisualiseBatteryOptions();
+                SetContextMenu();
+                Task.Run(() => { Program.modeControl?.SetPerformanceMode(); });
+            };
+            menuBatteryLimit.DropDownItems.Add(itemBatNoBoost);
+
+            var itemBatMiniled = new ToolStripMenuItem("Auto Single-Zone Mini-LED on Battery")
+            {
+                Checked = AppConfig.Is("auto_miniled"),
+                Margin = padding
+            };
+            itemBatMiniled.Click += (s, e) =>
+            {
+                int next = AppConfig.Is("auto_miniled") ? 0 : 1;
+                AppConfig.Set("auto_miniled", next);
+                VisualiseBatteryOptions();
+                SetContextMenu();
+                Task.Run(() => ScreenControl.AutoScreen());
+            };
+            menuBatteryLimit.DropDownItems.Add(itemBatMiniled);
+
+            var itemBatNoHdr = new ToolStripMenuItem("Auto Disable HDR on Battery")
+            {
+                Checked = AppConfig.Is("hdr_battery_off"),
+                Margin = padding
+            };
+            itemBatNoHdr.Click += (s, e) =>
+            {
+                int next = AppConfig.Is("hdr_battery_off") ? 0 : 1;
+                AppConfig.Set("hdr_battery_off", next);
+                VisualiseBatteryOptions();
+                SetContextMenu();
+                Task.Run(() => ScreenControl.AutoScreen());
+            };
+            menuBatteryLimit.DropDownItems.Add(itemBatNoHdr);
+
             menuBatteryLimit.DropDownItems.Add("-");
 
             var limit80 = new ToolStripMenuItem("80% (Maximum Longevity)") { Checked = !isFullCharge && currentLimit == 80, Margin = padding };
@@ -2636,6 +2776,20 @@ namespace GHelper
             menuTouchPen.DropDown.BackColor = this.BackColor;
             menuTouchPen.DropDown.ForeColor = this.ForeColor;
 
+            var itemQuickPenToggle = new ToolStripMenuItem("Quick Toggle Pen-Only Mode (Palm Rejection)")
+            {
+                Checked = curTouchMode == TouchPenMode.PenOnly,
+                Margin = padding
+            };
+            itemQuickPenToggle.Click += (s, e) =>
+            {
+                var nextMode = curTouchMode == TouchPenMode.PenOnly ? TouchPenMode.TouchAndPen : TouchPenMode.PenOnly;
+                ApplyTouchPenModeUI(nextMode);
+                SetContextMenu();
+            };
+            menuTouchPen.DropDownItems.Add(itemQuickPenToggle);
+            menuTouchPen.DropDownItems.Add("-");
+
             var itemTouchAndPen = new ToolStripMenuItem("Touch + Pen (Default)") { Checked = curTouchMode == TouchPenMode.TouchAndPen, Margin = padding };
             itemTouchAndPen.Click += (s, e) => { ApplyTouchPenModeUI(TouchPenMode.TouchAndPen); SetContextMenu(); };
             menuTouchPen.DropDownItems.Add(itemTouchAndPen);
@@ -2695,16 +2849,78 @@ namespace GHelper
 
             if (AutoRotationControl.IsSupported())
             {
-                bool isRotationLocked = !AutoRotationControl.IsEnabled();
-                var menuRotationLock = new ToolStripMenuItem("Convertible Auto-Rotation Lock") { Checked = isRotationLocked, Margin = padding };
-                menuRotationLock.Click += (s, e) =>
+                int curOrient = AutoRotationControl.GetOrientation();
+                var menuRotation = new ToolStripMenuItem($"Screen Rotation & Orientation ({AutoRotationControl.GetOrientationLabel(curOrient)})")
+                {
+                    Margin = padding
+                };
+                menuRotation.DropDown.BackColor = this.BackColor;
+                menuRotation.DropDown.ForeColor = this.ForeColor;
+
+                var itemRotateNext = new ToolStripMenuItem("Rotate 90° Next") { Margin = padding };
+                itemRotateNext.Click += (s, e) =>
+                {
+                    int nextO = AutoRotationControl.CycleOrientation();
+                    VisualiseRotation();
+                    SetContextMenu();
+                    Program.toast?.RunToast("Screen Rotation: " + AutoRotationControl.GetOrientationLabel(nextO), ToastIcon.Touchpad);
+                };
+                menuRotation.DropDownItems.Add(itemRotateNext);
+                menuRotation.DropDownItems.Add("-");
+
+                foreach (var oOpt in new (int o, string label)[]
+                {
+                    (AutoRotationControl.DMDO_DEFAULT, "Landscape (0° - Default)"),
+                    (AutoRotationControl.DMDO_90, "Portrait (90°)"),
+                    (AutoRotationControl.DMDO_180, "Landscape Flipped (180° - Tent Mode)"),
+                    (AutoRotationControl.DMDO_270, "Portrait Flipped (270°)")
+                })
+                {
+                    int oVal = oOpt.o;
+                    string oLbl = oOpt.label;
+                    var itemO = new ToolStripMenuItem(oLbl) { Checked = (curOrient == oVal), Margin = padding };
+                    itemO.Click += (s, e) =>
+                    {
+                        AutoRotationControl.SetOrientation(oVal);
+                        VisualiseRotation();
+                        SetContextMenu();
+                        Program.toast?.RunToast("Screen Rotation: " + AutoRotationControl.GetOrientationLabel(oVal), ToastIcon.Touchpad);
+                    };
+                    menuRotation.DropDownItems.Add(itemO);
+                }
+
+                menuRotation.DropDownItems.Add("-");
+                bool isAutoRotUnlocked = AutoRotationControl.IsEnabled();
+                var itemSensorRot = new ToolStripMenuItem("Sensor Auto-Rotation Unlocked")
+                {
+                    Checked = isAutoRotUnlocked,
+                    Margin = padding
+                };
+                itemSensorRot.Click += (s, e) =>
                 {
                     bool newAutoRotate = AutoRotationControl.Toggle();
-                    menuRotationLock.Checked = !newAutoRotate;
                     VisualiseRotation();
-                    Program.toast?.RunToast(newAutoRotate ? "Auto-Rotation Unlocked" : "Auto-Rotation Locked");
+                    SetContextMenu();
+                    Program.toast?.RunToast(newAutoRotate ? "Sensor Auto-Rotation: Unlocked" : "Sensor Auto-Rotation: Locked", ToastIcon.Touchpad);
                 };
-                contextMenuStrip.Items.Add(menuRotationLock);
+                menuRotation.DropDownItems.Add(itemSensorRot);
+
+                var itemAutoTabletRot = new ToolStripMenuItem("Auto-Unlock Rotation in Tablet / Tent Mode")
+                {
+                    Checked = AppConfig.Get("auto_tablet_rotation", 1) == 1,
+                    Margin = padding
+                };
+                itemAutoTabletRot.Click += (s, e) =>
+                {
+                    int nextAuto = AppConfig.Get("auto_tablet_rotation", 1) == 1 ? 0 : 1;
+                    AppConfig.Set("auto_tablet_rotation", nextAuto);
+                    VisualiseRotation();
+                    SetContextMenu();
+                    Program.toast?.RunToast(nextAuto == 1 ? "Auto Tablet Rotation: On" : "Auto Tablet Rotation: Off", ToastIcon.Touchpad);
+                };
+                menuRotation.DropDownItems.Add(itemAutoTabletRot);
+
+                contextMenuStrip.Items.Add(menuRotation);
             }
 
             var menuGameMode = new ToolStripMenuItem("Auto Game Mode (Turbo in Games)");
@@ -3028,6 +3244,18 @@ namespace GHelper
             };
             contextMenuStrip.Items.Add(menuTrimRam);
 
+            var menuFanRpmToggle = new ToolStripMenuItem("Fan Speed Display: Show RPM (vs %)")
+            {
+                Margin = padding,
+                Checked = FanSensorControl.fanRpm
+            };
+            menuFanRpmToggle.Click += (s, e) =>
+            {
+                LabelCPUFan_Click(s, e);
+                SetContextMenu();
+            };
+            contextMenuStrip.Items.Add(menuFanRpmToggle);
+
             contextMenuStrip.Items.Add("-");
 
             // --- Display OSD & Tools ---
@@ -3036,6 +3264,13 @@ namespace GHelper
             menuOverlay.Margin = padding;
             menuOverlay.Checked = AppConfig.IsOverlay();
             contextMenuStrip.Items.Add(menuOverlay);
+
+            var menuOverlayConfig = new ToolStripMenuItem("Configure Hardware Overlay...")
+            {
+                Margin = padding
+            };
+            menuOverlayConfig.Click += ButtonOverlay_Click;
+            contextMenuStrip.Items.Add(menuOverlayConfig);
 
             var menuOverlayGameOnly = new ToolStripMenuItem(Properties.Strings.OverlayOnlyInGames);
             menuOverlayGameOnly.Click += (sender, args) => ToggleOverlayGameOnly();
@@ -4420,15 +4655,7 @@ namespace GHelper
 
         public void VisualiseBatteryTitle(int limit)
         {
-            string suffix = "";
-            if (BatteryControl.chargePaused)
-                suffix = " (Paused / AC Bypass)";
-            else if (BatteryControl.smartCharge && BatteryControl.isSmartHoldActive)
-                suffix = $" (Smart Hold <{BatteryControl.smartChargeMin}%)";
-            else if (BatteryControl.smartCharge)
-                suffix = $" (Smart <{BatteryControl.smartChargeMin}%)";
-
-            labelBatteryTitle.Text = Properties.Strings.BatteryChargeLimit + ": " + limit.ToString() + "%" + suffix;
+            labelBatteryTitle.Text = Properties.Strings.BatteryChargeLimit + ": " + limit.ToString() + "%";
 
             if (sliderBattery != null)
             {
@@ -4548,10 +4775,11 @@ namespace GHelper
             if (buttonRotation == null) return;
 
             bool unlocked = AutoRotationControl.IsEnabled();
+            int orient = AutoRotationControl.GetOrientation();
             bool autoTablet = AppConfig.Get("auto_tablet_rotation", 1) == 1;
-            buttonRotation.Activated = unlocked;
-            buttonRotation.BorderColor = autoTablet ? colorStandard : colorGray;
-            buttonRotation.Text = "Rotate";
+            buttonRotation.Activated = (orient != AutoRotationControl.DMDO_DEFAULT) || unlocked;
+            buttonRotation.BorderColor = (orient != AutoRotationControl.DMDO_DEFAULT) ? colorEco : (autoTablet ? colorStandard : colorGray);
+            buttonRotation.Text = AutoRotationControl.GetShortButtonText();
         }
 
         public void VisualiseScreenSwitches(bool hdr)

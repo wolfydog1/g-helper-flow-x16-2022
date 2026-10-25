@@ -47,6 +47,32 @@ public class Startup
         }
     }
 
+    public static bool TryRunScheduledElevated()
+    {
+        if (ProcessHelper.IsUserAdministrator()) return false;
+        try
+        {
+            using (TaskService taskService = new TaskService())
+            {
+                var task = GetUserTask(taskService);
+                if (task != null && task.Definition.Principal.RunLevel == TaskRunLevel.Highest)
+                {
+                    string action = task.Definition.Actions.FirstOrDefault()?.ToString()?.Trim() ?? "";
+                    if (strExeFilePath.Equals(action, StringComparison.OrdinalIgnoreCase))
+                    {
+                        task.Run();
+                        return true;
+                    }
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Logger.WriteLine("TryRunScheduledElevated failed: " + e.Message);
+        }
+        return false;
+    }
+
     public static void ReScheduleAdmin()
     {
         if (ProcessHelper.IsUserAdministrator() && IsScheduled())
@@ -66,7 +92,7 @@ public class Startup
                 try
                 {
                     string action = task.Definition.Actions.FirstOrDefault()!.ToString().Trim();
-                    bool needsReschedule = false;
+                    bool needsReschedule = task.Definition.Principal.RunLevel != TaskRunLevel.Highest;
 
                     if (!strExeFilePath.Equals(action, StringComparison.OrdinalIgnoreCase))
                     {
@@ -182,11 +208,11 @@ public class Startup
 
             td.RegistrationInfo.Description = "G-Helper Auto Start";
             td.Triggers.Add(new LogonTrigger { UserId = WindowsIdentity.GetCurrent().Name, Delay = TimeSpan.FromSeconds(1) });
+            td.Principal.RunLevel = TaskRunLevel.Highest;
             // ConsoleConnect = fast user switch back; requires administrator rights
             if (ProcessHelper.IsUserAdministrator())
             {
                 td.Triggers.Add(new SessionStateChangeTrigger { StateChange = TaskSessionStateChangeType.ConsoleConnect, UserId = WindowsIdentity.GetCurrent().Name, Delay = TimeSpan.FromSeconds(1) });
-                td.Principal.RunLevel = TaskRunLevel.Highest;
             }
             td.Actions.Add(strExeFilePath);
 

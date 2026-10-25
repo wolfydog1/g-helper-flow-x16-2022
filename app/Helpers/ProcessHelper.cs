@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Security.AccessControl;
 using System.Security.Principal;
 
@@ -182,9 +182,9 @@ namespace GHelper.Helpers
         {
             try
             {
-                string script = $"Get-Service -Name \"{serviceName}\" | Stop-Service -Force -PassThru | Set-Service -StartupType {disable}";
-                Logger.WriteLine(script);
-                RunCMD("powershell", script);
+                string startType = string.Equals(disable, "Disabled", StringComparison.OrdinalIgnoreCase) ? "disabled" : "demand";
+                RunCMD("sc.exe", $"stop \"{serviceName}\"", timeoutMs: 3000);
+                RunCMD("sc.exe", $"config \"{serviceName}\" start= {startType}", timeoutMs: 3000);
             }
             catch (Exception ex)
             {
@@ -196,9 +196,9 @@ namespace GHelper.Helpers
         {
             try
             {
-                string script = $"Set-Service -Name \"{serviceName}\" -Status running" + (automatic? " -StartupType Automatic":"");
-                Logger.WriteLine(script);
-                RunCMD("powershell", script);
+                string startType = automatic ? "auto" : "demand";
+                RunCMD("sc.exe", $"config \"{serviceName}\" start= {startType}", timeoutMs: 3000);
+                RunCMD("sc.exe", $"start \"{serviceName}\"", timeoutMs: 3000);
             }
             catch (Exception ex)
             {

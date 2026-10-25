@@ -109,6 +109,14 @@ namespace GHelper
                 Logger.WriteLine("Unknown Language: " + language);
             }
 
+            if (action != "startup" && action != "unstartup" && !ProcessHelper.IsUserAdministrator())
+            {
+                if (Startup.TryRunScheduledElevated())
+                {
+                    return;
+                }
+            }
+
             Logger.WriteLine("----------------------");
             Logger.WriteLine("App launched: " + AppConfig.GetModel() + " :" + Assembly.GetExecutingAssembly().GetName().Version.ToString() + CultureInfo.CurrentUICulture + (ProcessHelper.IsUserAdministrator() ? "." : ""));
 

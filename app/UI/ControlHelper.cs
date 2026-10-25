@@ -28,7 +28,7 @@ public static class ControlHelper
     private static readonly ConditionalWeakTable<Control, BaseFontInfo> _baseFonts = new();
     private static readonly Dictionary<(string family, int sizeHundredths, FontStyle style, GraphicsUnit unit), Font> _fontCache = new();
 
-    private static Font GetCachedFont(string family, float size, FontStyle style, GraphicsUnit unit)
+    internal static Font GetCachedFont(string family, float size, FontStyle style, GraphicsUnit unit)
     {
         int keySize = (int)Math.Round(size * 100f);
         var key = (family, keySize, style, unit);

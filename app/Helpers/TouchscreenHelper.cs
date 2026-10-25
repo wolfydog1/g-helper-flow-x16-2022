@@ -14,11 +14,13 @@ public static class TouchscreenHelper
 {
     private static readonly Guid GUID_DEVCLASS_HIDCLASS = new("745a17a0-74d3-11d0-b6fe-00a0c90f57da");
     private const uint DIGCF_PRESENT = 0x00000002;
+    private const uint SPDRP_DEVICEDESC = 0x00000000;
     private const uint SPDRP_FRIENDLYNAME = 0x0000000C;
     private const uint DIF_PROPERTYCHANGE = 0x00000012;
     private const uint DICS_ENABLE = 0x00000001;
     private const uint DICS_DISABLE = 0x00000002;
     private const uint DICS_FLAG_GLOBAL = 0x00000001;
+    private const uint DICS_FLAG_CONFIGSPECIFIC = 0x00000002;
     private const uint DN_STARTED = 0x00000008;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -75,11 +77,43 @@ public static class TouchscreenHelper
         IntPtr DeviceInfoSet,
         ref SP_DEVINFO_DATA DeviceInfoData);
 
+    [DllImport("setupapi.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool SetupDiGetDeviceInstanceId(
+        IntPtr DeviceInfoSet,
+        ref SP_DEVINFO_DATA DeviceInfoData,
+        StringBuilder DeviceInstanceId,
+        uint DeviceInstanceIdSize,
+        out uint RequiredSize);
+
     [DllImport("setupapi.dll", SetLastError = true)]
     private static extern bool SetupDiDestroyDeviceInfoList(IntPtr DeviceInfoSet);
 
     [DllImport("cfgmgr32.dll", SetLastError = true)]
     private static extern int CM_Get_DevNode_Status(out uint ulStatus, out uint ulProblemNumber, uint dnDevInst, uint ulFlags);
+
+    [DllImport("cfgmgr32.dll", SetLastError = true)]
+    private static extern int CM_Enable_DevNode(uint dnDevInst, uint ulFlags);
+
+    [DllImport("cfgmgr32.dll", SetLastError = true)]
+    private static extern int CM_Disable_DevNode(uint dnDevInst, uint ulFlags);
+
+    private static bool TryGetDeviceName(IntPtr hDevInfo, ref SP_DEVINFO_DATA devInfo, StringBuilder sb, out string name)
+    {
+        sb.Clear();
+        if (SetupDiGetDeviceRegistryProperty(hDevInfo, ref devInfo, SPDRP_FRIENDLYNAME, out _, sb, (uint)sb.Capacity, out _) && sb.Length > 0)
+        {
+            name = sb.ToString();
+            return true;
+        }
+        sb.Clear();
+        if (SetupDiGetDeviceRegistryProperty(hDevInfo, ref devInfo, SPDRP_DEVICEDESC, out _, sb, (uint)sb.Capacity, out _) && sb.Length > 0)
+        {
+            name = sb.ToString();
+            return true;
+        }
+        name = string.Empty;
+        return false;
+    }
 
     private static bool IsTouchDeviceName(string name)
     {
@@ -108,10 +142,8 @@ public static class TouchscreenHelper
                 StringBuilder sb = new(256);
                 for (uint i = 0; SetupDiEnumDeviceInfo(hDevInfo, i, ref devInfo); i++)
                 {
-                    sb.Clear();
-                    if (SetupDiGetDeviceRegistryProperty(hDevInfo, ref devInfo, SPDRP_FRIENDLYNAME, out _, sb, (uint)sb.Capacity, out _))
+                    if (TryGetDeviceName(hDevInfo, ref devInfo, sb, out string name))
                     {
-                        string name = sb.ToString();
                         if (IsTouchDeviceName(name))
                         {
                             if (CM_Get_DevNode_Status(out uint status, out uint problem, devInfo.DevInst, 0) == 0)
@@ -146,25 +178,27 @@ public static class TouchscreenHelper
         return GetMode() == TouchPenMode.TouchAndPen;
     }
 
-    private static void RunPnpCommand(string script)
+    private static bool RunPnpUtilInstance(string instanceId, bool enable)
     {
+        if (string.IsNullOrWhiteSpace(instanceId)) return false;
         try
         {
             ProcessStartInfo psi = new ProcessStartInfo
             {
-                FileName = "powershell.exe",
-                Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
+                FileName = Path.Combine(Environment.SystemDirectory, "pnputil.exe"),
+                Arguments = $"{(enable ? "/enable-device" : "/disable-device")} \"{instanceId}\"",
                 CreateNoWindow = true,
-                UseShellExecute = !ProcessHelper.IsUserAdministrator(),
-                Verb = ProcessHelper.IsUserAdministrator() ? "" : "runas",
+                UseShellExecute = false,
                 WindowStyle = ProcessWindowStyle.Hidden
             };
             using var proc = Process.Start(psi);
-            proc?.WaitForExit(3000);
+            proc?.WaitForExit(2500);
+            return proc?.ExitCode == 0;
         }
         catch (Exception ex)
         {
-            Logger.WriteLine($"Fallback PnP execution error: {ex.Message}");
+            Logger.WriteLine($"pnputil execution error: {ex.Message}");
+            return false;
         }
     }
 
@@ -176,22 +210,12 @@ public static class TouchscreenHelper
         bool nativeTouchSuccess = SetDeviceClassState(IsTouchDeviceName, enableTouch);
         bool nativePenSuccess = SetDeviceClassState(IsPenDeviceName, enablePen);
 
-        if (!nativeTouchSuccess)
-        {
-            RunPnpCommand((enableTouch ? "Enable-PnpDevice" : "Disable-PnpDevice") + " -InstanceId (Get-PnpDevice -FriendlyName '*touch*screen*').InstanceId -Confirm:$false");
-        }
-
-        if (!nativePenSuccess && mode != TouchPenMode.TouchAndPen)
-        {
-            RunPnpCommand((enablePen ? "Enable-PnpDevice" : "Disable-PnpDevice") + " -InstanceId (Get-PnpDevice -FriendlyName '*compliant*pen*').InstanceId -Confirm:$false");
-        }
-
         AppConfig.Set("touch_pen_mode", (int)mode);
         if (mode == TouchPenMode.PenOnly)
         {
             SetTouchKeyboardAutoInvoke(true);
         }
-        Logger.WriteLine($"TouchPenMode set to {mode} (Touch={enableTouch}, Pen={enablePen})");
+        Logger.WriteLine($"TouchPenMode set to {mode} (Touch={enableTouch} [{nativeTouchSuccess}], Pen={enablePen} [{nativePenSuccess}])");
     }
 
     public static void SetTouchKeyboardAutoInvoke(bool enable)
@@ -224,11 +248,9 @@ public static class TouchscreenHelper
 
             for (uint i = 0; SetupDiEnumDeviceInfo(hDevInfo, i, ref devInfo); i++)
             {
-                sb.Clear();
-                if (!SetupDiGetDeviceRegistryProperty(hDevInfo, ref devInfo, SPDRP_FRIENDLYNAME, out _, sb, (uint)sb.Capacity, out _))
+                if (!TryGetDeviceName(hDevInfo, ref devInfo, sb, out string name))
                     continue;
 
-                string name = sb.ToString();
                 if (!predicate(name)) continue;
 
                 anyMatched = true;
@@ -244,8 +266,32 @@ public static class TouchscreenHelper
                     HwProfile = 0
                 };
 
-                if (!SetupDiSetClassInstallParams(hDevInfo, ref devInfo, ref propParams, Marshal.SizeOf<SP_PROPCHANGE_PARAMS>()) ||
-                    !SetupDiCallClassInstaller(DIF_PROPERTYCHANGE, hDevInfo, ref devInfo))
+                bool ok = SetupDiSetClassInstallParams(hDevInfo, ref devInfo, ref propParams, Marshal.SizeOf<SP_PROPCHANGE_PARAMS>()) &&
+                          SetupDiCallClassInstaller(DIF_PROPERTYCHANGE, hDevInfo, ref devInfo);
+
+                if (!ok)
+                {
+                    propParams.Scope = DICS_FLAG_CONFIGSPECIFIC;
+                    ok = SetupDiSetClassInstallParams(hDevInfo, ref devInfo, ref propParams, Marshal.SizeOf<SP_PROPCHANGE_PARAMS>()) &&
+                         SetupDiCallClassInstaller(DIF_PROPERTYCHANGE, hDevInfo, ref devInfo);
+                }
+
+                if (!ok)
+                {
+                    int cmRes = enable ? CM_Enable_DevNode(devInfo.DevInst, 0) : CM_Disable_DevNode(devInfo.DevInst, 0);
+                    ok = (cmRes == 0);
+                }
+
+                if (!ok)
+                {
+                    StringBuilder instSb = new(256);
+                    if (SetupDiGetDeviceInstanceId(hDevInfo, ref devInfo, instSb, (uint)instSb.Capacity, out _))
+                    {
+                        ok = RunPnpUtilInstance(instSb.ToString(), enable);
+                    }
+                }
+
+                if (!ok)
                 {
                     allSucceeded = false;
                 }

@@ -13,6 +13,8 @@ namespace GHelper.UI
         private const float ActiveBgEndFraction = 0.20f;
 
         private int borderSize = 5;
+        private bool _isHovered = false;
+        private bool _isPressed = false;
 
         private int borderRadius = 8;
         public int BorderRadius
@@ -71,6 +73,35 @@ namespace GHelper.UI
             UpdateHoverColor();
         }
 
+        protected override void OnMouseEnter(EventArgs e)
+        {
+            _isHovered = true;
+            base.OnMouseEnter(e);
+            Invalidate();
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            _isHovered = false;
+            _isPressed = false;
+            base.OnMouseLeave(e);
+            Invalidate();
+        }
+
+        protected override void OnMouseDown(MouseEventArgs mevent)
+        {
+            if (mevent.Button == MouseButtons.Left) _isPressed = true;
+            base.OnMouseDown(mevent);
+            Invalidate();
+        }
+
+        protected override void OnMouseUp(MouseEventArgs mevent)
+        {
+            _isPressed = false;
+            base.OnMouseUp(mevent);
+            Invalidate();
+        }
+
         private void UpdateHoverColor()
         {
             int lum = (BackColor.R * 30 + BackColor.G * 59 + BackColor.B * 11) / 100;
@@ -107,15 +138,33 @@ namespace GHelper.UI
 
         protected override void OnPaint(PaintEventArgs pevent)
         {
-
             base.OnPaint(pevent);
 
             float ratio = pevent.Graphics.DpiX / 192.0f;
-            int border = (int)Math.Round((ratio * borderSize - 1) / 2) * 2 + 1;
-            int radius = (int)Math.Round(ratio * borderRadius, MidpointRounding.AwayFromZero);
+            bool isCompactTextButton = Image is null && !(this is RColorButton);
+            int effectiveBorderSize = (isCompactTextButton && Height <= (int)(48 * (pevent.Graphics.DpiX / 96.0f))) ? 3 : borderSize;
+            int effectiveBorderRadius = (isCompactTextButton && Height <= (int)(48 * (pevent.Graphics.DpiX / 96.0f))) ? Math.Min(borderRadius, 5) : borderRadius;
+
+            int border = Math.Max(1, (int)Math.Round((ratio * effectiveBorderSize - 1) / 2) * 2 + 1);
+            int radius = Math.Max(2, (int)Math.Round(ratio * effectiveBorderRadius, MidpointRounding.AwayFromZero));
 
             Rectangle rectSurface = ClientRectangle;
             int totalRadius = radius + border;
+
+            if (isCompactTextButton)
+            {
+                Color fill = !Enabled ? BackColor
+                           : _isPressed ? FlatAppearance.MouseDownBackColor
+                           : _isHovered ? FlatAppearance.MouseOverBackColor
+                           : BackColor;
+                if (Parent != null && !Enabled)
+                {
+                    using var parentBrush = new SolidBrush(Parent.BackColor);
+                    pevent.Graphics.FillRectangle(parentBrush, rectSurface);
+                }
+                using var surfaceBrush = new SolidBrush(fill);
+                pevent.Graphics.FillRectangle(surfaceBrush, rectSurface);
+            }
 
             using (GraphicsPath pathSurface = GetFigurePath(rectSurface, totalRadius))
             using (Pen penSurface = new Pen(Parent?.BackColor ?? BackColor, border))
@@ -167,7 +216,27 @@ namespace GHelper.UI
                 }
             }
 
-            if (!Enabled && ForeColor != SystemColors.ControlText)
+            if (isCompactTextButton && !string.IsNullOrEmpty(Text))
+            {
+                int padX = border + 2;
+                Rectangle textRect = new Rectangle(padX, border, Math.Max(4, rectSurface.Width - 2 * padX), Math.Max(4, rectSurface.Height - 2 * border));
+                TextFormatFlags flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding;
+
+                Font drawFont = Font;
+                float curSize = drawFont.Size;
+                while (curSize > 6.5f)
+                {
+                    Size measured = TextRenderer.MeasureText(pevent.Graphics, Text, drawFont, new Size(int.MaxValue, int.MaxValue), flags);
+                    if (measured.Width <= textRect.Width)
+                        break;
+                    curSize -= 0.5f;
+                    drawFont = ControlHelper.GetCachedFont(drawFont.Name, curSize, drawFont.Style, drawFont.Unit);
+                }
+
+                Color textColor = Enabled ? ForeColor : Color.Gray;
+                TextRenderer.DrawText(pevent.Graphics, Text, drawFont, textRect, textColor, flags);
+            }
+            else if (!Enabled && ForeColor != SystemColors.ControlText)
             {
                 var rect = pevent.ClipRectangle;
                 if (Image is not null)
@@ -177,7 +246,7 @@ namespace GHelper.UI
                 }
                 else
                 {
-                    using (var brush = new SolidBrush(Parent.BackColor))
+                    using (var brush = new SolidBrush(Parent?.BackColor ?? BackColor))
                         pevent.Graphics.FillRectangle(brush, rect);
                     using (var brush = new SolidBrush(BackColor))
                         pevent.Graphics.FillRectangle(brush, rect);
@@ -191,8 +260,6 @@ namespace GHelper.UI
                 Rectangle borderRect = new Rectangle(border, border, rectSurface.Width - 2 * border, rectSurface.Height - 2 * border);
                 ControlHelper.DrawGradientBorder(pevent.Graphics, borderRect, borderColor, radius, border, PenAlignment.Outset, RForm.flatTheme ? 0f : ActiveTopLighten);
             }
-
-
         }
 
     }
