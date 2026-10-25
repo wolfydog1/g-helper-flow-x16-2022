@@ -43,6 +43,17 @@ public static class AppConfig
         timer.Elapsed += Timer_Elapsed;
     }
 
+    public static void Reload()
+    {
+        lock (configLock)
+        {
+            if (!TryLoadConfig(configFile) && !TryRecoverConfig(configFile))
+            {
+                TryLoadConfig(fallbackConfigFile);
+            }
+        }
+    }
+
     private static bool TryLoadConfig(string path)
     {
         if (!File.Exists(path)) return false;

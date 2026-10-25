@@ -2265,12 +2265,12 @@ namespace GHelper
             AutoSizeMode = AutoSizeMode.GrowAndShrink;
             ClientSize = new Size(1013, 720);
             Controls.Add(panelServices);
+            Controls.Add(panelACPI);
+            Controls.Add(panelCores);
+            Controls.Add(panelAPU);
             Controls.Add(panelPower);
             Controls.Add(panelSettings);
             Controls.Add(panelOptimalBrightness);
-            Controls.Add(panelAPU);
-            Controls.Add(panelCores);
-            Controls.Add(panelACPI);
             Controls.Add(panelSettingsHeader);
             Controls.Add(panelBacklight);
             Controls.Add(panelBacklightHeader);

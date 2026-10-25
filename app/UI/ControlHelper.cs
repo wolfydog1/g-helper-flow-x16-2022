@@ -1,6 +1,7 @@
-﻿using GHelper.UI;
+using GHelper.UI;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Windows.Forms.DataVisualization.Charting;
 
@@ -16,6 +17,68 @@ public static class ControlHelper
 
     public static float Scale => _scale;
     public static bool DarkMode => _darkMode;
+
+    private sealed class BaseFontInfo
+    {
+        public float BaseSize;
+        public FontStyle BaseStyle;
+        public GraphicsUnit BaseUnit;
+    }
+
+    private static readonly ConditionalWeakTable<Control, BaseFontInfo> _baseFonts = new();
+    private static readonly Dictionary<(string family, int sizeHundredths, FontStyle style, GraphicsUnit unit), Font> _fontCache = new();
+
+    private static Font GetCachedFont(string family, float size, FontStyle style, GraphicsUnit unit)
+    {
+        int keySize = (int)Math.Round(size * 100f);
+        var key = (family, keySize, style, unit);
+        if (_fontCache.TryGetValue(key, out Font? cached))
+            return cached;
+
+        Font created;
+        try
+        {
+            created = new Font(family, size, style, unit);
+        }
+        catch
+        {
+            created = new Font("Segoe UI", size, style, unit);
+        }
+        _fontCache[key] = created;
+        return created;
+    }
+
+    private static void ApplyCustomFont(Control control)
+    {
+        if (control.Font == null) return;
+
+        if (!_baseFonts.TryGetValue(control, out BaseFontInfo? info))
+        {
+            info = new BaseFontInfo
+            {
+                BaseSize = control.Font.Size,
+                BaseStyle = control.Font.Style,
+                BaseUnit = control.Font.Unit
+            };
+            _baseFonts.Add(control, info);
+        }
+
+        string targetFamily = RForm.CurrentFontFamily;
+        float targetSize = Math.Clamp(info.BaseSize * RForm.CurrentFontScale, 6.5f, 22f);
+        FontStyle targetStyle = info.BaseStyle;
+
+        if (string.Equals(targetFamily, "Segoe UI Semibold", StringComparison.OrdinalIgnoreCase))
+        {
+            targetStyle |= FontStyle.Bold;
+        }
+
+        if (!string.Equals(control.Font.Name, targetFamily, StringComparison.OrdinalIgnoreCase) ||
+            Math.Abs(control.Font.Size - targetSize) > 0.05f ||
+            control.Font.Style != targetStyle)
+        {
+            control.Font = GetCachedFont(targetFamily, targetSize, targetStyle, info.BaseUnit);
+        }
+    }
 
     public static void Adjust(RForm container, bool invert = false)
     {
@@ -62,12 +125,14 @@ public static class ControlHelper
         {
 
             AdjustControls(control.Controls);
+            ApplyCustomFont(control);
 
             var button = control as RButton;
             if (button != null)
             {
                 button.BackColor = button.Secondary ? RForm.buttonSecond : RForm.buttonMain;
                 button.ForeColor = RForm.foreMain;
+                button.BorderRadius = RForm.CurrentButtonRadius;
 
                 button.FlatStyle = FlatStyle.Flat;
                 if (!button.Borderless)
@@ -75,6 +140,8 @@ public static class ControlHelper
 
                 if (button.Image is not null && _invert)
                     button.Image = AdjustImage(button.Image);
+
+                button.Invalidate();
             }
 
             var pictureBox = control as PictureBox;
@@ -90,6 +157,7 @@ public static class ControlHelper
                 combo.BorderColor = RForm.borderMain;
                 combo.ButtonColor = RForm.buttonMain;
                 combo.ArrowColor = RForm.foreMain;
+                combo.Invalidate();
             }
             var rNumeric = control as RNumericUpDown;
             if (rNumeric is not null)
@@ -124,18 +192,30 @@ public static class ControlHelper
             if (sl != null)
             {
                 sl.borderColor = RForm.buttonMain;
+                sl.Invalidate();
             }
 
             var chk = control as CheckBox;
             if (chk != null)
             {
+                chk.ForeColor = RForm.foreMain;
                 if (chk.BackColor != RForm.formBack)
                 {
                     chk.BackColor = RForm.buttonSecond;
                     if (chk is RCheckBox)
                         chk.FlatAppearance.BorderColor = RForm.borderSecond;
                 }
-                SetWindowTheme(chk.Handle, _darkMode ? "DarkMode_Explorer" : "Explorer", null);
+                if (chk.IsHandleCreated)
+                    SetWindowTheme(chk.Handle, _darkMode ? "DarkMode_Explorer" : "Explorer", null);
+            }
+
+            var lbl = control as Label;
+            if (lbl != null)
+            {
+                if (lbl.ForeColor == SystemColors.ControlText || lbl.ForeColor == Color.FromArgb(255, 240, 240, 240) || lbl.ForeColor == Color.FromArgb(255, 24, 28, 34) || lbl.ForeColor == Color.FromArgb(255, 248, 240, 242) || lbl.ForeColor == Color.FromArgb(255, 236, 244, 255) || lbl.ForeColor == Color.FromArgb(255, 245, 245, 248))
+                {
+                    lbl.ForeColor = RForm.foreMain;
+                }
             }
 
             var chart = control as Chart;

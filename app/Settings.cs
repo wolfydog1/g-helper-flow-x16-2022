@@ -65,6 +65,15 @@ namespace GHelper
 
         private GHelper.UI.RButton? buttonAutoScreen;
         private GHelper.UI.RButton? buttonAutoKeyboard;
+        private MainSparklinePanel? _mainSparkline;
+
+        public void SetMainSparklineVisible(bool visible)
+        {
+            if (_mainSparkline == null) return;
+            if (InvokeRequired) { BeginInvoke(() => SetMainSparklineVisible(visible)); return; }
+            _mainSparkline.Visible = visible;
+            if (visible) _mainSparkline.Invalidate();
+        }
 
         private Windows.Devices.Sensors.LightSensor? ambientLightSensor;
         private System.Windows.Forms.Timer? ambientLightPollTimer;
@@ -838,7 +847,7 @@ namespace GHelper
 
             sensorTimer = new System.Timers.Timer(AppConfig.Get("sensor_timer", 1000));
             sensorTimer.Elapsed += OnTimedEvent;
-            sensorTimer.Enabled = sensorsAlways;
+            sensorTimer.Enabled = sensorsAlways || FlowFeaturesHelper.NeedsBackgroundSensorPolling();
 
             labelCharge.MouseEnter += PanelBattery_MouseEnter;
             labelCharge.MouseLeave += PanelBattery_MouseLeave;
@@ -946,6 +955,14 @@ namespace GHelper
 
             labelBacklight.ForeColor = colorStandard;
             labelBacklight.Click += LabelBacklight_Click;
+
+            _mainSparkline = new MainSparklinePanel
+            {
+                Visible = AppConfig.Is("show_main_sparkline")
+            };
+            toolTip.SetToolTip(_mainSparkline, "Left-click: Toggle CPU/GPU Temps vs Battery Wattage  |  Right-click: Hide Sparkline");
+            panelPerformance.Controls.Add(_mainSparkline);
+            panelPerformance.Controls.SetChildIndex(_mainSparkline, 0);
 
             panelPerformance.Focus();
             InitVisual();
@@ -1463,7 +1480,7 @@ namespace GHelper
         private void SettingsForm_VisibleChanged(object? sender, EventArgs e)
         {
             sensorTimer.Interval = this.Visible ? AppConfig.Get("sensor_timer_active", 500) : AppConfig.Get("sensor_timer", 2000);
-            sensorTimer.Enabled = this.Visible || sensorsAlways;
+            sensorTimer.Enabled = this.Visible || sensorsAlways || FlowFeaturesHelper.NeedsBackgroundSensorPolling();
             if (this.Visible)
             {
                 Task.Run(() =>
@@ -1715,6 +1732,57 @@ namespace GHelper
             };
             _menuSensorHeader.Click += (s, e) => FansToggle(0);
             contextMenuStrip.Items.Add(_menuSensorHeader);
+            contextMenuStrip.Items.Add("-");
+
+            // --- 1-Click Scenario Presets Submenu ---
+            string scenarioLabel = !string.IsNullOrEmpty(FlowFeaturesHelper.ActiveScenarioName)
+                ? $"Quick Scenarios ({FlowFeaturesHelper.ActiveScenarioName})"
+                : "Quick Scenarios (1-Click Presets)";
+            var menuScenarios = new ToolStripMenuItem(scenarioLabel) { Margin = padding };
+            menuScenarios.DropDown.BackColor = this.BackColor;
+            menuScenarios.DropDown.ForeColor = this.ForeColor;
+
+            var scGaming = new ToolStripMenuItem("Gaming Unleashed (Turbo • 165Hz+OD • 512Z Mini-LED)")
+            {
+                Margin = padding,
+                Checked = FlowFeaturesHelper.ActiveScenarioName == "Gaming Unleashed"
+            };
+            scGaming.Click += (s, e) => FlowFeaturesHelper.ApplyScenario(ScenarioPreset.Gaming);
+            menuScenarios.DropDownItems.Add(scGaming);
+
+            var scCreator = new ToolStripMenuItem("HDR Creator Studio (Balanced • HDR • 512Z • DCI-P3)")
+            {
+                Margin = padding,
+                Checked = FlowFeaturesHelper.ActiveScenarioName == "HDR Creator Studio"
+            };
+            scCreator.Click += (s, e) => FlowFeaturesHelper.ApplyScenario(ScenarioPreset.CreatorHDR);
+            menuScenarios.DropDownItems.Add(scCreator);
+
+            var scStudy = new ToolStripMenuItem("Silent Study / Eco (Silent • 60Hz • 1Z Clarity)")
+            {
+                Margin = padding,
+                Checked = FlowFeaturesHelper.ActiveScenarioName == "Silent Study / Eco"
+            };
+            scStudy.Click += (s, e) => FlowFeaturesHelper.ApplyScenario(ScenarioPreset.SilentStudy);
+            menuScenarios.DropDownItems.Add(scStudy);
+
+            var scTablet = new ToolStripMenuItem("Tablet / Stylus Note (Silent • Pen-Only • 1Z • Auto-Rotate)")
+            {
+                Margin = padding,
+                Checked = FlowFeaturesHelper.ActiveScenarioName == "Tablet / Stylus Note"
+            };
+            scTablet.Click += (s, e) => FlowFeaturesHelper.ApplyScenario(ScenarioPreset.TabletNote);
+            menuScenarios.DropDownItems.Add(scTablet);
+
+            if (FlowFeaturesHelper.HasScenarioUndo)
+            {
+                menuScenarios.DropDownItems.Add("-");
+                var scUndo = new ToolStripMenuItem("Undo Last Scenario (Restore Previous Settings)") { Margin = padding };
+                scUndo.Click += (s, e) => FlowFeaturesHelper.UndoScenario();
+                menuScenarios.DropDownItems.Add(scUndo);
+            }
+
+            contextMenuStrip.Items.Add(menuScenarios);
             contextMenuStrip.Items.Add("-");
 
             var title = new ToolStripMenuItem(Properties.Strings.PerformanceMode);
@@ -2509,6 +2577,200 @@ namespace GHelper
                 Program.toast?.RunToast(menuGameMode.Checked ? "Auto Game Mode Enabled" : "Auto Game Mode Disabled");
             };
             contextMenuStrip.Items.Add(menuGameMode);
+
+            var menuCreatorAuto = new ToolStripMenuItem("Auto Creator Profile (512Z Mini-LED in Creative Apps)")
+            {
+                Margin = padding,
+                Checked = GameWatcher.IsCreatorAppsEnabled()
+            };
+            menuCreatorAuto.Click += (s, e) =>
+            {
+                bool next = !GameWatcher.IsCreatorAppsEnabled();
+                GameWatcher.ToggleCreatorApps(next);
+                Program.toast?.RunToast(next ? "Auto Creator Profile: Enabled" : "Auto Creator Profile: Disabled");
+                SetContextMenu();
+            };
+            contextMenuStrip.Items.Add(menuCreatorAuto);
+
+            // --- Appearance, Tray Telemetry, Smart Alerts & Backup Submenu ---
+            var menuAppearance = new ToolStripMenuItem("Appearance, Tray & Smart Alerts") { Margin = padding };
+            menuAppearance.DropDown.BackColor = this.BackColor;
+            menuAppearance.DropDown.ForeColor = this.ForeColor;
+
+            // 1. Live Tray Icon Telemetry
+            var menuTrayMode = new ToolStripMenuItem("Tray Icon Display") { Margin = padding };
+            menuTrayMode.DropDown.BackColor = this.BackColor;
+            menuTrayMode.DropDown.ForeColor = this.ForeColor;
+            var curTrayMode = FlowFeaturesHelper.GetTrayMode();
+            var trayOptions = new (TrayTelemetryMode mode, string label)[]
+            {
+                (TrayTelemetryMode.DefaultLogo, "Default ROG GPU Mode Icon"),
+                (TrayTelemetryMode.CpuTemp, "Live CPU Temperature (°C)"),
+                (TrayTelemetryMode.BatteryWattage, "Live Battery Power Draw (W)"),
+                (TrayTelemetryMode.GpuTemp, "Live GPU Temperature (°C)"),
+                (TrayTelemetryMode.FanRpm, "Live Max Fan Speed (kRPM)")
+            };
+            foreach (var opt in trayOptions)
+            {
+                var tm = opt.mode;
+                var lbl = opt.label;
+                var itemTm = new ToolStripMenuItem(lbl) { Checked = (curTrayMode == tm), Margin = padding };
+                itemTm.Click += (s, e) =>
+                {
+                    FlowFeaturesHelper.SetTrayMode(tm);
+                    Program.toast?.RunToast($"Tray Icon: {lbl}");
+                    SetContextMenu();
+                };
+                menuTrayMode.DropDownItems.Add(itemTm);
+            }
+            menuAppearance.DropDownItems.Add(menuTrayMode);
+
+            // 2. Theme & Color Style
+            var menuStyle = new ToolStripMenuItem("UI Theme & Style") { Margin = padding };
+            menuStyle.DropDown.BackColor = this.BackColor;
+            menuStyle.DropDown.ForeColor = this.ForeColor;
+            string curStyle = AppConfig.GetString("theme")?.ToLower() ?? "default";
+            var styleOpts = new (string key, string label)[]
+            {
+                ("default", "Default Dark"),
+                ("flat", "Flat Minimal Dark"),
+                ("rog_cyber", "ROG Cyber Red"),
+                ("nebula_blue", "Nebula Midnight Blue"),
+                ("amoled", "AMOLED Pitch Black"),
+                ("light", "Clean Daylight Light")
+            };
+            foreach (var st in styleOpts)
+            {
+                string k = st.key;
+                string l = st.label;
+                var itemSt = new ToolStripMenuItem(l) { Checked = (curStyle == k), Margin = padding };
+                itemSt.Click += (s, e) =>
+                {
+                    AppConfig.Set("theme", k);
+                    AppConfig.Set("ui_mode", k == "light" ? "light" : "dark");
+                    RForm.RefreshAllThemes();
+                    SetContextMenu();
+                };
+                menuStyle.DropDownItems.Add(itemSt);
+            }
+            menuAppearance.DropDownItems.Add(menuStyle);
+
+            // 3. Font Family
+            var menuFont = new ToolStripMenuItem("Interface Font Family") { Margin = padding };
+            menuFont.DropDown.BackColor = this.BackColor;
+            menuFont.DropDown.ForeColor = this.ForeColor;
+            string curFont = AppConfig.GetString("ui_font_family") ?? "Segoe UI";
+            var fontOpts = new (string fam, string label)[]
+            {
+                ("Segoe UI", "Segoe UI (Default)"),
+                ("Segoe UI Semibold", "Segoe UI Semibold"),
+                ("Bahnschrift", "Bahnschrift (Modern Geometric)"),
+                ("Consolas", "Consolas (Technical Mono)"),
+                ("Verdana", "Verdana (High Legibility)"),
+                ("Calibri", "Calibri"),
+                ("Trebuchet MS", "Trebuchet MS")
+            };
+            foreach (var f in fontOpts)
+            {
+                string fam = f.fam;
+                string lbl = f.label;
+                var itemF = new ToolStripMenuItem(lbl) { Checked = string.Equals(curFont, fam, StringComparison.OrdinalIgnoreCase), Margin = padding };
+                itemF.Click += (s, e) =>
+                {
+                    AppConfig.Set("ui_font_family", fam);
+                    RForm.RefreshAllThemes();
+                    SetContextMenu();
+                };
+                menuFont.DropDownItems.Add(itemF);
+            }
+            menuAppearance.DropDownItems.Add(menuFont);
+
+            // 4. Text Scale
+            var menuScale = new ToolStripMenuItem("Text Size / Scale") { Margin = padding };
+            menuScale.DropDown.BackColor = this.BackColor;
+            menuScale.DropDown.ForeColor = this.ForeColor;
+            int curScale = AppConfig.Get("ui_font_scale", 100);
+            var scaleOpts = new (int pct, string label)[]
+            {
+                (90, "Compact (90%)"),
+                (100, "Default (100%)"),
+                (108, "Comfortable (108%)"),
+                (115, "Large (115%)")
+            };
+            foreach (var sc in scaleOpts)
+            {
+                int p = sc.pct;
+                string lbl = sc.label;
+                var itemSc = new ToolStripMenuItem(lbl) { Checked = (curScale == p), Margin = padding };
+                itemSc.Click += (s, e) =>
+                {
+                    AppConfig.Set("ui_font_scale", p);
+                    RForm.RefreshAllThemes();
+                    SetContextMenu();
+                };
+                menuScale.DropDownItems.Add(itemSc);
+            }
+            menuAppearance.DropDownItems.Add(menuScale);
+
+            menuAppearance.DropDownItems.Add("-");
+
+            // 5. Optional Main Window Sparkline
+            var itemSparkline = new ToolStripMenuItem("Show Live 60s Sensor Sparkline in Main Window")
+            {
+                Margin = padding,
+                Checked = AppConfig.Is("show_main_sparkline")
+            };
+            itemSparkline.Click += (s, e) =>
+            {
+                bool next = !AppConfig.Is("show_main_sparkline");
+                AppConfig.Set("show_main_sparkline", next ? 1 : 0);
+                SetMainSparklineVisible(next);
+                SetContextMenu();
+            };
+            menuAppearance.DropDownItems.Add(itemSparkline);
+
+            // 6. Optional Smart Thermal & Battery Alerts
+            var itemThermalAlert = new ToolStripMenuItem("Smart Thermal Alert (Toast at ≥92°C CPU / ≥88°C GPU)")
+            {
+                Margin = padding,
+                Checked = AppConfig.Is("thermal_alert_enabled")
+            };
+            itemThermalAlert.Click += (s, e) =>
+            {
+                bool next = !AppConfig.Is("thermal_alert_enabled");
+                AppConfig.Set("thermal_alert_enabled", next ? 1 : 0);
+                if (next && sensorTimer != null) sensorTimer.Enabled = true;
+                Program.toast?.RunToast(next ? "Smart Thermal Alert: Enabled" : "Smart Thermal Alert: Disabled");
+                SetContextMenu();
+            };
+            menuAppearance.DropDownItems.Add(itemThermalAlert);
+
+            var itemBatAlert = new ToolStripMenuItem("Smart Battery Target Alert (Toast when Charge Limit Reached)")
+            {
+                Margin = padding,
+                Checked = AppConfig.Is("battery_alert_enabled")
+            };
+            itemBatAlert.Click += (s, e) =>
+            {
+                bool next = !AppConfig.Is("battery_alert_enabled");
+                AppConfig.Set("battery_alert_enabled", next ? 1 : 0);
+                if (next && sensorTimer != null) sensorTimer.Enabled = true;
+                Program.toast?.RunToast(next ? "Smart Battery Target Alert: Enabled" : "Smart Battery Target Alert: Disabled");
+                SetContextMenu();
+            };
+            menuAppearance.DropDownItems.Add(itemBatAlert);
+
+            menuAppearance.DropDownItems.Add("-");
+
+            var itemExportCfg = new ToolStripMenuItem("Export Settings Backup (.json)...") { Margin = padding };
+            itemExportCfg.Click += (s, e) => FlowFeaturesHelper.ExportSettingsBackup(this);
+            menuAppearance.DropDownItems.Add(itemExportCfg);
+
+            var itemImportCfg = new ToolStripMenuItem("Restore Settings Backup (.json)...") { Margin = padding };
+            itemImportCfg.Click += (s, e) => FlowFeaturesHelper.ImportSettingsBackup(this);
+            menuAppearance.DropDownItems.Add(itemImportCfg);
+
+            contextMenuStrip.Items.Add(menuAppearance);
 
             var menuTrimRam = new ToolStripMenuItem("Trim Standby Memory (Free RAM)");
             menuTrimRam.Margin = padding;
@@ -3360,7 +3622,7 @@ namespace GHelper
 
         public async void RefreshSensors(bool force = false)
         {
-            int throttle = (!Visible && sensorsAlways) ? 6000 : (Visible ? 400 : 2000);
+            int throttle = (!Visible && (sensorsAlways || FlowFeaturesHelper.NeedsBackgroundSensorPolling())) ? 3000 : (Visible ? 400 : 2000);
             if (!force && Math.Abs(DateTimeOffset.Now.ToUnixTimeMilliseconds() - lastRefresh) < throttle) return;
             lastRefresh = DateTimeOffset.Now.ToUnixTimeMilliseconds();
 
@@ -3368,6 +3630,7 @@ namespace GHelper
             string charge = "";
 
             await Task.Run(() => HardwareControl.ReadSensors());
+            FlowFeaturesHelper.RecordSensorSampleAndUpdate();
             if (Visible)
             {
                 if (DateTimeOffset.Now.ToUnixTimeMilliseconds() - lastPeripheralCheck > 30000)
@@ -3535,6 +3798,9 @@ namespace GHelper
                             toolTip.SetToolTip(labelBattery, HardwareControl.batteryHealthStr + " (Click for Battery Health & Telemetry)");
                         }
                     }
+
+                    if (_mainSparkline != null && _mainSparkline.Visible)
+                        _mainSparkline.Invalidate();
 
                     if (fansForm != null && !fansForm.IsDisposed && fansForm.Visible)
                         fansForm.UpdateSensors();
@@ -3850,10 +4116,16 @@ namespace GHelper
         private (int, bool, bool)? lastIcon;
         private bool isDark = CheckSystemDarkModeStatus();
 
-        public void VisualiseIcon(bool themeChange = false)
+        public void VisualiseIcon(bool themeChange = false, bool force = false)
         {
             if (Program.trayIcon is null) return;
+            if (FlowFeaturesHelper.GetTrayMode() != TrayTelemetryMode.DefaultLogo)
+            {
+                FlowFeaturesHelper.UpdateLiveTrayIcon();
+                return;
+            }
             if (themeChange) isDark = CheckSystemDarkModeStatus();
+            if (force) lastIcon = null;
 
             int GPUMode = AppConfig.Get("gpu_mode");
             bool bw = AppConfig.IsBWIcon();

@@ -371,9 +371,7 @@ namespace GHelper
 
 
             InitTheme();
-
-            comboTheme.SelectedIndex = AppConfig.GetString("theme")?.ToLower() == "flat" ? 1 : 0;
-            comboTheme.SelectedIndexChanged += ComboTheme_SelectedIndexChanged;
+            InitAppearanceAndBackupCard();
 
             Shown += Keyboard_Shown;
 
@@ -670,6 +668,55 @@ namespace GHelper
                 );
             }
 
+            CreateExtraCheckBox(
+                "Auto Creator Studio Profile (512-Zone Mini-LED + 165Hz in Photoshop / Premiere / Resolve / Blender)",
+                GameWatcher.IsCreatorAppsEnabled(),
+                (s, e) => GameWatcher.ToggleCreatorApps(((RCheckBox)s!).Checked),
+                "Automatically enables 512-Zone Mini-LED local dimming and maximum refresh rate when creative applications are in the foreground on AC power."
+            );
+
+            CreateExtraCheckBox(
+                "Smart Thermal Alert toast when CPU ≥ 92°C or GPU ≥ 88°C sustained",
+                AppConfig.Is("thermal_alert_enabled"),
+                (s, e) =>
+                {
+                    bool en = ((RCheckBox)s!).Checked;
+                    AppConfig.Set("thermal_alert_enabled", en ? 1 : 0);
+                    if (en && SettingsForm.sensorTimer != null) SettingsForm.sensorTimer.Enabled = true;
+                    Program.settingsForm?.SetContextMenu();
+                },
+                "Displays a non-intrusive toast alert with a 5-minute cooldown if CPU or GPU temperature remains critically high."
+            );
+
+            CreateExtraCheckBox(
+                "Smart Battery Alert toast when battery reaches Charge Limit target",
+                AppConfig.Is("battery_alert_enabled"),
+                (s, e) =>
+                {
+                    bool en = ((RCheckBox)s!).Checked;
+                    AppConfig.Set("battery_alert_enabled", en ? 1 : 0);
+                    if (en && SettingsForm.sensorTimer != null) SettingsForm.sensorTimer.Enabled = true;
+                    Program.settingsForm?.SetContextMenu();
+                },
+                "Notifies you with a toast alert once per charge cycle when your battery reaches its configured Charge Limit (e.g. 80%, 85%, or 100%)."
+            );
+
+            CreateExtraCheckBox(
+                "Show Live 60s Sensor Sparkline Graph in Main Window",
+                AppConfig.Is("show_main_sparkline"),
+                (s, e) =>
+                {
+                    bool en = ((RCheckBox)s!).Checked;
+                    AppConfig.Set("show_main_sparkline", en ? 1 : 0);
+                    Program.settingsForm?.SetMainSparklineVisible(en);
+                    Program.settingsForm?.SetContextMenu();
+                },
+                "Displays a live 60-second rolling sparkline graph of CPU/GPU temperatures or Battery Wattage in the main G-Helper window."
+            );
+
+            // Keep Appearance & Backup card at the very top of the System tab
+            panelSettings.Controls.SetChildIndex(panelTheme, panelSettings.Controls.Count - 1);
+
             toolTip.SetToolTip(checkAutoToggleClamshellMode, Properties.Strings.ClamshellModeTooltip);
             toolTip.SetToolTip(checkNVPlatform, Properties.Strings.NVPlatformTooltip);
             toolTip.SetToolTip(checkAspm, Properties.Strings.DisablePCIeASPMTooltip);
@@ -699,6 +746,8 @@ namespace GHelper
 
             int savedTab = Math.Clamp(AppConfig.Get("extra_tab", 0), 0, 3);
             ShowTab(savedTab);
+
+            ControlHelper.Adjust(this);
         }
 
         public void ShowTab(int index)
@@ -732,15 +781,211 @@ namespace GHelper
             panelServices.Visible = (index == 3);
         }
 
-        private void ComboTheme_SelectedIndexChanged(object? sender, EventArgs e)
+        private void InitAppearanceAndBackupCard()
         {
-            AppConfig.Set("theme", comboTheme.SelectedIndex == 1 ? "flat" : "default");
-            DialogResult dialogResult = MessageBox.Show("Theme changed. G-Helper needs to restart to apply the new theme.", "Restart now?", MessageBoxButtons.YesNo);
-            if (dialogResult == DialogResult.Yes)
+            panelTheme.SuspendLayout();
+            panelTheme.Controls.Clear();
+            panelTheme.AutoSize = true;
+            panelTheme.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            panelTheme.Padding = new Padding(4, 6, 4, 10);
+
+            var table = new TableLayoutPanel
             {
-                Application.Restart();
-                Environment.Exit(0);
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Dock = DockStyle.Top,
+                ColumnCount = 2,
+                RowCount = 6,
+                Margin = new Padding(0)
+            };
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55F));
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45F));
+
+            Label MakeRowLabel(string text, string tip)
+            {
+                var lbl = new Label
+                {
+                    AutoSize = true,
+                    Dock = DockStyle.Fill,
+                    TextAlign = ContentAlignment.MiddleLeft,
+                    Text = text,
+                    Margin = new Padding(3, 4, 3, 4)
+                };
+                toolTip.SetToolTip(lbl, tip);
+                return lbl;
             }
+
+            RComboBox MakeCombo(Dictionary<string, string> items, string selectedKey, Action<string> onSelect, string tip)
+            {
+                var cb = new RComboBox
+                {
+                    Dock = DockStyle.Fill,
+                    DropDownStyle = ComboBoxStyle.DropDownList,
+                    FlatStyle = FlatStyle.Flat,
+                    Margin = new Padding(3, 4, 3, 4),
+                    NativeHeight = true
+                };
+                cb.DataSource = new BindingSource(items, null);
+                cb.DisplayMember = "Value";
+                cb.ValueMember = "Key";
+                cb.SelectedValue = items.ContainsKey(selectedKey) ? selectedKey : items.Keys.First();
+                cb.SelectedValueChanged += (s, e) =>
+                {
+                    if (cb.SelectedValue is string val)
+                        onSelect(val);
+                };
+                toolTip.SetToolTip(cb, tip);
+                return cb;
+            }
+
+            // 1. Theme & Color Style
+            var styleMap = new Dictionary<string, string>
+            {
+                { "default", "Default Dark" },
+                { "flat", "Flat Minimal Dark" },
+                { "rog_cyber", "ROG Cyber Red" },
+                { "nebula_blue", "Nebula Midnight Blue" },
+                { "amoled", "AMOLED Pitch Black" },
+                { "light", "Clean Daylight Light" }
+            };
+            string curStyle = AppConfig.GetString("theme")?.ToLower() ?? "default";
+            var cbStyle = MakeCombo(styleMap, curStyle, val =>
+            {
+                AppConfig.Set("theme", val);
+                AppConfig.Set("ui_mode", val == "light" ? "light" : "dark");
+                RForm.RefreshAllThemes();
+            }, "Instantly switch G-Helper's color theme and surface style without restarting.");
+
+            // 2. Font Family
+            var fontMap = new Dictionary<string, string>
+            {
+                { "Segoe UI", "Segoe UI (Default)" },
+                { "Segoe UI Semibold", "Segoe UI Semibold" },
+                { "Bahnschrift", "Bahnschrift (Modern Geometric)" },
+                { "Consolas", "Consolas (Technical Mono)" },
+                { "Verdana", "Verdana (High Legibility)" },
+                { "Calibri", "Calibri (Clean Sans)" },
+                { "Trebuchet MS", "Trebuchet MS" }
+            };
+            string curFont = AppConfig.GetString("ui_font_family") ?? "Segoe UI";
+            var cbFont = MakeCombo(fontMap, curFont, val =>
+            {
+                AppConfig.Set("ui_font_family", val);
+                RForm.RefreshAllThemes();
+            }, "Customize the typography across all G-Helper windows.");
+
+            // 3. Font Scale / Size
+            var scaleMap = new Dictionary<string, string>
+            {
+                { "90", "Compact (90%)" },
+                { "100", "Default (100%)" },
+                { "108", "Comfortable (108%)" },
+                { "115", "Large (115%)" }
+            };
+            string curScale = AppConfig.Get("ui_font_scale", 100).ToString();
+            var cbScale = MakeCombo(scaleMap, curScale, val =>
+            {
+                if (int.TryParse(val, out int sc))
+                {
+                    AppConfig.Set("ui_font_scale", sc);
+                    RForm.RefreshAllThemes();
+                }
+            }, "Adjust text size scaling for easier readability.");
+
+            // 4. Button Corner Shape
+            var radiusMap = new Dictionary<string, string>
+            {
+                { "8", "Rounded (8px Default)" },
+                { "14", "Soft Pill (14px)" },
+                { "4", "Subtle (4px)" },
+                { "1", "Sharp Rectangular (1px)" }
+            };
+            string curRadius = AppConfig.Get("ui_button_radius", 8).ToString();
+            var cbRadius = MakeCombo(radiusMap, curRadius, val =>
+            {
+                if (int.TryParse(val, out int r))
+                {
+                    AppConfig.Set("ui_button_radius", r);
+                    RForm.RefreshAllThemes();
+                }
+            }, "Customize button corner roundness across the interface.");
+
+            // 5. Live Tray Icon Telemetry
+            var trayMap = new Dictionary<string, string>
+            {
+                { "0", "Default ROG GPU Logo" },
+                { "1", "Live CPU Temperature (°C)" },
+                { "2", "Live Battery Power Draw (W)" },
+                { "3", "Live GPU Temperature (°C)" },
+                { "4", "Live Max Fan Speed (kRPM)" }
+            };
+            string curTray = ((int)FlowFeaturesHelper.GetTrayMode()).ToString();
+            var cbTray = MakeCombo(trayMap, curTray, val =>
+            {
+                if (int.TryParse(val, out int m))
+                {
+                    FlowFeaturesHelper.SetTrayMode((TrayTelemetryMode)m);
+                    Program.settingsForm?.SetContextMenu();
+                }
+            }, "Choose whether the system tray icon displays the ROG GPU mode icon or live hardware telemetry.");
+
+            // 6. Settings Backup & Restore Row
+            var panelBackupBtns = new TableLayoutPanel
+            {
+                AutoSize = true,
+                Dock = DockStyle.Fill,
+                ColumnCount = 2,
+                RowCount = 1,
+                Margin = new Padding(0)
+            };
+            panelBackupBtns.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            panelBackupBtns.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+
+            var btnExport = new RButton
+            {
+                Dock = DockStyle.Fill,
+                Height = 36,
+                Margin = new Padding(2, 3, 2, 3),
+                Secondary = true,
+                Text = "Export Backup..."
+            };
+            btnExport.Click += (s, e) => FlowFeaturesHelper.ExportSettingsBackup(this);
+            toolTip.SetToolTip(btnExport, "Save all fan curves, power limits, keybindings, and UI settings to a .json backup file.");
+
+            var btnImport = new RButton
+            {
+                Dock = DockStyle.Fill,
+                Height = 36,
+                Margin = new Padding(2, 3, 2, 3),
+                Secondary = true,
+                Text = "Restore Backup..."
+            };
+            btnImport.Click += (s, e) => FlowFeaturesHelper.ImportSettingsBackup(this);
+            toolTip.SetToolTip(btnImport, "Restore all settings and profiles from a saved .json backup file.");
+
+            panelBackupBtns.Controls.Add(btnExport, 0, 0);
+            panelBackupBtns.Controls.Add(btnImport, 1, 0);
+
+            table.Controls.Add(MakeRowLabel("🎨 UI Theme & Color Style:", "Choose a dark, cyber, midnight blue, AMOLED, or daylight theme."), 0, 0);
+            table.Controls.Add(cbStyle, 1, 0);
+
+            table.Controls.Add(MakeRowLabel("🔤 Interface Font Family:", "Select your preferred font family across all G-Helper windows."), 0, 1);
+            table.Controls.Add(cbFont, 1, 1);
+
+            table.Controls.Add(MakeRowLabel("🔍 Text Scale & Readability:", "Scale UI text size from Compact (90%) to Large (115%)."), 0, 2);
+            table.Controls.Add(cbScale, 1, 2);
+
+            table.Controls.Add(MakeRowLabel("⬜ Button Corner Style:", "Adjust the corner radius of buttons and cards."), 0, 3);
+            table.Controls.Add(cbRadius, 1, 3);
+
+            table.Controls.Add(MakeRowLabel("📊 System Tray Icon Display:", "Show live CPU temp, GPU temp, Battery Wattage, or Fan RPM in the Windows system tray."), 0, 4);
+            table.Controls.Add(cbTray, 1, 4);
+
+            table.Controls.Add(MakeRowLabel("💾 Settings & Profiles Backup:", "Export or restore your complete G-Helper configuration."), 0, 5);
+            table.Controls.Add(panelBackupBtns, 1, 5);
+
+            panelTheme.Controls.Add(table);
+            panelTheme.ResumeLayout(true);
         }
 
         private void CheckKeystoneSoundCheckedChanged(object? sender, EventArgs e)

@@ -24,6 +24,7 @@ namespace GHelper.Helpers
         private static System.Timers.Timer? _timer;
         private static bool _gameModeActive = false;
         private static int _savedMode = -1;
+        private static int _savedGameMiniled = -1;
         private static int _lastGamePid = 0;
         private static int _nonGameStreak = 0;
 
@@ -31,12 +32,23 @@ namespace GHelper.Helpers
         private static TouchPenMode _savedTouchPenMode = TouchPenMode.TouchAndPen;
         private static int _nonDrawingStreak = 0;
 
+        private static bool _creatorModeActive = false;
+        private static int _savedCreatorMiniled = -1;
+        private static int _nonCreatorStreak = 0;
+
         private static readonly HashSet<string> DrawingAndNoteApps = new(StringComparer.OrdinalIgnoreCase)
         {
             "ONENOTE", "ONENOTEIM", "Drawboard.PDF", "DrawboardPDF", "Drawboard",
             "Journal", "Microsoft.Journal", "xournalpp", "krita", "Photoshop",
             "Illustrator", "CLIPStudioPaint", "Concepts", "Rebelle", "sai2",
             "MediBangPaintPro", "Goodnotes", "Whiteboard", "Microsoft.Whiteboard", "ZBrush"
+        };
+
+        private static readonly HashSet<string> CreatorStudioApps = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "Photoshop", "Illustrator", "AfterFX", "Premiere", "Adobe Premiere Pro",
+            "Lightroom", "LightroomClassic", "Resolve", "DaVinciResolve", "blender",
+            "krita", "CLIPStudioPaint", "ZBrush", "Cinema 4D", "UnrealEditor", "SubstancePainter"
         };
 
         // Common desktop applications, Windows system hosts, media players, and store launchers that should never trigger game mode
@@ -53,14 +65,18 @@ namespace GHelper.Helpers
             "GHelper", "Antigravity", "steam", "steamwebhelper", "EpicGamesLauncher", "Origin", "EADesktop", "GalaxyClient", "Battle.net",
             "RiotClientServices", "UbisoftConnect", "upc",
             "vlc", "mpc-hc", "mpc-hc64", "mpc-be", "mpc-be64", "mpv", "wmplayer", "Video.UI", "foobar2000",
-            "obs64", "obs32", "blender", "Photoshop", "Illustrator", "AfterFX", "Premiere", "audacity",
+            "obs64", "obs32", "blender", "Photoshop", "Illustrator", "AfterFX", "Premiere", "Adobe Premiere Pro",
+            "Lightroom", "LightroomClassic", "Resolve", "DaVinciResolve", "audacity",
             "WINWORD", "EXCEL", "POWERPNT", "Acrobat", "AcroRd32",
             "ONENOTE", "ONENOTEIM", "Drawboard.PDF", "DrawboardPDF", "Drawboard",
             "Journal", "Microsoft.Journal", "xournalpp", "krita", "CLIPStudioPaint",
             "Concepts", "Rebelle", "sai2", "MediBangPaintPro", "Goodnotes", "Whiteboard", "Microsoft.Whiteboard", "ZBrush"
         };
 
-        private static bool ShouldTimerRun() => AppConfig.Is("auto_game_mode") || AppConfig.Is("auto_pen_drawing_apps");
+        private static bool ShouldTimerRun() =>
+            AppConfig.Is("auto_game_mode") ||
+            AppConfig.Is("auto_pen_drawing_apps") ||
+            AppConfig.Is("auto_creator_apps");
 
         public static void Init()
         {
@@ -100,8 +116,21 @@ namespace GHelper.Helpers
             }
         }
 
+        public static void ToggleCreatorApps(bool enable)
+        {
+            AppConfig.Set("auto_creator_apps", enable ? 1 : 0);
+            if (_timer != null) _timer.Enabled = ShouldTimerRun();
+            else if (ShouldTimerRun()) Init();
+
+            if (!enable && _creatorModeActive)
+            {
+                RevertCreatorMode();
+            }
+        }
+
         public static bool IsEnabled() => AppConfig.Is("auto_game_mode");
         public static bool IsPenDrawingAppsEnabled() => AppConfig.Is("auto_pen_drawing_apps");
+        public static bool IsCreatorAppsEnabled() => AppConfig.Is("auto_creator_apps");
 
         private static int _isChecking = 0;
 
@@ -110,9 +139,11 @@ namespace GHelper.Helpers
             if (!_gameModeActive) return;
 
             int revertMode = _savedMode >= 0 ? _savedMode : AsusACPI.PerformanceBalanced;
+            int revertMiniled = _savedGameMiniled;
             Logger.WriteLine($"AutoGameMode: Reverting to mode {revertMode}.");
             _gameModeActive = false;
             _savedMode = -1;
+            _savedGameMiniled = -1;
             _lastGamePid = 0;
 
             if (Program.settingsForm != null && !Program.settingsForm.IsDisposed && Program.settingsForm.IsHandleCreated)
@@ -120,6 +151,11 @@ namespace GHelper.Helpers
                 Program.settingsForm.BeginInvoke(delegate
                 {
                     Program.modeControl.SetPerformanceMode(revertMode);
+                    if (revertMiniled >= 0)
+                    {
+                        AppConfig.Set("miniled", revertMiniled);
+                        ScreenControl.SetMiniled(revertMiniled);
+                    }
                     ScreenControl.AutoScreen();
                     Program.toast?.RunToast("Game Mode: Reverted to " + Modes.GetName(revertMode));
                 });
@@ -144,6 +180,28 @@ namespace GHelper.Helpers
             }
         }
 
+        private static void RevertCreatorMode()
+        {
+            if (!_creatorModeActive) return;
+            _creatorModeActive = false;
+            int restoreMiniled = _savedCreatorMiniled;
+            _savedCreatorMiniled = -1;
+            Logger.WriteLine($"AutoCreatorApps: Restoring Mini-LED mode {restoreMiniled}.");
+
+            if (Program.settingsForm != null && !Program.settingsForm.IsDisposed && Program.settingsForm.IsHandleCreated)
+            {
+                Program.settingsForm.BeginInvoke(delegate
+                {
+                    if (restoreMiniled >= 0)
+                    {
+                        AppConfig.Set("miniled", restoreMiniled);
+                        ScreenControl.SetMiniled(restoreMiniled);
+                    }
+                    ScreenControl.InitScreen();
+                });
+            }
+        }
+
         private static void CheckForeground()
         {
             if (!ShouldTimerRun()) return;
@@ -156,6 +214,7 @@ namespace GHelper.Helpers
                 {
                     if (_gameModeActive) RevertMode();
                     if (_penDrawingActive) RevertPenDrawingMode();
+                    if (_creatorModeActive) RevertCreatorMode();
                     return;
                 }
 
@@ -223,7 +282,44 @@ namespace GHelper.Helpers
                     }
                 }
 
-                // 2. Check Auto Game Mode
+                // 2. Check Auto Creator Studio Profile (Multi-Zone Mini-LED + Max Hz on AC)
+                if (AppConfig.Is("auto_creator_apps"))
+                {
+                    bool isCreatorApp = CreatorStudioApps.Contains(procName);
+                    if (isCreatorApp)
+                    {
+                        _nonCreatorStreak = 0;
+                        if (!_creatorModeActive && SystemInformation.PowerStatus.PowerLineStatus == PowerLineStatus.Online)
+                        {
+                            _savedCreatorMiniled = AppConfig.Get("miniled", 1);
+                            _creatorModeActive = true;
+                            Logger.WriteLine($"AutoCreatorApps: Detected '{procName}'. Activating 512-Zone Mini-LED + Max Refresh.");
+                            if (Program.settingsForm != null && !Program.settingsForm.IsDisposed && Program.settingsForm.IsHandleCreated)
+                            {
+                                Program.settingsForm.BeginInvoke(delegate
+                                {
+                                    if (_savedCreatorMiniled == 0)
+                                    {
+                                        AppConfig.Set("miniled", 1);
+                                        ScreenControl.SetMiniled(1);
+                                        ScreenControl.InitScreen();
+                                    }
+                                    ScreenControl.SetScreen(frequency: ScreenControl.MAX_REFRESH, overdrive: 1);
+                                    Program.toast?.RunToast($"Creator Profile: {procName} (512Z Mini-LED)", ToastIcon.BrightnessUp);
+                                });
+                            }
+                        }
+                    }
+                    else if (_creatorModeActive)
+                    {
+                        if (++_nonCreatorStreak >= 4)
+                        {
+                            RevertCreatorMode();
+                        }
+                    }
+                }
+
+                // 3. Check Auto Game Mode
                 if (AppConfig.Is("auto_game_mode"))
                 {
                     bool isGame = !ExcludedProcesses.Contains(procName);
@@ -234,6 +330,7 @@ namespace GHelper.Helpers
                         if (!_gameModeActive)
                         {
                             _savedMode = Modes.GetCurrent();
+                            _savedGameMiniled = AppConfig.Get("miniled", 1);
                             _lastGamePid = pid;
                             _gameModeActive = true;
                             Logger.WriteLine($"AutoGameMode: Detected game '{procName}' (PID {pid}, Title: '{windowTitle}'). Activating Turbo.");
@@ -248,6 +345,11 @@ namespace GHelper.Helpers
                                     Program.modeControl.SetPerformanceMode(AsusACPI.PerformanceTurbo);
                                     if (SystemInformation.PowerStatus.PowerLineStatus == PowerLineStatus.Online)
                                     {
+                                        if (AppConfig.IsNotFalse("auto_game_miniled") && _savedGameMiniled == 0)
+                                        {
+                                            AppConfig.Set("miniled", 1);
+                                            ScreenControl.SetMiniled(1);
+                                        }
                                         ScreenControl.SetScreen(frequency: ScreenControl.MAX_REFRESH, overdrive: 1);
                                     }
                                     Program.toast?.RunToast($"Game Mode: {procName} (Turbo)");

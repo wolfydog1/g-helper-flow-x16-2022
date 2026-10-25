@@ -333,10 +333,7 @@ namespace GHelper.Mode
                     customFans = true;
                 }
 
-                int hystUp = AppConfig.GetMode("hysteresis_up");
-                int hystDown = AppConfig.GetMode("hysteresis_down");
-                if (hystUp > 0 && hystDown > 0)
-                    Program.acpi.SetFanHysteresis(hystUp, hystDown);
+                ApplyHysteresis();
 
                 // force set PPTs for missbehaving bios on FX507/517 series
                 if ((AppConfig.IsPowerRequired() || xgmFan) && !AppConfig.IsApplyPower())
@@ -360,6 +357,7 @@ namespace GHelper.Mode
                 {
                     XGM.Reset();
                 }
+                ApplyHysteresis();
             }
 
             SetModeLabel();
@@ -380,7 +378,8 @@ namespace GHelper.Mode
                 Thread.Sleep(500);
             }
 
-            if (applyPower) SetPower(launchAsAdmin);
+            bool isUsbcPowerLimit = Program.currentSource == Program.PowerSource.USBC && AppConfig.Get("limit_power_usbc", 1) == 1;
+            if (applyPower || isUsbcPowerLimit) SetPower(launchAsAdmin);
 
             Thread.Sleep(500);
             SetGPUPower();
@@ -435,9 +434,10 @@ namespace GHelper.Mode
             if (Program.currentSource == Program.PowerSource.USBC && AppConfig.Get("limit_power_usbc", 1) == 1)
             {
                 int maxUsbcCpu = AppConfig.Get("max_usbc_cpu", 35);
-                if (limit_total > maxUsbcCpu) limit_total = maxUsbcCpu;
-                if (limit_slow > maxUsbcCpu) limit_slow = maxUsbcCpu;
-                if (limit_fast > maxUsbcCpu + 10) limit_fast = maxUsbcCpu + 10;
+                if (limit_total < AsusACPI.MinTotal || limit_total > maxUsbcCpu) limit_total = maxUsbcCpu;
+                if (limit_slow < AsusACPI.MinTotal || limit_slow > maxUsbcCpu) limit_slow = maxUsbcCpu;
+                if (limit_fast < AsusACPI.MinTotal || limit_fast > maxUsbcCpu + 10) limit_fast = maxUsbcCpu + 10;
+                if (limit_cpu < AsusACPI.MinCPU || limit_cpu > maxUsbcCpu) limit_cpu = maxUsbcCpu;
                 Logger.WriteLine($"USB-C PD Power Limit active: CPU capped to {limit_total}W (SPL), {limit_slow}W (sPPT), {limit_fast}W (fPPT)");
             }
 
@@ -547,8 +547,8 @@ namespace GHelper.Mode
             if (Program.currentSource == Program.PowerSource.USBC && AppConfig.Get("limit_power_usbc", 1) == 1)
             {
                 int maxUsbcGpu = AppConfig.Get("max_usbc_gpu", 45);
-                if (gpu_power > maxUsbcGpu) gpu_power = maxUsbcGpu;
-                if (gpu_boost > 10) gpu_boost = 5;
+                if (gpu_power < AsusACPI.MinGPUPower || gpu_power > maxUsbcGpu) gpu_power = maxUsbcGpu;
+                if (gpu_boost < AsusACPI.MinGPUBoost || gpu_boost > 10) gpu_boost = Math.Max(AsusACPI.MinGPUBoost, 5);
                 Logger.WriteLine($"USB-C PD GPU Power Limit active: TGP capped to {gpu_power}W, Boost to {gpu_boost}W");
             }
 
