@@ -4691,7 +4691,8 @@ namespace GHelper
 
         public void VisualiseBatteryTitle(int limit)
         {
-            labelBatteryTitle.Text = Properties.Strings.BatteryChargeLimit + ": " + limit.ToString() + "%";
+            string suffix = BatteryControl.chargePaused ? " (Paused)" : "";
+            labelBatteryTitle.Text = Properties.Strings.BatteryChargeLimit + ": " + limit.ToString() + "%" + suffix;
 
             if (sliderBattery != null)
             {

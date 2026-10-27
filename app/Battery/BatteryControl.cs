@@ -151,12 +151,15 @@ namespace GHelper.Battery
                 _lastAppliedEcLimit = 40;
                 Program.acpi.DeviceSet(AsusACPI.BatteryLimit, 40, "BatteryLimitPaused");
                 Logger.WriteLine("Battery charging paused (EC limit set to 40% for AC bypass)");
+                Program.toast?.RunToast("Battery Paused: Direct AC Bypass (0W Battery Flow)", ToastIcon.Battery);
             }
             else
             {
                 SetBatteryChargeLimit();
+                Program.toast?.RunToast($"Battery Limit Active: {AppConfig.Get("charge_limit", 80)}%", ToastIcon.Battery);
             }
             Program.settingsForm.VisualiseBattery(AppConfig.Get("charge_limit", 80));
+            Program.settingsForm.RefreshSensors(true);
         }
 
         public static void ToggleBatteryLimitFull()
