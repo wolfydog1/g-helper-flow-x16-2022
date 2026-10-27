@@ -20,7 +20,7 @@ namespace GHelper.UI
         {
             base.OnPaint(pevent);
 
-            if (Parent == null || FlatAppearance.BorderColor.A == 0 || RForm.flatTheme) return;
+            if (Parent is not Panel parentPn || !parentPn.Name.Contains("Header") || FlatAppearance.BorderColor.A == 0 || RForm.flatTheme) return;
 
             float ratio = pevent.Graphics.DpiX / 192.0f;
             int radius = (int)Math.Round(ratio * borderRadius, MidpointRounding.AwayFromZero);

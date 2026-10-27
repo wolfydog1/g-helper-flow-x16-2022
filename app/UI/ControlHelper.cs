@@ -209,7 +209,7 @@ public static class ControlHelper
                 {
                     chk.BackColor = RForm.formBack;
                     if (chk is RCheckBox)
-                        chk.FlatAppearance.BorderColor = Color.Transparent;
+                        chk.FlatAppearance.BorderColor = Color.Empty;
                 }
                 if (chk.IsHandleCreated)
                     SetWindowTheme(chk.Handle, _darkMode ? "DarkMode_Explorer" : "Explorer", null);
