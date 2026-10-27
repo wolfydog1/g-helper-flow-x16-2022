@@ -50,7 +50,7 @@ public static class ControlHelper
 
     private static void ApplyCustomFont(Control control)
     {
-        if (control.Font == null) return;
+        if (control is Chart || control.Font == null) return;
 
         if (!_baseFonts.TryGetValue(control, out BaseFontInfo? info))
         {
@@ -209,7 +209,7 @@ public static class ControlHelper
                 {
                     chk.BackColor = RForm.formBack;
                     if (chk is RCheckBox)
-                        chk.FlatAppearance.BorderColor = RForm.borderMain;
+                        chk.FlatAppearance.BorderColor = Color.Transparent;
                 }
                 if (chk.IsHandleCreated)
                     SetWindowTheme(chk.Handle, _darkMode ? "DarkMode_Explorer" : "Explorer", null);
