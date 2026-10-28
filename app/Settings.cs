@@ -3103,7 +3103,11 @@ namespace GHelper
                 (TrayTelemetryMode.CpuTemp, "Live CPU Temperature (°C)"),
                 (TrayTelemetryMode.BatteryWattage, "Live Battery Power Draw (W)"),
                 (TrayTelemetryMode.GpuTemp, "Live GPU Temperature (°C)"),
-                (TrayTelemetryMode.FanRpm, "Live Max Fan Speed (kRPM)")
+                (TrayTelemetryMode.FanRpm, "Live Max Fan Speed (kRPM)"),
+                (TrayTelemetryMode.RamUsage, "Live RAM Usage (%)"),
+                (TrayTelemetryMode.BatteryCapacity, "Live Battery Capacity (%)"),
+                (TrayTelemetryMode.CpuPower, "Live CPU Package Power (W)"),
+                (TrayTelemetryMode.MidFanRpm, "Live Mid Fan Speed (RPM)")
             };
             foreach (var opt in trayOptions)
             {
@@ -3132,6 +3136,10 @@ namespace GHelper
                 ("rog_cyber", "ROG Cyber Red"),
                 ("nebula_blue", "Nebula Midnight Blue"),
                 ("amoled", "AMOLED Pitch Black"),
+                ("emerald_matrix", "Emerald Stealth Matrix"),
+                ("solar_amber", "Solaris Cyberpunk Gold"),
+                ("vapor_violet", "Vaporwave Twilight Violet"),
+                ("frost_titanium", "Frost Titanium Silver"),
                 ("light", "Clean Daylight Light")
             };
             foreach (var st in styleOpts)
@@ -3159,10 +3167,15 @@ namespace GHelper
             {
                 ("Segoe UI", "Segoe UI (Default)"),
                 ("Segoe UI Semibold", "Segoe UI Semibold"),
-                ("Bahnschrift", "Bahnschrift (Modern Geometric)"),
+                ("Segoe UI Variable Display", "Segoe UI Variable (Win11)"),
+                ("Bahnschrift", "Bahnschrift (Geometric Sans)"),
+                ("Cascadia Code", "Cascadia Code (Modern Terminal)"),
+                ("Cascadia Mono", "Cascadia Mono"),
                 ("Consolas", "Consolas (Technical Mono)"),
                 ("Verdana", "Verdana (High Legibility)"),
-                ("Calibri", "Calibri"),
+                ("Calibri", "Calibri (Clean Sans)"),
+                ("Arial", "Arial (Clean Universal)"),
+                ("Century Gothic", "Century Gothic (Wide Geometric)"),
                 ("Trebuchet MS", "Trebuchet MS")
             };
             foreach (var f in fontOpts)
@@ -3187,10 +3200,15 @@ namespace GHelper
             int curScale = AppConfig.Get("ui_font_scale", 100);
             var scaleOpts = new (int pct, string label)[]
             {
+                (85, "Extra Compact (85%)"),
                 (90, "Compact (90%)"),
+                (95, "Dense (95%)"),
                 (100, "Default (100%)"),
+                (105, "Balanced (105%)"),
                 (108, "Comfortable (108%)"),
-                (115, "Large (115%)")
+                (112, "Medium-Large (112%)"),
+                (115, "Large (115%)"),
+                (120, "Extra Large (120%)")
             };
             foreach (var sc in scaleOpts)
             {
@@ -3206,6 +3224,37 @@ namespace GHelper
                 menuScale.DropDownItems.Add(itemSc);
             }
             menuAppearance.DropDownItems.Add(menuScale);
+
+            // 5. Button Corner Style
+            var menuRadius = new ToolStripMenuItem("Button Corner Style") { Margin = padding };
+            menuRadius.DropDown.BackColor = this.BackColor;
+            menuRadius.DropDown.ForeColor = this.ForeColor;
+            int curRadius = AppConfig.Get("ui_button_radius", 8);
+            var radiusOpts = new (int rad, string label)[]
+            {
+                (1, "Sharp Rectangular (1px)"),
+                (4, "Subtle (4px)"),
+                (6, "Medium (6px)"),
+                (8, "Default Rounded (8px)"),
+                (10, "Smooth (10px)"),
+                (12, "Curved (12px)"),
+                (14, "Soft Pill (14px)"),
+                (18, "Full Capsule (18px)")
+            };
+            foreach (var ro in radiusOpts)
+            {
+                int r = ro.rad;
+                string lbl = ro.label;
+                var itemRo = new ToolStripMenuItem(lbl) { Checked = (curRadius == r), Margin = padding };
+                itemRo.Click += (s, e) =>
+                {
+                    AppConfig.Set("ui_button_radius", r);
+                    RForm.RefreshAllThemes();
+                    SetContextMenu();
+                };
+                menuRadius.DropDownItems.Add(itemRo);
+            }
+            menuAppearance.DropDownItems.Add(menuRadius);
 
             menuAppearance.DropDownItems.Add("-");
 

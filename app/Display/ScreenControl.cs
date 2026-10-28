@@ -411,7 +411,7 @@ namespace GHelper.Display
             AppConfig.Set("frequency", frequency);
             AppConfig.Set("overdrive", overdrive);
 
-            Program.settingsForm.Invoke(delegate
+            Program.RunOnUI(delegate
             {
                 Program.settingsForm.VisualiseScreen(
                     screenEnabled: screenEnabled,

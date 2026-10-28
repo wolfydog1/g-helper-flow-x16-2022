@@ -20,7 +20,11 @@ namespace GHelper.Helpers
         CpuTemp = 1,
         BatteryWattage = 2,
         GpuTemp = 3,
-        FanRpm = 4
+        FanRpm = 4,
+        RamUsage = 5,
+        BatteryCapacity = 6,
+        CpuPower = 7,
+        MidFanRpm = 8
     }
 
     public enum ScenarioPreset
@@ -192,6 +196,46 @@ namespace GHelper.Helpers
                     int rpm = Math.Max(HardwareControl.cpuFanRPM ?? 0, HardwareControl.gpuFanRPM ?? 0);
                     topText = rpm > 0 ? (rpm / 1000.0).ToString("0.0") : "0";
                     bottomText = "kRPM";
+                    accent = rpm >= 4800 ? Color.FromArgb(255, 90, 90)
+                           : rpm >= 3200 ? Color.FromArgb(255, 195, 50)
+                           : Color.FromArgb(90, 220, 170);
+                    break;
+                }
+                case TrayTelemetryMode.RamUsage:
+                {
+                    int ram = HardwareControl.ramUsage ?? 0;
+                    topText = ram > 0 ? ram.ToString() : "--";
+                    bottomText = "RAM";
+                    accent = ram >= 85 ? Color.FromArgb(255, 80, 80)
+                           : ram >= 70 ? Color.FromArgb(255, 190, 40)
+                           : Color.FromArgb(120, 200, 255);
+                    break;
+                }
+                case TrayTelemetryMode.BatteryCapacity:
+                {
+                    int cap = (int)Math.Round(HardwareControl.batteryCapacity);
+                    topText = cap > 0 ? cap.ToString() : "--";
+                    bottomText = "%";
+                    accent = cap <= 20 ? Color.FromArgb(255, 75, 75)
+                           : cap <= 40 ? Color.FromArgb(255, 190, 40)
+                           : Color.FromArgb(50, 225, 140);
+                    break;
+                }
+                case TrayTelemetryMode.CpuPower:
+                {
+                    int pwr = (int)Math.Round(HardwareControl.cpuPower ?? 0);
+                    topText = pwr > 0 ? pwr.ToString() : "--";
+                    bottomText = "CPW";
+                    accent = pwr >= 65 ? Color.FromArgb(255, 80, 80)
+                           : pwr >= 45 ? Color.FromArgb(255, 190, 40)
+                           : Color.FromArgb(60, 210, 255);
+                    break;
+                }
+                case TrayTelemetryMode.MidFanRpm:
+                {
+                    int rpm = HardwareControl.midFanRPM ?? 0;
+                    topText = rpm > 0 ? (rpm / 1000.0).ToString("0.0") : "0";
+                    bottomText = "MID";
                     accent = rpm >= 4800 ? Color.FromArgb(255, 90, 90)
                            : rpm >= 3200 ? Color.FromArgb(255, 195, 50)
                            : Color.FromArgb(90, 220, 170);

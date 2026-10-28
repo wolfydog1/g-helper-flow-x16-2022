@@ -194,9 +194,8 @@ namespace GHelper.AutoUpdate
                     cmd.StartInfo.WorkingDirectory = exeDir;
                     cmd.StartInfo.UseShellExecute = false;
                     cmd.StartInfo.CreateNoWindow = true;
-                    cmd.StartInfo.FileName = "powershell";
-                    cmd.StartInfo.Arguments = command;
-                    if (ProcessHelper.IsUserAdministrator()) cmd.StartInfo.Verb = "runas";
+                    cmd.StartInfo.FileName = Path.Combine(Environment.SystemDirectory, @"WindowsPowerShell\v1.0\powershell.exe");
+                    cmd.StartInfo.Arguments = "-NoProfile -Command \"" + command.Replace("\"", "\\\"") + "\"";
                     cmd.Start();
                 }
                 catch (Exception ex)

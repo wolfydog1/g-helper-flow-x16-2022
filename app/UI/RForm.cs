@@ -129,6 +129,50 @@ namespace GHelper.UI
                     chartGrid = Color.FromArgb(255, 52, 52, 60);
                     break;
 
+                case "emerald_matrix":
+                    buttonMain = Color.FromArgb(255, 20, 36, 28);
+                    buttonSecond = Color.FromArgb(255, 14, 26, 20);
+                    formBack = Color.FromArgb(255, 10, 18, 14);
+                    foreMain = Color.FromArgb(255, 235, 252, 243);
+                    borderMain = Color.FromArgb(255, 34, 110, 72);
+                    borderSecond = Color.FromArgb(255, 24, 76, 50);
+                    chartMain = Color.FromArgb(255, 14, 24, 18);
+                    chartGrid = Color.FromArgb(255, 30, 70, 48);
+                    break;
+
+                case "solar_amber":
+                    buttonMain = Color.FromArgb(255, 42, 32, 18);
+                    buttonSecond = Color.FromArgb(255, 30, 22, 12);
+                    formBack = Color.FromArgb(255, 20, 16, 10);
+                    foreMain = Color.FromArgb(255, 254, 243, 225);
+                    borderMain = Color.FromArgb(255, 140, 95, 25);
+                    borderSecond = Color.FromArgb(255, 95, 62, 16);
+                    chartMain = Color.FromArgb(255, 26, 20, 14);
+                    chartGrid = Color.FromArgb(255, 85, 60, 25);
+                    break;
+
+                case "vapor_violet":
+                    buttonMain = Color.FromArgb(255, 38, 24, 48);
+                    buttonSecond = Color.FromArgb(255, 28, 16, 36);
+                    formBack = Color.FromArgb(255, 18, 12, 24);
+                    foreMain = Color.FromArgb(255, 246, 238, 255);
+                    borderMain = Color.FromArgb(255, 112, 54, 146);
+                    borderSecond = Color.FromArgb(255, 78, 36, 102);
+                    chartMain = Color.FromArgb(255, 24, 16, 32);
+                    chartGrid = Color.FromArgb(255, 75, 40, 95);
+                    break;
+
+                case "frost_titanium":
+                    buttonMain = Color.FromArgb(255, 26, 34, 44);
+                    buttonSecond = Color.FromArgb(255, 18, 24, 32);
+                    formBack = Color.FromArgb(255, 13, 17, 23);
+                    foreMain = Color.FromArgb(255, 238, 244, 250);
+                    borderMain = Color.FromArgb(255, 42, 98, 134);
+                    borderSecond = Color.FromArgb(255, 30, 68, 94);
+                    chartMain = Color.FromArgb(255, 17, 22, 30);
+                    chartGrid = Color.FromArgb(255, 45, 80, 105);
+                    break;
+
                 default: // "default" and "flat"
                     buttonMain = Color.FromArgb(255, 46, 46, 46);
                     buttonSecond = Color.FromArgb(255, 36, 36, 36);
@@ -146,7 +190,7 @@ namespace GHelper.UI
         {
             string? style = AppConfig.GetString("theme")?.ToLower();
             if (style == "light") return false;
-            if (style is "rog_cyber" or "nebula_blue" or "amoled" or "flat" or "default")
+            if (style is "rog_cyber" or "nebula_blue" or "amoled" or "flat" or "default" or "emerald_matrix" or "solar_amber" or "vapor_violet" or "frost_titanium")
             {
                 string? modeOverride = AppConfig.GetString("ui_mode")?.ToLower();
                 if (modeOverride == "light") return false;

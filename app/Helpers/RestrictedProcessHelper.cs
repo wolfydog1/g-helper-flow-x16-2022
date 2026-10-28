@@ -31,13 +31,15 @@ public static class RestrictedProcessHelper
         var si = new STARTUPINFO();
         si.cb = Marshal.SizeOf(si);
         si.dwFlags = 0x1;
-        si.wShowWindow = 0x00; // Set the window to be hidden
+        si.wShowWindow = 0x00; // SW_HIDE: Set the window to be hidden
+
+        const uint CREATE_NO_WINDOW = 0x08000000;
 
         if (GetShellUserToken(out var hToken))
         {
             try
             {
-                if (CreateProcessWithTokenW(hToken, 0, null, cmd, 0, IntPtr.Zero, system32, ref si, out var pi))
+                if (CreateProcessWithTokenW(hToken, 0, null, cmd, CREATE_NO_WINDOW, IntPtr.Zero, system32, ref si, out var pi))
                 {
                     CloseHandle(pi.hProcess);
                     CloseHandle(pi.hThread);
@@ -55,7 +57,7 @@ public static class RestrictedProcessHelper
 
         try
         {
-            if (CreateProcessAsUser(hToken, null, cmd, IntPtr.Zero, IntPtr.Zero, false, 0, IntPtr.Zero, system32, ref si, out var pi))
+            if (CreateProcessAsUser(hToken, null, cmd, IntPtr.Zero, IntPtr.Zero, false, CREATE_NO_WINDOW, IntPtr.Zero, system32, ref si, out var pi))
             {
                 CloseHandle(pi.hProcess);
                 CloseHandle(pi.hThread);

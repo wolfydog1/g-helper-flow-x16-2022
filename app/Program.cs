@@ -43,6 +43,21 @@ namespace GHelper
 
         public static InputDispatcher? inputDispatcher;
 
+        public static void RunOnUI(Action action)
+        {
+            try
+            {
+                if (settingsForm is { IsHandleCreated: true, IsDisposed: false })
+                {
+                    settingsForm.BeginInvoke(action);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.WriteLine("RunOnUI error: " + ex.Message);
+            }
+        }
+
         // The main entry point for the application
         public static void Main(string[] args)
         {

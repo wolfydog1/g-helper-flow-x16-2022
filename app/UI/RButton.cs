@@ -32,7 +32,11 @@ namespace GHelper.UI
             get { return borderColor; }
             set
             {
-                borderColor = value;
+                if (borderColor != value)
+                {
+                    borderColor = value;
+                    Invalidate();
+                }
             }
         }
 
@@ -44,8 +48,10 @@ namespace GHelper.UI
             set
             {
                 if (activated != value)
+                {
+                    activated = value;
                     Invalidate();
-                activated = value;
+                }
                 AccessibleDescription = activated ? "Active" : null;
             }
         }
@@ -56,7 +62,11 @@ namespace GHelper.UI
             get { return secondary; }
             set
             {
-                secondary = value;
+                if (secondary != value)
+                {
+                    secondary = value;
+                    Invalidate();
+                }
             }
         }
 

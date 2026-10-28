@@ -180,12 +180,22 @@ public static class ControlHelper
             if (gb != null)
             {
                 gb.ForeColor = RForm.foreMain;
+                gb.BackColor = RForm.formBack;
             }
 
             var pn = control as Panel;
-            if (pn != null && pn.Name.Contains("Header"))
+            if (pn != null)
             {
-                pn.BackColor = RForm.buttonSecond;
+                if (pn.Name.Contains("Header"))
+                    pn.BackColor = RForm.buttonSecond;
+                else
+                    pn.BackColor = RForm.formBack;
+            }
+
+            var tlp = control as TableLayoutPanel;
+            if (tlp != null)
+            {
+                tlp.BackColor = RForm.formBack;
             }
 
             var sl = control as Slider;

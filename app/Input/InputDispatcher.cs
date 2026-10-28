@@ -527,8 +527,8 @@ namespace GHelper.Input
                 if (e.Key == keyProfile2) modeControl.SetPerformanceMode(2, true);
                 if (e.Key == keyProfile3) modeControl.SetPerformanceMode(3, true);
                 if (e.Key == keyProfile4) modeControl.SetPerformanceMode(4, true);
-                if (e.Key == keyXGM) Program.settingsForm.gpuControl.ToggleXGM(true);
-                if (e.Key == keyOverlay) Program.settingsForm.BeginInvoke(() => Program.settingsForm.ToggleOverlay(true));
+                if (e.Key == keyXGM) Program.RunOnUI(() => Program.settingsForm.gpuControl.ToggleXGM(true));
+                if (e.Key == keyOverlay) Program.RunOnUI(() => Program.settingsForm.ToggleOverlay(true));
 
                 switch (e.Key)
                 {
@@ -539,10 +539,10 @@ namespace GHelper.Input
                         SetBrightness(true);
                         break;
                     case Keys.F3:
-                        Program.settingsForm.gpuControl.ToggleXGM(true);
+                        Program.RunOnUI(() => Program.settingsForm.gpuControl.ToggleXGM(true));
                         break;
                     case Keys.F4:
-                        Program.settingsForm.BeginInvoke(Program.settingsForm.allyControl.ToggleModeHotkey);
+                        Program.RunOnUI(Program.settingsForm.allyControl.ToggleModeHotkey);
                         break;
                     case Keys.F6:
                         ToggleTouchScreen();
@@ -556,18 +556,18 @@ namespace GHelper.Input
                         else SetBrightnessDimming(10);
                         break;
                     case Keys.F9:
-                        Program.settingsForm.BeginInvoke(Program.settingsForm.allyControl.ToggleFPSLimit, true);
+                        Program.RunOnUI(() => Program.settingsForm.allyControl.ToggleFPSLimit(true));
                         break;
                     case Keys.F13:
                         ToggleScreenRate();
                         break;
                     case Keys.F14:
                         Program.toast.RunToast(Properties.Strings.EcoMode);
-                        Program.settingsForm.gpuControl.SetGPUMode(AsusACPI.GPUModeEco);
+                        Program.RunOnUI(() => Program.settingsForm.gpuControl.SetGPUMode(AsusACPI.GPUModeEco));
                         break;
                     case Keys.F15:
                         Program.toast.RunToast(Properties.Strings.StandardMode);
-                        Program.settingsForm.gpuControl.SetGPUMode(AsusACPI.GPUModeStandard);
+                        Program.RunOnUI(() => Program.settingsForm.gpuControl.SetGPUMode(AsusACPI.GPUModeStandard));
                         break;
                 }
             }
@@ -689,32 +689,22 @@ namespace GHelper.Input
                     Program.toast.RunToast(autoHdrNow ? "Auto HDR: On" : "Auto HDR: Off", autoHdrNow ? ToastIcon.BrightnessUp : ToastIcon.BrightnessDown);
                     break;
                 case "aura":
-                    Program.settingsForm.BeginInvoke(Program.settingsForm.CycleAuraMode, Control.ModifierKeys == Keys.Shift ? -1 : 1);
+                    Program.RunOnUI(() => Program.settingsForm.CycleAuraMode(Control.ModifierKeys == Keys.Shift ? -1 : 1));
                     break;
                 case "visual":
-                    Program.settingsForm.BeginInvoke(Program.settingsForm.CycleVisualMode, Control.ModifierKeys == Keys.Shift ? -1 : 1);
+                    Program.RunOnUI(() => Program.settingsForm.CycleVisualMode(Control.ModifierKeys == Keys.Shift ? -1 : 1));
                     break;
                 case "performance":
                     modeControl.CyclePerformanceMode(Control.ModifierKeys == Keys.Shift);
                     break;
                 case "ghelper":
-                    try
-                    {
-                        Program.settingsForm.BeginInvoke(delegate
-                        {
-                            Program.SettingsToggle();
-                        });
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine(ex);
-                    }
+                    Program.RunOnUI(() => Program.SettingsToggle());
                     break;
                 case "fnlock":
                     ToggleFnLock();
                     break;
                 case "overlay":
-                    Program.settingsForm.BeginInvoke(() => Program.settingsForm.ToggleOverlay(true));
+                    Program.RunOnUI(() => Program.settingsForm.ToggleOverlay(true));
                     break;
                 case "micmute":
                     ToggleMic();
@@ -738,7 +728,7 @@ namespace GHelper.Input
                     LaunchProcess("calc");
                     break;
                 case "controller":
-                    Program.settingsForm.BeginInvoke(Program.settingsForm.allyControl.ToggleModeHotkey);
+                    Program.RunOnUI(Program.settingsForm.allyControl.ToggleModeHotkey);
                     break;
                 case "touchscreen":
                     ToggleTouchScreen();
@@ -897,7 +887,7 @@ namespace GHelper.Input
             int arLock = AppConfig.Is("arrow_lock") ? 0 : 1;
             AppConfig.Set("arrow_lock", arLock);
 
-            Program.settingsForm.BeginInvoke(Program.inputDispatcher.RegisterKeys);
+            Program.RunOnUI(Program.inputDispatcher.RegisterKeys);
             Program.toast.RunToast("Arrow-Lock " + (arLock == 1 ? Properties.Strings.On : Properties.Strings.Off), ToastIcon.FnLock);
         }
 
@@ -927,9 +917,9 @@ namespace GHelper.Input
             if (IsHardwareFnLock())
                 HardwareFnLock(fnLock);
             else
-                Program.settingsForm.BeginInvoke(Program.inputDispatcher.RegisterKeys);
+                Program.RunOnUI(Program.inputDispatcher.RegisterKeys);
 
-            Program.settingsForm.BeginInvoke(Program.settingsForm.VisualiseFnLock);
+            Program.RunOnUI(Program.settingsForm.VisualiseFnLock);
 
             Program.toast.RunToast(fnLock ? Properties.Strings.FnLockOn : Properties.Strings.FnLockOff, ToastIcon.FnLock);
         }
@@ -1263,7 +1253,7 @@ namespace GHelper.Input
                         modeControl.CyclePerformanceMode(Control.ModifierKeys == Keys.Shift);
                         return;
                     case 178:   // FN+LEFT ARROW / FN + F4
-                        Program.settingsForm.BeginInvoke(Program.settingsForm.CycleAuraMode, -1);
+                        Program.RunOnUI(() => Program.settingsForm.CycleAuraMode(-1));
                         return;
                     case 179:   // FN+F4
                         KeyProcess("fnf4");
@@ -1315,7 +1305,7 @@ namespace GHelper.Input
                     if (Control.ModifierKeys == Keys.Shift)
                     {
                         if (AppConfig.IsDUO()) SetScreenpad(-10);
-                        else if (Program.settingsForm.matrixControl.IsValid) Program.settingsForm.BeginInvoke(Program.settingsForm.CycleMatrix, -1);
+                        else if (Program.settingsForm?.matrixControl.IsValid == true) Program.RunOnUI(() => Program.settingsForm.CycleMatrix(-1));
                         else SetBacklight(-1);
                     }
                     else if (Control.ModifierKeys == Keys.Control && AppConfig.IsOLED())
@@ -1331,7 +1321,7 @@ namespace GHelper.Input
                     if (Control.ModifierKeys == Keys.Shift)
                     {
                         if (AppConfig.IsDUO()) SetScreenpad(10);
-                        else if (Program.settingsForm.matrixControl.IsValid) Program.settingsForm.BeginInvoke(Program.settingsForm.CycleMatrix, 1);
+                        else if (Program.settingsForm?.matrixControl.IsValid == true) Program.RunOnUI(() => Program.settingsForm.CycleMatrix(1));
                         else SetBacklight(1);
                     }
                     else if (Control.ModifierKeys == Keys.Control && AppConfig.IsOLED())
@@ -1718,7 +1708,7 @@ namespace GHelper.Input
                 if (AppConfig.NoWMI()) return;
 
                 if (EventID == 123) Program.OnChargerEvent();
-                if (EventID == 186 || EventID == 194) Program.settingsForm.VisualizeXGM();
+                if (EventID == 186 || EventID == 194) Program.RunOnUI(() => Program.settingsForm.VisualizeXGM());
 
                 HandleEvent(EventID);
             }

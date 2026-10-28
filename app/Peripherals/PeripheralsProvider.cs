@@ -1,4 +1,4 @@
-﻿using GHelper.Peripherals.Keyboard;
+using GHelper.Peripherals.Keyboard;
 using GHelper.Peripherals.Keyboard.Models;
 using GHelper.Peripherals.Mouse;
 using GHelper.Peripherals.Mouse.Models;
@@ -361,15 +361,12 @@ namespace GHelper.Peripherals
         private static void RefreshHotkeys()
         {
             if (Program.inputDispatcher is null || Program.settingsForm is null) return;
-            if (Program.settingsForm.InvokeRequired)
-                Program.settingsForm.BeginInvoke((Action)Program.inputDispatcher.RegisterKeys);
-            else
-                Program.inputDispatcher.RegisterKeys();
+            Program.RunOnUI((Action)Program.inputDispatcher.RegisterKeys);
         }
 
         private static void UpdateSettingsView()
         {
-            Program.settingsForm.Invoke(delegate
+            Program.RunOnUI(delegate
             {
                 Program.settingsForm.VisualizePeripherals();
             });

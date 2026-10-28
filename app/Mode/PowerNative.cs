@@ -590,9 +590,9 @@ namespace GHelper.Mode
 
         public static void SetKeepAwake(int minutes)
         {
-            if (Program.settingsForm != null && Program.settingsForm.IsHandleCreated && Program.settingsForm.InvokeRequired)
+            if (Program.settingsForm is { IsHandleCreated: true, IsDisposed: false } && Program.settingsForm.InvokeRequired)
             {
-                Program.settingsForm.Invoke(() => SetKeepAwake(minutes));
+                Program.settingsForm.BeginInvoke(() => SetKeepAwake(minutes));
                 return;
             }
 

@@ -292,13 +292,20 @@ namespace GHelper.Battery
                 cmd.StartInfo.WorkingDirectory = reportDir;
                 cmd.StartInfo.UseShellExecute = false;
                 cmd.StartInfo.CreateNoWindow = true;
-                cmd.StartInfo.FileName = "powershell";
-                cmd.StartInfo.Arguments = "powercfg /batteryreport; explorer battery-report.html";
+                cmd.StartInfo.FileName = Path.Combine(Environment.SystemDirectory, "powercfg.exe");
+                cmd.StartInfo.Arguments = "/batteryreport /output battery-report.html";
                 cmd.Start();
+                cmd.WaitForExit(5000);
+
+                string reportPath = Path.Combine(reportDir, "battery-report.html");
+                if (File.Exists(reportPath))
+                {
+                    Process.Start(new ProcessStartInfo(reportPath) { UseShellExecute = true });
+                }
             }
             catch (Exception ex)
             {
-                Logger.WriteLine(ex.Message);
+                Logger.WriteLine("BatteryReport error: " + ex.Message);
             }
         }
 

@@ -436,8 +436,8 @@ namespace GHelper
             tableBindings.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40F));
             tableBindings.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40F));
             tableBindings.Controls.Add(labelFNE, 0, 8);
-            tableBindings.Controls.Add(comboFNE, 0, 8);
-            tableBindings.Controls.Add(textFNE, 0, 8);
+            tableBindings.Controls.Add(comboFNE, 1, 8);
+            tableBindings.Controls.Add(textFNE, 2, 8);
             tableBindings.Controls.Add(labelFNV, 0, 7);
             tableBindings.Controls.Add(comboFNV, 1, 7);
             tableBindings.Controls.Add(textFNV, 2, 7);

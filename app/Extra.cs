@@ -6,6 +6,7 @@ using GHelper.Mode;
 using GHelper.UI;
 using GHelper.USB;
 using System.Diagnostics;
+using System.Drawing.Drawing2D;
 
 namespace GHelper
 {
@@ -784,6 +785,7 @@ namespace GHelper
             buttonTabSystem.Click += (s, e) => ShowTab(3);
 
             int savedTab = Math.Clamp(AppConfig.Get("extra_tab", 0), 0, 3);
+            tableTabs.BringToFront();
             ShowTab(savedTab);
 
             ControlHelper.Adjust(this);
@@ -820,6 +822,7 @@ namespace GHelper
             SuspendLayout();
             try
             {
+                tableTabs.BringToFront();
                 AutoScrollPosition = new Point(0, 0);
 
                 buttonTabKeyboard.Activated = (index == 0);
@@ -954,18 +957,55 @@ namespace GHelper
             table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55F));
             table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45F));
 
-            Label MakeRowLabel(string text, string tip)
+            Control MakeRowHeader(string title, string tip, Action<Graphics, RectangleF, Color> drawIcon)
             {
+                var rowPanel = new TableLayoutPanel
+                {
+                    Dock = DockStyle.Fill,
+                    AutoSize = true,
+                    ColumnCount = 2,
+                    RowCount = 1,
+                    Margin = new Padding(0),
+                    Padding = new Padding(0),
+                    BackColor = Color.Transparent
+                };
+                int iconPx = Math.Max(18, (int)Math.Round(18 * (DeviceDpi / 96f)));
+                rowPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, iconPx + 8));
+                rowPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+
+                var pic = new PictureBox
+                {
+                    Size = new Size(iconPx, iconPx),
+                    Margin = new Padding(2, 4, 4, 4),
+                    Anchor = AnchorStyles.Left | AnchorStyles.None,
+                    BackColor = Color.Transparent
+                };
+                pic.Paint += (s, e) =>
+                {
+                    e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                    e.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                    drawIcon(e.Graphics, new RectangleF(1, 1, pic.Width - 2, pic.Height - 2), RForm.foreMain);
+                };
+
                 var lbl = new Label
                 {
                     AutoSize = true,
                     Dock = DockStyle.Fill,
                     TextAlign = ContentAlignment.MiddleLeft,
-                    Text = text,
-                    Margin = new Padding(3, 4, 3, 4)
+                    Text = title,
+                    Margin = new Padding(0, 4, 3, 4),
+                    ForeColor = RForm.foreMain,
+                    BackColor = Color.Transparent
                 };
+
+                toolTip.SetToolTip(rowPanel, tip);
+                toolTip.SetToolTip(pic, tip);
                 toolTip.SetToolTip(lbl, tip);
-                return lbl;
+
+                rowPanel.Controls.Add(pic, 0, 0);
+                rowPanel.Controls.Add(lbl, 1, 0);
+
+                return rowPanel;
             }
 
             RComboBox MakeCombo(Dictionary<string, string> items, string selectedKey, Action<string> onSelect, string tip)
@@ -1000,6 +1040,10 @@ namespace GHelper
                 { "rog_cyber", "ROG Cyber Red" },
                 { "nebula_blue", "Nebula Midnight Blue" },
                 { "amoled", "AMOLED Pitch Black" },
+                { "emerald_matrix", "Emerald Stealth Matrix" },
+                { "solar_amber", "Solaris Cyberpunk Gold" },
+                { "vapor_violet", "Vaporwave Twilight Violet" },
+                { "frost_titanium", "Frost Titanium Silver" },
                 { "light", "Clean Daylight Light" }
             };
             string curStyle = AppConfig.GetString("theme")?.ToLower() ?? "default";
@@ -1015,10 +1059,15 @@ namespace GHelper
             {
                 { "Segoe UI", "Segoe UI (Default)" },
                 { "Segoe UI Semibold", "Segoe UI Semibold" },
-                { "Bahnschrift", "Bahnschrift (Modern Geometric)" },
+                { "Segoe UI Variable Display", "Segoe UI Variable (Win11)" },
+                { "Bahnschrift", "Bahnschrift (Geometric Sans)" },
+                { "Cascadia Code", "Cascadia Code (Modern Terminal)" },
+                { "Cascadia Mono", "Cascadia Mono" },
                 { "Consolas", "Consolas (Technical Mono)" },
                 { "Verdana", "Verdana (High Legibility)" },
                 { "Calibri", "Calibri (Clean Sans)" },
+                { "Arial", "Arial (Clean Universal)" },
+                { "Century Gothic", "Century Gothic (Wide Geometric)" },
                 { "Trebuchet MS", "Trebuchet MS" }
             };
             string curFont = AppConfig.GetString("ui_font_family") ?? "Segoe UI";
@@ -1031,10 +1080,15 @@ namespace GHelper
             // 3. Font Scale / Size
             var scaleMap = new Dictionary<string, string>
             {
+                { "85", "Extra Compact (85%)" },
                 { "90", "Compact (90%)" },
+                { "95", "Dense (95%)" },
                 { "100", "Default (100%)" },
+                { "105", "Balanced (105%)" },
                 { "108", "Comfortable (108%)" },
-                { "115", "Large (115%)" }
+                { "112", "Medium-Large (112%)" },
+                { "115", "Large (115%)" },
+                { "120", "Extra Large (120%)" }
             };
             string curScale = AppConfig.Get("ui_font_scale", 100).ToString();
             var cbScale = MakeCombo(scaleMap, curScale, val =>
@@ -1049,10 +1103,14 @@ namespace GHelper
             // 4. Button Corner Shape
             var radiusMap = new Dictionary<string, string>
             {
-                { "8", "Rounded (8px Default)" },
-                { "14", "Soft Pill (14px)" },
+                { "1", "Sharp Rectangular (1px)" },
                 { "4", "Subtle (4px)" },
-                { "1", "Sharp Rectangular (1px)" }
+                { "6", "Medium (6px)" },
+                { "8", "Rounded (8px Default)" },
+                { "10", "Smooth (10px)" },
+                { "12", "Curved (12px)" },
+                { "14", "Soft Pill (14px)" },
+                { "18", "Full Capsule (18px)" }
             };
             string curRadius = AppConfig.Get("ui_button_radius", 8).ToString();
             var cbRadius = MakeCombo(radiusMap, curRadius, val =>
@@ -1071,7 +1129,11 @@ namespace GHelper
                 { "1", "Live CPU Temperature (°C)" },
                 { "2", "Live Battery Power Draw (W)" },
                 { "3", "Live GPU Temperature (°C)" },
-                { "4", "Live Max Fan Speed (kRPM)" }
+                { "4", "Live Max Fan Speed (kRPM)" },
+                { "5", "Live RAM Usage (%)" },
+                { "6", "Live Battery Capacity (%)" },
+                { "7", "Live CPU Package Power (W)" },
+                { "8", "Live Mid Fan Speed (RPM)" }
             };
             string curTray = ((int)FlowFeaturesHelper.GetTrayMode()).ToString();
             var cbTray = MakeCombo(trayMap, curTray, val =>
@@ -1120,22 +1182,137 @@ namespace GHelper
             panelBackupBtns.Controls.Add(btnExport, 0, 0);
             panelBackupBtns.Controls.Add(btnImport, 1, 0);
 
-            table.Controls.Add(MakeRowLabel("🎨 UI Theme & Color Style:", "Choose a dark, cyber, midnight blue, AMOLED, or daylight theme."), 0, 0);
+            table.Controls.Add(MakeRowHeader("UI Theme & Color Style:", "Choose a dark, cyber, midnight blue, emerald, amber, violet, titanium, AMOLED, or daylight theme.",
+                (g, r, fg) =>
+                {
+                    using var pen = new Pen(fg, 1.6f);
+                    float w = r.Width;
+                    float h = r.Height;
+                    using var path = new GraphicsPath();
+                    path.AddBezier(r.Left + w * 0.15f, r.Top + h * 0.85f,
+                                   r.Left, r.Top + h * 0.35f,
+                                   r.Left + w * 0.25f, r.Top,
+                                   r.Left + w * 0.75f, r.Top + h * 0.1f);
+                    path.AddBezier(r.Left + w * 0.75f, r.Top + h * 0.1f,
+                                   r.Right, r.Top + h * 0.4f,
+                                   r.Right - w * 0.15f, r.Bottom,
+                                   r.Left + w * 0.5f, r.Bottom - h * 0.15f);
+                    path.AddBezier(r.Left + w * 0.5f, r.Bottom - h * 0.15f,
+                                   r.Left + w * 0.4f, r.Bottom,
+                                   r.Left + w * 0.25f, r.Bottom,
+                                   r.Left + w * 0.15f, r.Top + h * 0.85f);
+                    g.DrawPath(pen, path);
+
+                    float dotR = Math.Max(2f, w * 0.13f);
+                    using var bRed = new SolidBrush(Color.FromArgb(235, 75, 75));
+                    using var bBlue = new SolidBrush(Color.FromArgb(60, 160, 245));
+                    using var bGold = new SolidBrush(Color.FromArgb(245, 190, 50));
+                    using var bGreen = new SolidBrush(Color.FromArgb(50, 205, 130));
+                    g.FillEllipse(bRed, r.Left + w * 0.28f, r.Top + h * 0.22f, dotR, dotR);
+                    g.FillEllipse(bBlue, r.Left + w * 0.52f, r.Top + h * 0.18f, dotR, dotR);
+                    g.FillEllipse(bGold, r.Left + w * 0.72f, r.Top + h * 0.35f, dotR, dotR);
+                    g.FillEllipse(bGreen, r.Left + w * 0.65f, r.Top + h * 0.60f, dotR, dotR);
+                }), 0, 0);
             table.Controls.Add(cbStyle, 1, 0);
 
-            table.Controls.Add(MakeRowLabel("🔤 Interface Font Family:", "Select your preferred font family across all G-Helper windows."), 0, 1);
+            table.Controls.Add(MakeRowHeader("Interface Font Family:", "Select your preferred font family across all G-Helper windows.",
+                (g, r, fg) =>
+                {
+                    using var fLarge = new Font("Segoe UI", r.Height * 0.62f, FontStyle.Bold, GraphicsUnit.Pixel);
+                    using var fSmall = new Font("Segoe UI", r.Height * 0.46f, FontStyle.Regular, GraphicsUnit.Pixel);
+                    using var brush = new SolidBrush(fg);
+                    using var sf = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Center };
+                    g.DrawString("A", fLarge, brush, new PointF(r.Left, r.Top + r.Height * 0.45f), sf);
+                    g.DrawString("a", fSmall, brush, new PointF(r.Left + r.Width * 0.50f, r.Top + r.Height * 0.55f), sf);
+                }), 0, 1);
             table.Controls.Add(cbFont, 1, 1);
 
-            table.Controls.Add(MakeRowLabel("🔍 Text Scale & Readability:", "Scale UI text size from Compact (90%) to Large (115%)."), 0, 2);
+            table.Controls.Add(MakeRowHeader("Text Scale & Readability:", "Scale UI text size from Extra Compact (85%) to Extra Large (120%).",
+                (g, r, fg) =>
+                {
+                    using var pen = new Pen(fg, 1.6f);
+                    float w = r.Width;
+                    float h = r.Height;
+                    float lensR = w * 0.65f;
+                    var lensRect = new RectangleF(r.Left, r.Top, lensR, lensR);
+                    g.DrawEllipse(pen, lensRect);
+
+                    using var handlePen = new Pen(fg, 2.4f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+                    g.DrawLine(handlePen, r.Left + lensR * 0.85f, r.Top + lensR * 0.85f, r.Right - 1, r.Bottom - 1);
+
+                    using var f = new Font("Segoe UI", lensR * 0.54f, FontStyle.Bold, GraphicsUnit.Pixel);
+                    using var b = new SolidBrush(fg);
+                    using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                    g.DrawString("A", f, b, new RectangleF(lensRect.X, lensRect.Y + 0.5f, lensRect.Width, lensRect.Height), sf);
+                }), 0, 2);
             table.Controls.Add(cbScale, 1, 2);
 
-            table.Controls.Add(MakeRowLabel("⬜ Button Corner Style:", "Adjust the corner radius of buttons and cards."), 0, 3);
+            table.Controls.Add(MakeRowHeader("Button Corner Style:", "Adjust the corner radius of buttons and cards from Sharp (1px) to Capsule (18px).",
+                (g, r, fg) =>
+                {
+                    using var pen = new Pen(fg, 1.6f);
+                    using var accentPen = new Pen(Color.FromArgb(58, 174, 239), 2f);
+                    float w = r.Width;
+                    float h = r.Height;
+                    var cardRect = new RectangleF(r.Left + 1.5f, r.Top + 1.5f, w - 3, h - 3);
+                    float rad = cardRect.Width * 0.35f;
+                    using var path = new GraphicsPath();
+                    path.AddArc(cardRect.Right - rad * 2, cardRect.Top, rad * 2, rad * 2, 270, 90);
+                    path.AddLine(cardRect.Right, cardRect.Top + rad, cardRect.Right, cardRect.Bottom - rad);
+                    path.AddArc(cardRect.Right - rad * 2, cardRect.Bottom - rad * 2, rad * 2, rad * 2, 0, 90);
+                    path.AddLine(cardRect.Right - rad, cardRect.Bottom, cardRect.Left + rad, cardRect.Bottom);
+                    path.AddArc(cardRect.Left, cardRect.Bottom - rad * 2, rad * 2, rad * 2, 90, 90);
+                    path.AddLine(cardRect.Left, cardRect.Bottom - rad, cardRect.Left, cardRect.Top + rad);
+                    path.AddArc(cardRect.Left, cardRect.Top, rad * 2, rad * 2, 180, 90);
+                    path.CloseFigure();
+                    g.DrawPath(pen, path);
+
+                    g.DrawArc(accentPen, cardRect.Left, cardRect.Top, rad * 2, rad * 2, 180, 90);
+                }), 0, 3);
             table.Controls.Add(cbRadius, 1, 3);
 
-            table.Controls.Add(MakeRowLabel("📊 System Tray Icon Display:", "Show live CPU temp, GPU temp, Battery Wattage, or Fan RPM in the Windows system tray."), 0, 4);
+            table.Controls.Add(MakeRowHeader("System Tray Icon Display:", "Show live CPU temp, GPU temp, Battery Wattage, Fan RPM, RAM, or CPU Power in the Windows system tray.",
+                (g, r, fg) =>
+                {
+                    using var pen = new Pen(fg, 1.5f);
+                    using var accentPen = new Pen(Color.FromArgb(6, 180, 138), 1.8f);
+                    float w = r.Width;
+                    float h = r.Height;
+                    var box = new RectangleF(r.Left + 1, r.Top + 1, w - 2, h - 3);
+                    g.DrawRectangle(pen, box.X, box.Y, box.Width, box.Height);
+
+                    PointF[] pulse = [
+                        new PointF(box.Left + 2, box.Top + box.Height * 0.6f),
+                        new PointF(box.Left + box.Width * 0.28f, box.Top + box.Height * 0.6f),
+                        new PointF(box.Left + box.Width * 0.42f, box.Top + box.Height * 0.2f),
+                        new PointF(box.Left + box.Width * 0.58f, box.Top + box.Height * 0.85f),
+                        new PointF(box.Left + box.Width * 0.72f, box.Top + box.Height * 0.45f),
+                        new PointF(box.Right - 2, box.Top + box.Height * 0.45f)
+                    ];
+                    g.DrawLines(accentPen, pulse);
+                }), 0, 4);
             table.Controls.Add(cbTray, 1, 4);
 
-            table.Controls.Add(MakeRowLabel("💾 Settings & Profiles Backup:", "Export or restore your complete G-Helper configuration."), 0, 5);
+            table.Controls.Add(MakeRowHeader("Settings & Profiles Backup:", "Export or restore your complete G-Helper configuration.",
+                (g, r, fg) =>
+                {
+                    using var pen = new Pen(fg, 1.5f);
+                    using var accentBrush = new SolidBrush(Color.FromArgb(58, 174, 239));
+                    float w = r.Width;
+                    float h = r.Height;
+                    var dRect = new RectangleF(r.Left + 1, r.Top + 1, w - 2, h - 2);
+                    using var path = new GraphicsPath();
+                    float clip = w * 0.22f;
+                    path.AddLine(dRect.Left, dRect.Top, dRect.Right - clip, dRect.Top);
+                    path.AddLine(dRect.Right - clip, dRect.Top, dRect.Right, dRect.Top + clip);
+                    path.AddLine(dRect.Right, dRect.Top + clip, dRect.Right, dRect.Bottom);
+                    path.AddLine(dRect.Right, dRect.Bottom, dRect.Left, dRect.Bottom);
+                    path.CloseFigure();
+                    g.DrawPath(pen, path);
+
+                    g.FillRectangle(accentBrush, dRect.Left + w * 0.25f, dRect.Top + 2, w * 0.42f, h * 0.32f);
+                    g.DrawRectangle(pen, dRect.Left + w * 0.18f, dRect.Top + h * 0.52f, w * 0.64f, h * 0.38f);
+                }), 0, 5);
             table.Controls.Add(panelBackupBtns, 1, 5);
 
             _syncAppearanceCombos = () =>
