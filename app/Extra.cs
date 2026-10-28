@@ -617,7 +617,7 @@ namespace GHelper
             checkKeystoneSound.CheckedChanged += CheckKeystoneSoundCheckedChanged;
 
             // Add Convertible, Stylus & Smart Battery Automation checkboxes to panelSettings
-            RCheckBox CreateExtraCheckBox(string text, bool isChecked, EventHandler onChanged, string tip)
+            RCheckBox CreateExtraCheckBox(string text, bool isChecked, EventHandler onChanged, string tip, Panel? targetPanel = null)
             {
                 var cb = new RCheckBox
                 {
@@ -633,15 +633,84 @@ namespace GHelper
                 };
                 cb.CheckedChanged += onChanged;
                 toolTip.SetToolTip(cb, tip);
-                panelSettings.Controls.Add(cb);
+                (targetPanel ?? panelSettings).Controls.Add(cb);
                 return cb;
             }
+
+            // Move checkTopmost to panelAppearance for clean tab separation
+            panelSettings.Controls.Remove(checkTopmost);
+            panelAppearance.Controls.Add(checkTopmost);
+
+            // Tab 4 (UI & Appearance): UI, Graphs & Alerts
+            CreateExtraCheckBox(
+                "Show Live 60s Sensor Sparkline Graph in Main Window",
+                AppConfig.Is("show_main_sparkline"),
+                (s, e) =>
+                {
+                    bool en = ((RCheckBox)s!).Checked;
+                    AppConfig.Set("show_main_sparkline", en ? 1 : 0);
+                    Program.settingsForm?.SetMainSparklineVisible(en);
+                    Program.settingsForm?.SetContextMenu();
+                },
+                "Displays a live 60-second rolling sparkline graph of CPU/GPU temperatures or Battery Wattage in the main G-Helper window.",
+                panelAppearance
+            );
+
+            CreateExtraCheckBox(
+                "Smart Battery Alert toast when battery reaches Charge Limit target",
+                AppConfig.Is("battery_alert_enabled"),
+                (s, e) =>
+                {
+                    bool en = ((RCheckBox)s!).Checked;
+                    AppConfig.Set("battery_alert_enabled", en ? 1 : 0);
+                    if (en && SettingsForm.sensorTimer != null) SettingsForm.sensorTimer.Enabled = true;
+                    Program.settingsForm?.SetContextMenu();
+                },
+                "Notifies you with a toast alert once per charge cycle when your battery reaches its configured Charge Limit (e.g. 80%, 85%, or 100%).",
+                panelAppearance
+            );
+
+            CreateExtraCheckBox(
+                "Smart Thermal Alert toast when CPU ≥ 92°C or GPU ≥ 88°C sustained",
+                AppConfig.Is("thermal_alert_enabled"),
+                (s, e) =>
+                {
+                    bool en = ((RCheckBox)s!).Checked;
+                    AppConfig.Set("thermal_alert_enabled", en ? 1 : 0);
+                    if (en && SettingsForm.sensorTimer != null) SettingsForm.sensorTimer.Enabled = true;
+                    Program.settingsForm?.SetContextMenu();
+                },
+                "Displays a non-intrusive toast alert with a 5-minute cooldown if CPU or GPU temperature remains critically high.",
+                panelAppearance
+            );
+
+            CreateExtraCheckBox(
+                "Auto Creator Studio Profile (512-Zone Mini-LED + 165Hz in Photoshop / Premiere / Resolve / Blender)",
+                GameWatcher.IsCreatorAppsEnabled(),
+                (s, e) => GameWatcher.ToggleCreatorApps(((RCheckBox)s!).Checked),
+                "Automatically enables 512-Zone Mini-LED local dimming and maximum refresh rate when creative applications are in the foreground on AC power.",
+                panelAppearance
+            );
 
             CreateExtraCheckBox(
                 "Auto Windows Power Saver at ≤ 20% battery",
                 AppConfig.Get("auto_low_battery_saver", 1) == 1,
                 (s, e) => AppConfig.Set("auto_low_battery_saver", ((RCheckBox)s!).Checked ? 1 : 0),
-                "Automatically enables Windows Power Saver & Energy Saver when battery drops to 20% or below while discharging."
+                "Automatically enables Windows Power Saver & Energy Saver when battery drops to 20% or below while discharging.",
+                panelAppearance
+            );
+
+            // Tab 3 (System): Flow X16 Posture & Hardware Automations
+            CreateExtraCheckBox(
+                "Show Convertible Posture Touch Bar when folded into Tablet or Tent mode",
+                AppConfig.IsNotFalse("posture_osd_enabled"),
+                (s, e) =>
+                {
+                    bool en = ((RCheckBox)s!).Checked;
+                    AppConfig.Set("posture_osd_enabled", en ? 1 : 0);
+                    Program.settingsForm?.SetContextMenu();
+                },
+                "Displays a sleek, touch-friendly floating mini bar for 6 seconds when folding into Tablet or Tent mode with 1-tap Touch/Pen, Rotate, Silent, 1Z/512Z, and Brightness controls."
             );
 
             CreateExtraCheckBox(
@@ -673,39 +742,6 @@ namespace GHelper
             }
 
             CreateExtraCheckBox(
-                "Auto Creator Studio Profile (512-Zone Mini-LED + 165Hz in Photoshop / Premiere / Resolve / Blender)",
-                GameWatcher.IsCreatorAppsEnabled(),
-                (s, e) => GameWatcher.ToggleCreatorApps(((RCheckBox)s!).Checked),
-                "Automatically enables 512-Zone Mini-LED local dimming and maximum refresh rate when creative applications are in the foreground on AC power."
-            );
-
-            CreateExtraCheckBox(
-                "Smart Thermal Alert toast when CPU ≥ 92°C or GPU ≥ 88°C sustained",
-                AppConfig.Is("thermal_alert_enabled"),
-                (s, e) =>
-                {
-                    bool en = ((RCheckBox)s!).Checked;
-                    AppConfig.Set("thermal_alert_enabled", en ? 1 : 0);
-                    if (en && SettingsForm.sensorTimer != null) SettingsForm.sensorTimer.Enabled = true;
-                    Program.settingsForm?.SetContextMenu();
-                },
-                "Displays a non-intrusive toast alert with a 5-minute cooldown if CPU or GPU temperature remains critically high."
-            );
-
-            CreateExtraCheckBox(
-                "Smart Battery Alert toast when battery reaches Charge Limit target",
-                AppConfig.Is("battery_alert_enabled"),
-                (s, e) =>
-                {
-                    bool en = ((RCheckBox)s!).Checked;
-                    AppConfig.Set("battery_alert_enabled", en ? 1 : 0);
-                    if (en && SettingsForm.sensorTimer != null) SettingsForm.sensorTimer.Enabled = true;
-                    Program.settingsForm?.SetContextMenu();
-                },
-                "Notifies you with a toast alert once per charge cycle when your battery reaches its configured Charge Limit (e.g. 80%, 85%, or 100%)."
-            );
-
-            CreateExtraCheckBox(
                 "Wi-Fi Low-Latency Gaming Mode (eliminates MediaTek/Intel Wi-Fi power-saving ping spikes)",
                 WifiLatencyHelper.IsLowLatencyActive(),
                 (s, e) =>
@@ -729,33 +765,8 @@ namespace GHelper
                 "Automatically switches Wi-Fi to Low-Latency Maximum Performance mode while gaming and restores Eco power saving afterwards."
             );
 
-            CreateExtraCheckBox(
-                "Show Convertible Posture Touch Bar when folded into Tablet or Tent mode",
-                AppConfig.IsNotFalse("posture_osd_enabled"),
-                (s, e) =>
-                {
-                    bool en = ((RCheckBox)s!).Checked;
-                    AppConfig.Set("posture_osd_enabled", en ? 1 : 0);
-                    Program.settingsForm?.SetContextMenu();
-                },
-                "Displays a sleek, touch-friendly floating mini bar for 6 seconds when folding into Tablet or Tent mode with 1-tap Touch/Pen, Rotate, Silent, 1Z/512Z, and Brightness controls."
-            );
-
-            CreateExtraCheckBox(
-                "Show Live 60s Sensor Sparkline Graph in Main Window",
-                AppConfig.Is("show_main_sparkline"),
-                (s, e) =>
-                {
-                    bool en = ((RCheckBox)s!).Checked;
-                    AppConfig.Set("show_main_sparkline", en ? 1 : 0);
-                    Program.settingsForm?.SetMainSparklineVisible(en);
-                    Program.settingsForm?.SetContextMenu();
-                },
-                "Displays a live 60-second rolling sparkline graph of CPU/GPU temperatures or Battery Wattage in the main G-Helper window."
-            );
-
-            // Keep Appearance & Backup card at the very top of the System tab
-            panelSettings.Controls.SetChildIndex(panelTheme, panelSettings.Controls.Count - 1);
+            // Keep Appearance & Backup card at the very top of the UI & Style tab
+            panelAppearance.Controls.SetChildIndex(panelTheme, panelAppearance.Controls.Count - 1);
 
             toolTip.SetToolTip(checkAutoToggleClamshellMode, Properties.Strings.ClamshellModeTooltip);
             toolTip.SetToolTip(checkNVPlatform, Properties.Strings.NVPlatformTooltip);
@@ -768,6 +779,8 @@ namespace GHelper
             toolTip.SetToolTip(checkGpuApps, "Automatically terminates non-essential background apps holding onto the discrete GPU before switching to Eco mode.");
             toolTip.SetToolTip(checkBootSound, "Enables or disables the ASUS ROG startup sound effect in BIOS.");
             toolTip.SetToolTip(checkXGMBattery, "Automatically caps laptop battery charge at 80% while docked to the ROG XG Mobile to prevent heat/voltage wear.");
+            toolTip.SetToolTip(pictureScan, "Scan ASUS ACPI BIOS registers and export hardware diagnostic dump (scan.txt)");
+            toolTip.SetToolTip(pictureLog, "Open G-Helper application event log (log.txt)");
             toolTip.SetToolTip(checkXGMMidBoost, "Syncs the laptop's 3rd (Middle/System) fan curve to match the CPU fan curve while the XG Mobile is docked.");
             toolTip.SetToolTip(checkXGMIndepFan, "Applies your custom XG Mobile fan curve whenever the XG Mobile is connected, even if laptop BIOS custom fan curves are unchecked.");
             toolTip.SetToolTip(checkXGMShowFan, "Always displays the XG Mobile fan curve chart in Fans & Power so you can pre-configure curves while unplugged.");
@@ -783,8 +796,9 @@ namespace GHelper
             buttonTabLighting.Click += (s, e) => ShowTab(1);
             buttonTabPower.Click += (s, e) => ShowTab(2);
             buttonTabSystem.Click += (s, e) => ShowTab(3);
+            buttonTabAppearance.Click += (s, e) => ShowTab(4);
 
-            int savedTab = Math.Clamp(AppConfig.Get("extra_tab", 0), 0, 3);
+            int savedTab = Math.Clamp(AppConfig.Get("extra_tab", 0), 0, 4);
             tableTabs.BringToFront();
             ShowTab(savedTab);
 
@@ -829,11 +843,13 @@ namespace GHelper
                 buttonTabLighting.Activated = (index == 1);
                 buttonTabPower.Activated = (index == 2);
                 buttonTabSystem.Activated = (index == 3);
+                buttonTabAppearance.Activated = (index == 4);
 
                 buttonTabKeyboard.BorderColor = RForm.colorStandard;
                 buttonTabLighting.BorderColor = RForm.colorStandard;
                 buttonTabPower.BorderColor = RForm.colorEco;
                 buttonTabSystem.BorderColor = RForm.colorTurbo;
+                buttonTabAppearance.BorderColor = RForm.colorCustom;
 
                 // Tab 0: Keyboard
                 panelBindingsHeader.Visible = (index == 0);
@@ -851,12 +867,16 @@ namespace GHelper
                 panelACPI.Visible = (index == 2 && _hasACPI);
 
                 // Tab 3: System
+                panelServices.Visible = (index == 3);
                 panelSettingsHeader.Visible = (index == 3);
                 panelSettings.Visible = (index == 3);
                 panelOptimalBrightness.Visible = (index == 3 && _hasOptimalBrightness);
-                panelServices.Visible = (index == 3);
 
-                if (index == 3)
+                // Tab 4: UI & Style
+                panelAppearanceHeader.Visible = (index == 4);
+                panelAppearance.Visible = (index == 4);
+
+                if (index == 4)
                 {
                     _syncAppearanceCombos?.Invoke();
                 }

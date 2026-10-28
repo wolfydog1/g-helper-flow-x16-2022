@@ -52,6 +52,10 @@ namespace GHelper
             checkJitter = new GHelper.UI.RCheckBox();
             checkShadow = new GHelper.UI.RCheckBox();
             checkHdrBadge = new GHelper.UI.RCheckBox();
+            checkFrametime = new GHelper.UI.RCheckBox();
+            checkClock = new GHelper.UI.RCheckBox();
+            checkVram = new GHelper.UI.RCheckBox();
+            checkMidFan = new GHelper.UI.RCheckBox();
             panelSliders = new Panel();
             labelSizeTitle = new Label();
             labelSize = new Label();
@@ -257,16 +261,21 @@ namespace GHelper
             tableBlocks.Controls.Add(checkJitter, 1, 3);
             tableBlocks.Controls.Add(checkShadow, 2, 3);
             tableBlocks.Controls.Add(checkHdrBadge, 0, 4);
+            tableBlocks.Controls.Add(checkFrametime, 1, 4);
+            tableBlocks.Controls.Add(checkClock, 2, 4);
+            tableBlocks.Controls.Add(checkVram, 0, 5);
+            tableBlocks.Controls.Add(checkMidFan, 1, 5);
             tableBlocks.Dock = DockStyle.Top;
             tableBlocks.Location = new Point(10, 160);
             tableBlocks.Name = "tableBlocks";
-            tableBlocks.RowCount = 5;
+            tableBlocks.RowCount = 6;
             tableBlocks.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));
             tableBlocks.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));
             tableBlocks.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));
             tableBlocks.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));
             tableBlocks.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));
-            tableBlocks.Size = new Size(880, 230);
+            tableBlocks.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));
+            tableBlocks.Size = new Size(880, 276);
             tableBlocks.TabIndex = 2;
             //
             // checkFps
@@ -412,6 +421,50 @@ namespace GHelper
             checkHdrBadge.Size = new Size(200, 44);
             checkHdrBadge.TabIndex = 12;
             checkHdrBadge.Text = "HDR / Mini-LED Badge";
+            // 
+            // checkFrametime
+            // 
+            checkFrametime.Anchor = AnchorStyles.Left;
+            checkFrametime.AutoSize = true;
+            checkFrametime.Location = new Point(303, 188);
+            checkFrametime.Margin = new Padding(10, 2, 4, 2);
+            checkFrametime.Name = "checkFrametime";
+            checkFrametime.Size = new Size(200, 44);
+            checkFrametime.TabIndex = 13;
+            checkFrametime.Text = "Frametime (ms)";
+            // 
+            // checkClock
+            // 
+            checkClock.Anchor = AnchorStyles.Left;
+            checkClock.AutoSize = true;
+            checkClock.Location = new Point(596, 188);
+            checkClock.Margin = new Padding(10, 2, 4, 2);
+            checkClock.Name = "checkClock";
+            checkClock.Size = new Size(200, 44);
+            checkClock.TabIndex = 14;
+            checkClock.Text = "System Clock";
+            // 
+            // checkVram
+            // 
+            checkVram.Anchor = AnchorStyles.Left;
+            checkVram.AutoSize = true;
+            checkVram.Location = new Point(10, 234);
+            checkVram.Margin = new Padding(10, 2, 4, 2);
+            checkVram.Name = "checkVram";
+            checkVram.Size = new Size(200, 44);
+            checkVram.TabIndex = 15;
+            checkVram.Text = "VRAM Usage";
+            // 
+            // checkMidFan
+            // 
+            checkMidFan.Anchor = AnchorStyles.Left;
+            checkMidFan.AutoSize = true;
+            checkMidFan.Location = new Point(303, 234);
+            checkMidFan.Margin = new Padding(10, 2, 4, 2);
+            checkMidFan.Name = "checkMidFan";
+            checkMidFan.Size = new Size(200, 44);
+            checkMidFan.TabIndex = 16;
+            checkMidFan.Text = "Mid Fan RPM";
             //
             // panelSliders
             //
@@ -753,6 +806,10 @@ namespace GHelper
         private UI.RCheckBox checkJitter;
         private UI.RCheckBox checkShadow;
         private UI.RCheckBox checkHdrBadge;
+        private UI.RCheckBox checkFrametime;
+        private UI.RCheckBox checkClock;
+        private UI.RCheckBox checkVram;
+        private UI.RCheckBox checkMidFan;
         private Panel panelSliders;
         private Label labelSizeTitle;
         private Label labelSize;

@@ -33,6 +33,10 @@ namespace GHelper
             checkJitter.Text = "Frame Pacing";
             checkShadow.Text = "Text Shadow";
             checkHdrBadge.Text = "HDR / 512Z Badge";
+            checkFrametime.Text = "Frametime (ms)";
+            checkClock.Text = "System Clock";
+            checkVram.Text = "VRAM Usage";
+            checkMidFan.Text = "Mid Fan RPM";
             labelSizeTitle.Text = Properties.Strings.OverlaySize;
             labelAlphaTitle.Text = Properties.Strings.OverlayTransparency;
             labelHotkeys.Text = "•  Ctrl + Shift + Alt + O - Toggle overlay\n•  Ctrl + Shift + Alt + Mouse Drag - Move overlay\n•  Ctrl + Shift + Alt + Mouse Click - Switch mode\n•  Ctrl + Shift + Alt + Wheel - Resize overlay\n•  Ctrl + Shift + Alt + Wheel Click - Reset size";
@@ -66,6 +70,10 @@ namespace GHelper
                 (checkJitter, "overlay_show_jitter"),
                 (checkShadow, "overlay_text_shadow"),
                 (checkHdrBadge, "overlay_show_hdr_badge"),
+                (checkFrametime, "overlay_show_frametime"),
+                (checkClock, "overlay_show_clock"),
+                (checkVram, "overlay_show_vram"),
+                (checkMidFan, "overlay_show_mid_fan"),
             };
 
             checkEnable.Checked = AppConfig.IsOverlay();

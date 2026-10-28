@@ -1124,7 +1124,11 @@ namespace GHelper
                     StripWidth = 0,
                     BorderColor = targetColor,
                     BorderDashStyle = ChartDashStyle.Dash,
-                    BorderWidth = 2
+                    BorderWidth = 2,
+                    Text = $"{Math.Round(clampedTemp)}°",
+                    TextAlignment = StringAlignment.Far,
+                    TextLineAlignment = StringAlignment.Near,
+                    ForeColor = targetColor
                 };
                 stripLines.Add(line);
                 chart.Invalidate();
@@ -1133,6 +1137,8 @@ namespace GHelper
             {
                 stripLines[0].IntervalOffset = clampedTemp;
                 stripLines[0].BorderColor = targetColor;
+                stripLines[0].Text = $"{Math.Round(clampedTemp)}°";
+                stripLines[0].ForeColor = targetColor;
                 chart.Invalidate();
             }
         }
@@ -1327,10 +1333,15 @@ namespace GHelper
 
         private void SavePower()
         {
+            Color GetPwrColor(int w) => w >= 75 ? RForm.colorTurbo : (w >= 40 ? RForm.colorStandard : RForm.colorEco);
             labelTotal.Text = trackTotal.Value.ToString() + "W";
+            labelTotal.ForeColor = GetPwrColor(trackTotal.Value);
             labelSlow.Text = trackSlow.Value.ToString() + "W";
+            labelSlow.ForeColor = GetPwrColor(trackSlow.Value);
             labelCPU.Text = trackCPU.Value.ToString() + "W";
+            labelCPU.ForeColor = GetPwrColor(trackCPU.Value);
             labelFast.Text = trackFast.Value.ToString() + "W";
+            labelFast.ForeColor = GetPwrColor(trackFast.Value);
 
             labelCrossLoad.Text = trackCrossLoad.Value.ToString() + "W";
             labelGPUtoCPU.Text = trackGPUtoCPU.Value.ToString() + "W";
@@ -1467,9 +1478,15 @@ namespace GHelper
         void LoadProfile(Series series, AsusFan device, bool reset = false)
         {
 
-            series.ChartType = SeriesChartType.Line;
+            bool smooth = AppConfig.Is("smooth_fan_curves");
+            series.ChartType = smooth ? SeriesChartType.Spline : SeriesChartType.Line;
+            series.BorderWidth = 3;
             series.MarkerSize = 10;
             series.MarkerStyle = MarkerStyle.Circle;
+            series.MarkerBorderColor = RForm.formBack;
+            series.MarkerBorderWidth = 2;
+            series.ShadowOffset = 1;
+            series.ShadowColor = Color.FromArgb(40, 0, 0, 0);
 
             series.Points.Clear();
 
@@ -2147,6 +2164,21 @@ namespace GHelper
                 UpdateSensors();
             };
             menu.Items.Add(itemShiftDown);
+
+            var itemSmooth = new ToolStripMenuItem("Smooth Spline Curve Visuals")
+            {
+                Checked = AppConfig.Is("smooth_fan_curves"),
+                Margin = pad
+            };
+            itemSmooth.Click += (s, e) =>
+            {
+                AppConfig.Set("smooth_fan_curves", !itemSmooth.Checked ? 1 : 0);
+                LoadProfile(seriesCPU, AsusFan.CPU);
+                LoadProfile(seriesGPU, AsusFan.GPU);
+                if (chartMid.Visible) LoadProfile(seriesMid, AsusFan.Mid);
+                if (chartXGM.Visible) LoadProfile(seriesXGM, AsusFan.XGM);
+            };
+            menu.Items.Add(itemSmooth);
 
             menu.Items.Add("-");
 

@@ -37,6 +37,11 @@ namespace GHelper
             buttonTabLighting = new RButton();
             buttonTabPower = new RButton();
             buttonTabSystem = new RButton();
+            buttonTabAppearance = new RButton();
+            panelAppearanceHeader = new Panel();
+            pictureAppearance = new PictureBox();
+            labelAppearance = new Label();
+            panelAppearance = new Panel();
             panelServices = new Panel();
             pictureService = new PictureBox();
             labelServices = new Label();
@@ -222,15 +227,17 @@ namespace GHelper
             // 
             // tableTabs
             // 
-            tableTabs.ColumnCount = 4;
-            tableTabs.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
-            tableTabs.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
-            tableTabs.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
-            tableTabs.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+            tableTabs.ColumnCount = 5;
+            tableTabs.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20F));
+            tableTabs.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20F));
+            tableTabs.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20F));
+            tableTabs.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20F));
+            tableTabs.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20F));
             tableTabs.Controls.Add(buttonTabKeyboard, 0, 0);
             tableTabs.Controls.Add(buttonTabLighting, 1, 0);
             tableTabs.Controls.Add(buttonTabPower, 2, 0);
             tableTabs.Controls.Add(buttonTabSystem, 3, 0);
+            tableTabs.Controls.Add(buttonTabAppearance, 4, 0);
             tableTabs.Dock = DockStyle.Top;
             tableTabs.Location = new Point(15, 15);
             tableTabs.Margin = new Padding(0, 0, 0, 10);
@@ -297,6 +304,20 @@ namespace GHelper
             buttonTabSystem.TabIndex = 3;
             buttonTabSystem.Text = "⚙ System";
             buttonTabSystem.UseVisualStyleBackColor = false;
+            // 
+            // buttonTabAppearance
+            // 
+            buttonTabAppearance.BorderColor = Color.FromArgb(230, 0, 35);
+            buttonTabAppearance.Dock = DockStyle.Fill;
+            buttonTabAppearance.FlatStyle = FlatStyle.Flat;
+            buttonTabAppearance.FlatAppearance.BorderSize = 0;
+            buttonTabAppearance.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            buttonTabAppearance.Margin = new Padding(3, 2, 3, 2);
+            buttonTabAppearance.Name = "buttonTabAppearance";
+            buttonTabAppearance.Size = new Size(185, 42);
+            buttonTabAppearance.TabIndex = 4;
+            buttonTabAppearance.Text = "🎨 UI & Style";
+            buttonTabAppearance.UseVisualStyleBackColor = false;
             
             // 
             // panelServices
@@ -1323,6 +1344,52 @@ namespace GHelper
             panelSettingsHeader.Size = new Size(949, 51);
             panelSettingsHeader.TabIndex = 45;
             // 
+            // panelAppearanceHeader
+            // 
+            panelAppearanceHeader.AccessibleRole = AccessibleRole.Grouping;
+            panelAppearanceHeader.AutoSize = true;
+            panelAppearanceHeader.BackColor = SystemColors.ControlLight;
+            panelAppearanceHeader.Controls.Add(pictureAppearance);
+            panelAppearanceHeader.Controls.Add(labelAppearance);
+            panelAppearanceHeader.Dock = DockStyle.Top;
+            panelAppearanceHeader.Location = new Point(15, 1000);
+            panelAppearanceHeader.Name = "panelAppearanceHeader";
+            panelAppearanceHeader.Padding = new Padding(11, 5, 11, 5);
+            panelAppearanceHeader.Size = new Size(949, 51);
+            panelAppearanceHeader.TabIndex = 47;
+            // 
+            // pictureAppearance
+            // 
+            pictureAppearance.BackgroundImage = Resources.icons8_settings_32;
+            pictureAppearance.BackgroundImageLayout = ImageLayout.Zoom;
+            pictureAppearance.Location = new Point(21, 11);
+            pictureAppearance.Name = "pictureAppearance";
+            pictureAppearance.Size = new Size(32, 32);
+            pictureAppearance.TabIndex = 1;
+            pictureAppearance.TabStop = false;
+            // 
+            // labelAppearance
+            // 
+            labelAppearance.AutoSize = true;
+            labelAppearance.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            labelAppearance.Location = new Point(59, 14);
+            labelAppearance.Margin = new Padding(8, 0, 8, 0);
+            labelAppearance.Name = "labelAppearance";
+            labelAppearance.Size = new Size(200, 25);
+            labelAppearance.TabIndex = 2;
+            labelAppearance.Text = "UI & Interface Customization";
+            // 
+            // panelAppearance
+            // 
+            panelAppearance.AutoSize = true;
+            panelAppearance.Dock = DockStyle.Top;
+            panelAppearance.Location = new Point(15, 1050);
+            panelAppearance.Margin = new Padding(0);
+            panelAppearance.Name = "panelAppearance";
+            panelAppearance.Padding = new Padding(21, 10, 21, 10);
+            panelAppearance.Size = new Size(949, 100);
+            panelAppearance.TabIndex = 52;
+            // 
             // pictureScan
             // 
             pictureScan.Anchor = AnchorStyles.Top | AnchorStyles.Right;
@@ -1432,7 +1499,7 @@ namespace GHelper
             
             panelTheme.Controls.Add(labelTheme);
             panelTheme.Controls.Add(comboTheme);
-            panelSettings.Controls.Add(panelTheme);
+            panelAppearance.Controls.Add(panelTheme);
             // 
             // checkELMB
             // 
@@ -2269,6 +2336,8 @@ namespace GHelper
             Controls.Add(panelCores);
             Controls.Add(panelAPU);
             Controls.Add(panelPower);
+            Controls.Add(panelAppearance);
+            Controls.Add(panelAppearanceHeader);
             Controls.Add(panelSettings);
             Controls.Add(panelOptimalBrightness);
             Controls.Add(panelSettingsHeader);
@@ -2348,6 +2417,11 @@ namespace GHelper
         private RButton buttonTabLighting;
         private RButton buttonTabPower;
         private RButton buttonTabSystem;
+        private RButton buttonTabAppearance;
+        private Panel panelAppearanceHeader;
+        private PictureBox pictureAppearance;
+        private Label labelAppearance;
+        private Panel panelAppearance;
         private Panel panelServices;
         private RButton buttonServices;
         private Label labelServices;

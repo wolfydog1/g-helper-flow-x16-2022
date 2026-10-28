@@ -225,7 +225,7 @@ namespace GHelper.Overlay
         private bool _active;
         private bool _gameOnly;
         private bool _showNames;
-        private bool _showFps, _showTemp, _showFans, _showChart, _showPower, _showUsage, _showRam, _showBattery, _show1PercentLow, _showShadow, _showJitter, _showHdrBadge;
+        private bool _showFps, _showTemp, _showFans, _showChart, _showPower, _showUsage, _showRam, _showBattery, _show1PercentLow, _showShadow, _showJitter, _showHdrBadge, _showFrametime, _showClock, _showVram, _showMidFan;
         private bool _onBattery;
         private int _overlayBattery = -1;
         private static readonly bool _isAlly = AppConfig.IsAlly();
@@ -637,7 +637,7 @@ namespace GHelper.Overlay
             bool showBat = _showBattery && _onBattery;
             bool showUsage = _showUsage || _showRam; // bar sizing is shared by the usage and ram bars
 
-            bool showMidRow = (_midTempStr.Length > 0 || _midFanNum.Length > 0) && (showTemp || showFans);
+            bool showMidRow = _showMidFan && (_midTempStr.Length > 0 || _midFanNum.Length > 0) && (showTemp || showFans);
             bool showXgmRow = (_xgmTempStr.Length > 0 || _xgmFanNum.Length > 0 || _xgmPow.Length > 0 || _xgmUsage.HasValue) && (showTemp || showFans || showPower || showUsageMetric);
 
             int rowCount = 2;
@@ -759,6 +759,13 @@ namespace GHelper.Overlay
                         barCursor += (int)dotSize + S(sc, 6);
                     }
 
+                    if (_showFrametime && _currentFps > 0)
+                    {
+                        string ftStr = $"{1000.0 / _currentFps:F1}ms";
+                        DrawStringWithShadow(g, ftStr, rpmFont, _gpuBrush, new PointF(barCursor, textY + 2f * sc));
+                        barCursor += (int)g.MeasureString(ftStr, rpmFont).Width + S(sc, 4);
+                    }
+
                     barCursor += S(sc, 4);
                 }
 
@@ -843,6 +850,15 @@ namespace GHelper.Overlay
                     float bX = padX + (fpsColW - bW) / 2f;
                     float bY = topY - 1f * sc;
                     DrawStringWithShadow(g, badge, rpmFont, _badgeBrush, new PointF(bX, bY));
+                }
+
+                if (_showFrametime && _currentFps > 0 && !_showHdrBadge)
+                {
+                    string ftStr = $"{1000.0 / _currentFps:F1}ms";
+                    float ftW = g.MeasureString(ftStr, rpmFont).Width;
+                    float ftX = padX + (fpsColW - ftW) / 2f;
+                    float ftY = topY - 1f * sc;
+                    DrawStringWithShadow(g, ftStr, rpmFont, _gpuBrush, new PointF(ftX, ftY));
                 }
             }
 
@@ -1269,6 +1285,10 @@ namespace GHelper.Overlay
                 "overlay_show_1pct_low" => m == OverlayMode.Full || m == OverlayMode.Complete || m == OverlayMode.Bar,
                 "overlay_show_jitter" => m == OverlayMode.Full || m == OverlayMode.Complete || m == OverlayMode.Bar,
                 "overlay_show_hdr_badge" => false,
+                "overlay_show_frametime" => m == OverlayMode.Full || m == OverlayMode.Complete,
+                "overlay_show_clock" => false,
+                "overlay_show_vram" => m == OverlayMode.Complete,
+                "overlay_show_mid_fan" => true,
                 "overlay_text_shadow" => true,
                 "overlay_names" => false,
                 _ => true,
@@ -1294,6 +1314,10 @@ namespace GHelper.Overlay
             _show1PercentLow = BlockShown("overlay_show_1pct_low", m);
             _showJitter = BlockShown("overlay_show_jitter", m);
             _showHdrBadge = BlockShown("overlay_show_hdr_badge", m);
+            _showFrametime = BlockShown("overlay_show_frametime", m);
+            _showClock = BlockShown("overlay_show_clock", m);
+            _showVram = BlockShown("overlay_show_vram", m);
+            _showMidFan = BlockShown("overlay_show_mid_fan", m);
             _showShadow = BlockShown("overlay_text_shadow", m);
             _overlayBattery = BatteryState(m);
             _showBattery = _overlayBattery != 0;
@@ -1302,9 +1326,9 @@ namespace GHelper.Overlay
         // Don't pull sensors for blocks that aren't drawn (power feeds both the power and chart blocks).
         private void ApplySensorFlags()
         {
-            HardwareControl.readFans   = _showFans;
+            HardwareControl.readFans   = _showFans || _showMidFan;
             HardwareControl.readUsage  = _showUsage;
-            HardwareControl.readMemory = _showRam;
+            HardwareControl.readMemory = _showRam || _showVram;
             HardwareControl.readPower  = _showPower || _showChart;
             HardwareControl.readBattery = _showBattery && _onBattery;
         }
