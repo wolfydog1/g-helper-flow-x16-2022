@@ -154,7 +154,7 @@ namespace GHelper.Gpu
             if (restart)
             {
                 settings.VisualiseGPUMode();
-                Process.Start("shutdown", "/r /t 1");
+                Process.Start(new ProcessStartInfo("shutdown", "/r /t 1") { CreateNoWindow = true, UseShellExecute = false });
             }
 
         }

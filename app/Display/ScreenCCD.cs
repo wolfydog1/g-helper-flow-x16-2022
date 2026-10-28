@@ -137,57 +137,63 @@ namespace GHelper.Display
         public static bool GetHDRStatus(out bool acm, bool log = true)
         {
             acm = false;
-            var err = GetDisplayConfigBufferSizes(QDC.QDC_ONLY_ACTIVE_PATHS, out var pathCount, out var modeCount);
-            if (err != 0)
-                throw new Win32Exception(err);
-
-            var paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
-            var modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
-            err = QueryDisplayConfig(QDC.QDC_ONLY_ACTIVE_PATHS, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
-            if (err != 0)
+            try
             {
-                Logger.WriteLine("HDR Detection Error: " + new Win32Exception(err).Message);
-                return false;
-            }
-
-            string internalName = AppConfig.GetString("internal_display");
-
-            foreach (var path in paths)
-            {
-                // get display name
-                var info = new DISPLAYCONFIG_TARGET_DEVICE_NAME();
-                info.header.type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME;
-                info.header.size = Marshal.SizeOf<DISPLAYCONFIG_TARGET_DEVICE_NAME>();
-                info.header.adapterId = path.targetInfo.adapterId;
-                info.header.id = path.targetInfo.id;
-                err = DisplayConfigGetDeviceInfo(ref info);
+                var err = GetDisplayConfigBufferSizes(QDC.QDC_ONLY_ACTIVE_PATHS, out var pathCount, out var modeCount);
                 if (err != 0)
-                    throw new Win32Exception(err);
-
-                var colorInfo = new DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO();
-                colorInfo.header.type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
-                colorInfo.header.size = Marshal.SizeOf<DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO>();
-                colorInfo.header.adapterId = path.targetInfo.adapterId;
-                colorInfo.header.id = path.targetInfo.id;
-                err = DisplayConfigGetDeviceInfo(ref colorInfo);
-                if (err != 0)
-                    throw new Win32Exception(err);
-
-
-                if (info.outputTechnology == DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY.DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INTERNAL ||
-                    info.outputTechnology == DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY.DISPLAYCONFIG_OUTPUT_TECHNOLOGY_DISPLAYPORT_EMBEDDED ||
-                    info.monitorFriendlyDeviceName == internalName)
                 {
-                    bool hdr = colorInfo.advancedColorEnabled && !colorInfo.wideColorEnforced;
-                    acm = colorInfo.advancedColorEnabled && colorInfo.wideColorEnforced && colorInfo.bitsPerColorChannel > 8;
-                    if (log) Logger.WriteLine(info.monitorFriendlyDeviceName + " HDR: " + hdr + " ACM: " + acm + " | " + colorInfo.advancedColorEnabled + " " + colorInfo.bitsPerColorChannel + " " + colorInfo.value + " " + colorInfo.wideColorEnforced);
-                    return hdr;
+                    if (log) Logger.WriteLine("HDR Buffer Sizes Error: " + new Win32Exception(err).Message);
+                    return false;
                 }
 
+                var paths = new DISPLAYCONFIG_PATH_INFO[pathCount];
+                var modes = new DISPLAYCONFIG_MODE_INFO[modeCount];
+                err = QueryDisplayConfig(QDC.QDC_ONLY_ACTIVE_PATHS, ref pathCount, paths, ref modeCount, modes, IntPtr.Zero);
+                if (err != 0)
+                {
+                    if (log) Logger.WriteLine("HDR Detection Error: " + new Win32Exception(err).Message);
+                    return false;
+                }
+
+                string internalName = AppConfig.GetString("internal_display");
+
+                foreach (var path in paths)
+                {
+                    // get display name
+                    var info = new DISPLAYCONFIG_TARGET_DEVICE_NAME();
+                    info.header.type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME;
+                    info.header.size = Marshal.SizeOf<DISPLAYCONFIG_TARGET_DEVICE_NAME>();
+                    info.header.adapterId = path.targetInfo.adapterId;
+                    info.header.id = path.targetInfo.id;
+                    err = DisplayConfigGetDeviceInfo(ref info);
+                    if (err != 0) continue;
+
+                    var colorInfo = new DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO();
+                    colorInfo.header.type = DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
+                    colorInfo.header.size = Marshal.SizeOf<DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO>();
+                    colorInfo.header.adapterId = path.targetInfo.adapterId;
+                    colorInfo.header.id = path.targetInfo.id;
+                    err = DisplayConfigGetDeviceInfo(ref colorInfo);
+                    if (err != 0) continue;
+
+                    if (info.outputTechnology == DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY.DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INTERNAL ||
+                        info.outputTechnology == DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY.DISPLAYCONFIG_OUTPUT_TECHNOLOGY_DISPLAYPORT_EMBEDDED ||
+                        info.monitorFriendlyDeviceName == internalName)
+                    {
+                        bool hdr = colorInfo.advancedColorEnabled && !colorInfo.wideColorEnforced;
+                        acm = colorInfo.advancedColorEnabled && colorInfo.wideColorEnforced && colorInfo.bitsPerColorChannel > 8;
+                        if (log) Logger.WriteLine(info.monitorFriendlyDeviceName + " HDR: " + hdr + " ACM: " + acm + " | " + colorInfo.advancedColorEnabled + " " + colorInfo.bitsPerColorChannel + " " + colorInfo.value + " " + colorInfo.wideColorEnforced);
+                        return hdr;
+                    }
+
+                }
+            }
+            catch (Exception ex)
+            {
+                if (log) Logger.WriteLine("GetHDRStatus exception: " + ex.Message);
             }
 
             return false;
-
         }
 
         private enum DISPLAYCONFIG_DEVICE_INFO_TYPE

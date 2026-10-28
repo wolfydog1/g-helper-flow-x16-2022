@@ -131,6 +131,7 @@ namespace GHelper.Mode
 
 
             _modeCts.Cancel();
+            _modeCts.Dispose();
             _modeCts = new CancellationTokenSource();
             var ct = _modeCts.Token;
 

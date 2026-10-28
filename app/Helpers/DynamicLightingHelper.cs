@@ -113,13 +113,13 @@ namespace GHelper.Helpers
 
         static void SetDynamicLightingOnAllDevices(int status = 1)
         {
-            RegistryKey? devicesKey = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Lighting\Devices", true);
+            using RegistryKey? devicesKey = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Lighting\Devices", true);
 
             if (devicesKey != null)
             {
                 foreach (string deviceKeyName in devicesKey.GetSubKeyNames())
                 {
-                    RegistryKey? deviceKey = devicesKey.OpenSubKey(deviceKeyName, true);
+                    using RegistryKey? deviceKey = devicesKey.OpenSubKey(deviceKeyName, true);
                     if (deviceKey != null && deviceKey.GetValue(LightingValue) != null)
                     {
                         deviceKey.SetValue(LightingValue, status, RegistryValueKind.DWord);

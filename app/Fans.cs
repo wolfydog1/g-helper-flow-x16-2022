@@ -1031,7 +1031,8 @@ namespace GHelper
 
         private void ComboPowerMode_Changed(object? sender, EventArgs e)
         {
-            string powerMode = (string)comboPowerMode.SelectedValue;
+            string? powerMode = comboPowerMode.SelectedValue as string;
+            if (powerMode == null) return;
             PowerNative.SetPowerMode(powerMode);
 
             if (PowerNative.GetDefaultPowerMode(Modes.GetCurrentBase()) != powerMode)

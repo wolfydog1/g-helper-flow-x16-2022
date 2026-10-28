@@ -145,7 +145,8 @@ public static class AppConfig
         try
         {
             using var searcher = new ManagementObjectSearcher("Select * from Win32_ComputerSystem");
-            foreach (var obj in searcher.Get())
+            using var collection = searcher.Get();
+            foreach (var obj in collection)
             {
                 using (obj) return obj["Model"]?.ToString() ?? string.Empty;
             }
@@ -162,7 +163,8 @@ public static class AppConfig
         try
         {
             using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_BIOS");
-            foreach (var obj in searcher.Get())
+            using var collection = searcher.Get();
+            foreach (var obj in collection)
             {
                 using (obj)
                 {
@@ -513,7 +515,7 @@ public static class AppConfig
     {
         try
         {
-            var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\ASUS\OLEDCare");
+            using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\ASUS\OLEDCare");
             return key is not null && Convert.ToInt32(key.GetValue("EnablePixelRefresh", 0)) != 0;
         }
         catch { return false; }

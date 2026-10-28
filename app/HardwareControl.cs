@@ -1400,10 +1400,9 @@ public static class HardwareControl
 
     public static NvidiaGpuControl? GetNvidiaGpuControl()
     {
-        if ((bool)GpuControl?.IsNvidia)
-            return (NvidiaGpuControl)GpuControl;
-        else
-            return null;
+        if (GpuControl is NvidiaGpuControl nvidiaGpuControl)
+            return nvidiaGpuControl;
+        return null;
     }
 
     public static void DisposeGpuControl()

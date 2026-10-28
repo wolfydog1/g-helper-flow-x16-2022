@@ -465,7 +465,9 @@ public class AsusACPI
     {
         try
         {
-            using var wmi = new ManagementObjectSearcher(@"root\wmi", "SELECT * FROM AsusAtkWmi_WMNB").Get().Cast<ManagementObject>().First();
+            using var searcher = new ManagementObjectSearcher(@"root\wmi", "SELECT * FROM AsusAtkWmi_WMNB");
+            using var collection = searcher.Get();
+            using var wmi = collection.Cast<ManagementObject>().First();
             var inParams = wmi.GetMethodParameters("DEVS");
             inParams["Device_ID"] = DeviceID;
             inParams["Control_status"] = (uint)Status;

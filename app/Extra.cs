@@ -1444,7 +1444,7 @@ namespace GHelper
             if (dialogResult == DialogResult.Yes)
             {
                 Program.acpi.SetCores(coresMinE + comboCoresE.SelectedIndex, coresMinP + comboCoresP.SelectedIndex);
-                Process.Start("shutdown", "/r /t 1");
+                Process.Start(new ProcessStartInfo("shutdown", "/r /t 1") { CreateNoWindow = true, UseShellExecute = false });
             }
         }
 
@@ -1507,7 +1507,7 @@ namespace GHelper
             DialogResult dialogResult = MessageBox.Show(Properties.Strings.AlertAPUMemoryRestart, Properties.Strings.AlertAPUMemoryRestartTitle, MessageBoxButtons.YesNo);
             if (dialogResult == DialogResult.Yes)
             {
-                Process.Start("shutdown", "/r /t 1");
+                Process.Start(new ProcessStartInfo("shutdown", "/r /t 1") { CreateNoWindow = true, UseShellExecute = false });
             }
 
         }

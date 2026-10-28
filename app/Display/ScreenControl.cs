@@ -253,7 +253,7 @@ namespace GHelper.Display
             if (dialogResult == DialogResult.Yes)
             {
                 Program.acpi.DeviceSet(AsusACPI.ScreenFHD, (fhd == 1) ? 0 : 1, "FHD");
-                Process.Start("shutdown", "/r /t 1");
+                Process.Start(new ProcessStartInfo("shutdown", "/r /t 1") { CreateNoWindow = true, UseShellExecute = false });
             }
         }
 
