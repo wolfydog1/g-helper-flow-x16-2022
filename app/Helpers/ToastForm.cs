@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Drawing.Drawing2D;
 
 namespace GHelper.Helpers
@@ -116,8 +116,9 @@ namespace GHelper.Helpers
         {
             ProcessStartInfo startInfo = new ProcessStartInfo();
             startInfo.FileName = "PowerShell.exe";
-            startInfo.Arguments = $"-Command \"Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('{text}')\"";
+            startInfo.Arguments = $"-NoProfile -Command \"Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('{text.Replace("'", "''").Replace("\"", "")}')\"";
             startInfo.CreateNoWindow = true;
+            startInfo.UseShellExecute = false;
             Process.Start(startInfo);
         }
 
@@ -126,8 +127,10 @@ namespace GHelper.Helpers
         {
 
             if (AppConfig.Is("disable_osd")) return;
+            if (Program.settingsForm is null || Program.settingsForm.IsDisposed || !Program.settingsForm.IsHandleCreated) return;
 
-            Program.settingsForm.Invoke(delegate
+            // BeginInvoke (not Invoke) so background callers never block/deadlock on the UI thread
+            Program.settingsForm.BeginInvoke(delegate
             {
                 //Hide();
                 timer.Stop();

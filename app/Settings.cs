@@ -1294,8 +1294,15 @@ namespace GHelper
 
         private async void ButtonInstallColorProfile_Click(object? sender, EventArgs e)
         {
-            await ColorProfileHelper.InstallProfile();
-            InitVisual();
+            try
+            {
+                await ColorProfileHelper.InstallProfile();
+                InitVisual();
+            }
+            catch (Exception ex)
+            {
+                Logger.WriteLine("InstallColorProfile: " + ex.Message);
+            }
         }
 
         private void ComboGamut_SelectedValueChanged(object? sender, EventArgs e)
@@ -1610,7 +1617,8 @@ namespace GHelper
             if (lastBatteryRefresh == 0 || Math.Abs(DateTimeOffset.Now.ToUnixTimeMilliseconds() - lastBatteryRefresh) > 15 * 60_000)
             {
                 lastBatteryRefresh = DateTimeOffset.Now.ToUnixTimeMilliseconds();
-                await Task.Run(HardwareControl.RefreshBatteryHealth);
+                try { await Task.Run(HardwareControl.RefreshBatteryHealth); }
+                catch (Exception ex) { Logger.WriteLine("ShowBatteryWear: " + ex.Message); }
             }
 
             if (batteryMouseOver && HardwareControl.batteryHealth != -1)
@@ -4135,16 +4143,34 @@ namespace GHelper
             gpuControl.KillGPUApps();
         }
 
+        private int _sensorReadBusy = 0;
+
         public async void RefreshSensors(bool force = false)
         {
             int throttle = (!Visible && (sensorsAlways || FlowFeaturesHelper.NeedsBackgroundSensorPolling())) ? 3000 : (Visible ? 400 : 2000);
             if (!force && Math.Abs(DateTimeOffset.Now.ToUnixTimeMilliseconds() - lastRefresh) < throttle) return;
+
+            // Prevent overlapping sensor reads from concurrent timer ticks / forced refreshes
+            if (Interlocked.Exchange(ref _sensorReadBusy, 1) == 1) return;
             lastRefresh = DateTimeOffset.Now.ToUnixTimeMilliseconds();
 
             string battery = "";
             string charge = "";
 
-            await Task.Run(() => HardwareControl.ReadSensors());
+            try
+            {
+                await Task.Run(() => HardwareControl.ReadSensors());
+            }
+            catch (Exception ex)
+            {
+                // async void: an unhandled exception here would terminate the whole app
+                Logger.WriteLine("RefreshSensors: " + ex.GetType().Name + ": " + ex.Message);
+                return;
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _sensorReadBusy, 0);
+            }
 
             string pctPrefix = HardwareControl.batteryCapacity > 0
                 ? Math.Round((decimal)HardwareControl.batteryCapacity, 0) + "% | "

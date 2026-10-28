@@ -1,4 +1,4 @@
-﻿using GHelper.Helpers;
+using GHelper.Helpers;
 using System.Diagnostics;
 using System.Net.Http;
 using System.Reflection;
@@ -12,7 +12,10 @@ namespace GHelper.AutoUpdate
 
         SettingsForm settings;
 
-        public string versionUrl = "https://github.com/seerge/g-helper/releases";
+        // Custom Flow X16 fork: never check/install upstream seerge/g-helper builds over this one
+        private const string UpdateRepo = "wolfydog1/g-helper-flow-x16-2022";
+
+        public string versionUrl = "https://github.com/" + UpdateRepo + "/releases";
         public bool update = false;
 
         static long lastUpdate;
@@ -74,10 +77,15 @@ namespace GHelper.AutoUpdate
                 using (var httpClient = new HttpClient())
                 {
                     httpClient.DefaultRequestHeaders.Add("User-Agent", "G-Helper App");
-                    var json = await httpClient.GetStringAsync("https://api.github.com/repos/seerge/g-helper/releases/latest");
+                    var json = await httpClient.GetStringAsync("https://api.github.com/repos/" + UpdateRepo + "/releases/latest");
                     var config = JsonSerializer.Deserialize<JsonElement>(json);
                     var tag = config.GetProperty("tag_name").ToString().Replace("v", "");
                     var assets = config.GetProperty("assets");
+                    if (assets.GetArrayLength() == 0)
+                    {
+                        Logger.WriteLine($"Update check: release {tag} has no downloadable assets");
+                        return;
+                    }
 
                     string url = null;
 

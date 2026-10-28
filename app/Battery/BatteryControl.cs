@@ -137,7 +137,8 @@ namespace GHelper.Battery
                 _lastAppliedEcLimit = desiredEcLimit;
                 Program.acpi?.DeviceSet(AsusACPI.BatteryLimit, desiredEcLimit, "SmartBatteryLimit");
                 Logger.WriteLine($"Smart Charge ({minLimit}%..{maxLimit}%): SoC={Math.Round(currentPct, 1)}% -> EC Limit={desiredEcLimit}% (Charging={isSmartChargingActive})");
-                Program.settingsForm?.BeginInvoke(() => Program.settingsForm.VisualiseBatteryOptions());
+                if (Program.settingsForm is { IsHandleCreated: true, IsDisposed: false })
+                    Program.settingsForm.BeginInvoke(() => Program.settingsForm.VisualiseBatteryOptions());
             }
         }
 
@@ -182,7 +183,8 @@ namespace GHelper.Battery
         {
             chargeFull = false;
             Logger.WriteLine("Battery fully charged");
-            Program.settingsForm.Invoke(Program.settingsForm.VisualiseBatteryFull);
+            if (Program.settingsForm is { IsHandleCreated: true, IsDisposed: false })
+                Program.settingsForm.BeginInvoke(Program.settingsForm.VisualiseBatteryFull);
         }
 
         public static void AutoBattery(bool init = false)
