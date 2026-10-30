@@ -16,14 +16,14 @@ namespace GHelper
             InitTheme(true);
 
             Text = "Overlay Settings & Telemetry HUD";
-            checkEnable.Text = "⚡ Enable In-Game Telemetry Overlay";
-            checkGameOnly.Text = "🎮 Show Only While Gaming (auto-hide on desktop)";
+            checkEnable.Text = "Enable In-Game Overlay";
+            checkGameOnly.Text = "Show Only in Games";
             buttonLight.Text = Properties.Strings.OverlayModeLight;
             buttonDefault.Text = Properties.Strings.Default;
             buttonFull.Text = Properties.Strings.OverlayModeFull;
             buttonComplete.Text = Properties.Strings.OverlayModeComplete;
             checkFps.Text = "FPS Counter";
-            checkTemp.Text = "CPU & GPU Temps";
+            checkTemp.Text = "CPU / GPU Temps";
             checkFans.Text = "Main Fan Speeds";
             checkChart.Text = "Load History Graph";
             checkPower.Text = "Power Draw (W)";
@@ -165,7 +165,7 @@ namespace GHelper
         public void FormPosition()
         {
             Top = Program.settingsForm.Top;
-            Left = Program.settingsForm.Left - Width - 5;
+            Left = Math.Max(10, Program.settingsForm.Left - Width - 5);
         }
 
         private void UpdateCornerButtons()

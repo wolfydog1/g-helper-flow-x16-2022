@@ -29,7 +29,7 @@ namespace GHelper
         /// </summary>
         private void InitializeComponent()
         {
-            panelToggles = new Panel();
+            panelToggles = new TableLayoutPanel();
             checkEnable = new GHelper.UI.RCheckBox();
             checkGameOnly = new GHelper.UI.RCheckBox();
             tableModes = new TableLayoutPanel();
@@ -56,13 +56,16 @@ namespace GHelper
             checkClock = new GHelper.UI.RCheckBox();
             checkVram = new GHelper.UI.RCheckBox();
             checkMidFan = new GHelper.UI.RCheckBox();
-            panelSliders = new Panel();
+            panelSliders = new TableLayoutPanel();
+            panelSizeHeader = new Panel();
+            panelAlphaHeader = new Panel();
             labelSizeTitle = new Label();
             labelSize = new Label();
             trackScale = new RTrackBar();
             labelAlphaTitle = new Label();
             labelAlpha = new Label();
             trackAlpha = new RTrackBar();
+            tableAppearance = new TableLayoutPanel();
             labelFontTitle = new Label();
             comboFont = new GHelper.UI.RComboBox();
             labelStyleTitle = new Label();
@@ -91,39 +94,46 @@ namespace GHelper
             //
             // panelToggles
             //
-            panelToggles.Controls.Add(checkEnable);
-            panelToggles.Controls.Add(checkGameOnly);
+            panelToggles.AutoSize = true;
+            panelToggles.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            panelToggles.ColumnCount = 2;
+            panelToggles.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            panelToggles.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            panelToggles.Controls.Add(checkEnable, 0, 0);
+            panelToggles.Controls.Add(checkGameOnly, 1, 0);
             panelToggles.Dock = DockStyle.Top;
-            panelToggles.Location = new Point(10, 425);
+            panelToggles.Location = new Point(10, 10);
+            panelToggles.Margin = new Padding(0, 0, 0, 8);
             panelToggles.Name = "panelToggles";
-            panelToggles.Size = new Size(880, 70);
+            panelToggles.RowCount = 1;
+            panelToggles.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            panelToggles.Size = new Size(880, 60);
             panelToggles.TabIndex = 0;
             //
             // checkEnable
             //
             checkEnable.AutoSize = true;
-            checkEnable.BackColor = SystemColors.ControlLight;
-            checkEnable.Location = new Point(10, 10);
-            checkEnable.Margin = new Padding(0);
+            checkEnable.Dock = DockStyle.Fill;
+            checkEnable.Location = new Point(2, 2);
+            checkEnable.Margin = new Padding(2);
             checkEnable.Name = "checkEnable";
-            checkEnable.Padding = new Padding(16, 6, 16, 6);
-            checkEnable.Size = new Size(160, 48);
+            checkEnable.Padding = new Padding(6, 6, 6, 6);
+            checkEnable.Size = new Size(436, 48);
             checkEnable.TabIndex = 0;
-            checkEnable.Text = "Overlay";
+            checkEnable.Text = "Enable In-Game Overlay";
             checkEnable.UseVisualStyleBackColor = false;
             //
             // checkGameOnly
             //
-            checkGameOnly.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             checkGameOnly.AutoSize = true;
-            checkGameOnly.BackColor = SystemColors.ControlLight;
-            checkGameOnly.Location = new Point(600, 10);
-            checkGameOnly.Margin = new Padding(0);
+            checkGameOnly.Dock = DockStyle.Fill;
+            checkGameOnly.Location = new Point(442, 2);
+            checkGameOnly.Margin = new Padding(2);
             checkGameOnly.Name = "checkGameOnly";
-            checkGameOnly.Padding = new Padding(16, 6, 16, 6);
-            checkGameOnly.Size = new Size(280, 48);
+            checkGameOnly.Padding = new Padding(6, 6, 6, 6);
+            checkGameOnly.Size = new Size(436, 48);
             checkGameOnly.TabIndex = 1;
-            checkGameOnly.Text = "Overlay only in games";
+            checkGameOnly.Text = "Show Only in Games";
             checkGameOnly.UseVisualStyleBackColor = false;
             //
             // tableModes
@@ -470,134 +480,184 @@ namespace GHelper
             checkMidFan.TabIndex = 16;
             checkMidFan.Text = "Mid Fan RPM";
             //
-            // panelSliders
+            // panelSliders (tableSliders)
             //
-            panelSliders.Controls.Add(labelSizeTitle);
-            panelSliders.Controls.Add(labelSize);
-            panelSliders.Controls.Add(trackScale);
-            panelSliders.Controls.Add(labelAlphaTitle);
-            panelSliders.Controls.Add(labelAlpha);
-            panelSliders.Controls.Add(trackAlpha);
-            panelSliders.Controls.Add(labelFontTitle);
-            panelSliders.Controls.Add(comboFont);
-            panelSliders.Controls.Add(labelStyleTitle);
-            panelSliders.Controls.Add(comboStyle);
+            panelSliders.AutoSize = true;
+            panelSliders.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            panelSliders.ColumnCount = 2;
+            panelSliders.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            panelSliders.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            panelSliders.Controls.Add(panelSizeHeader, 0, 0);
+            panelSliders.Controls.Add(panelAlphaHeader, 1, 0);
+            panelSliders.Controls.Add(trackScale, 0, 1);
+            panelSliders.Controls.Add(trackAlpha, 1, 1);
             panelSliders.Dock = DockStyle.Top;
             panelSliders.Location = new Point(10, 340);
+            panelSliders.Margin = new Padding(0, 0, 0, 8);
             panelSliders.Name = "panelSliders";
-            panelSliders.Size = new Size(880, 200);
+            panelSliders.RowCount = 2;
+            panelSliders.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+            panelSliders.RowStyles.Add(new RowStyle(SizeType.Absolute, 52F));
+            panelSliders.Size = new Size(880, 86);
             panelSliders.TabIndex = 3;
+            //
+            // panelSizeHeader
+            //
+            panelSizeHeader.Controls.Add(labelSizeTitle);
+            panelSizeHeader.Controls.Add(labelSize);
+            panelSizeHeader.Dock = DockStyle.Fill;
+            panelSizeHeader.Location = new Point(2, 2);
+            panelSizeHeader.Margin = new Padding(2);
+            panelSizeHeader.Name = "panelSizeHeader";
+            panelSizeHeader.Size = new Size(436, 30);
             //
             // labelSizeTitle
             //
             labelSizeTitle.AutoSize = true;
-            labelSizeTitle.Location = new Point(10, 8);
-            labelSizeTitle.Margin = new Padding(4, 0, 4, 0);
+            labelSizeTitle.Dock = DockStyle.Left;
+            labelSizeTitle.Location = new Point(0, 0);
             labelSizeTitle.Name = "labelSizeTitle";
-            labelSizeTitle.Size = new Size(60, 32);
+            labelSizeTitle.Size = new Size(110, 28);
             labelSizeTitle.TabIndex = 0;
-            labelSizeTitle.Text = "Size";
+            labelSizeTitle.Text = "HUD Scale Size:";
             //
             // labelSize
             //
+            labelSize.AutoSize = true;
+            labelSize.Dock = DockStyle.Right;
             labelSize.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
-            labelSize.Location = new Point(330, 8);
-            labelSize.Margin = new Padding(4, 0, 4, 0);
+            labelSize.Location = new Point(376, 0);
             labelSize.Name = "labelSize";
-            labelSize.Size = new Size(100, 32);
+            labelSize.Size = new Size(60, 28);
             labelSize.TabIndex = 1;
             labelSize.Text = "100%";
-            labelSize.TextAlign = ContentAlignment.TopRight;
             //
-            // trackScale
+            // panelAlphaHeader
             //
-            trackScale.LargeChange = 25;
-            trackScale.Location = new Point(6, 44);
-            trackScale.Margin = new Padding(4, 2, 4, 2);
-            trackScale.Maximum = 300;
-            trackScale.Minimum = 35;
-            trackScale.Name = "trackScale";
-            trackScale.Size = new Size(424, 60);
-            trackScale.SmallChange = 5;
-            trackScale.TabIndex = 2;
-            trackScale.TickFrequency = 25;
-            trackScale.TickStyle = TickStyle.TopLeft;
-            trackScale.Value = 100;
+            panelAlphaHeader.Controls.Add(labelAlphaTitle);
+            panelAlphaHeader.Controls.Add(labelAlpha);
+            panelAlphaHeader.Dock = DockStyle.Fill;
+            panelAlphaHeader.Location = new Point(442, 2);
+            panelAlphaHeader.Margin = new Padding(2);
+            panelAlphaHeader.Name = "panelAlphaHeader";
+            panelAlphaHeader.Size = new Size(436, 30);
             //
             // labelAlphaTitle
             //
             labelAlphaTitle.AutoSize = true;
-            labelAlphaTitle.Location = new Point(460, 8);
-            labelAlphaTitle.Margin = new Padding(4, 0, 4, 0);
+            labelAlphaTitle.Dock = DockStyle.Left;
+            labelAlphaTitle.Location = new Point(0, 0);
             labelAlphaTitle.Name = "labelAlphaTitle";
-            labelAlphaTitle.Size = new Size(150, 32);
-            labelAlphaTitle.TabIndex = 3;
-            labelAlphaTitle.Text = "Transparency";
+            labelAlphaTitle.Size = new Size(140, 28);
+            labelAlphaTitle.TabIndex = 2;
+            labelAlphaTitle.Text = "HUD Transparency:";
             //
             // labelAlpha
             //
+            labelAlpha.AutoSize = true;
+            labelAlpha.Dock = DockStyle.Right;
             labelAlpha.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
-            labelAlpha.Location = new Point(780, 8);
-            labelAlpha.Margin = new Padding(4, 0, 4, 0);
+            labelAlpha.Location = new Point(386, 0);
             labelAlpha.Name = "labelAlpha";
-            labelAlpha.Size = new Size(100, 32);
-            labelAlpha.TabIndex = 4;
+            labelAlpha.Size = new Size(50, 28);
+            labelAlpha.TabIndex = 3;
             labelAlpha.Text = "50%";
-            labelAlpha.TextAlign = ContentAlignment.TopRight;
+            //
+            // trackScale
+            //
+            trackScale.Dock = DockStyle.Fill;
+            trackScale.LargeChange = 25;
+            trackScale.Location = new Point(2, 36);
+            trackScale.Margin = new Padding(2);
+            trackScale.Maximum = 300;
+            trackScale.Minimum = 35;
+            trackScale.Name = "trackScale";
+            trackScale.Size = new Size(436, 48);
+            trackScale.SmallChange = 5;
+            trackScale.TabIndex = 4;
+            trackScale.TickFrequency = 25;
+            trackScale.TickStyle = TickStyle.None;
+            trackScale.Value = 100;
             //
             // trackAlpha
             //
+            trackAlpha.Dock = DockStyle.Fill;
             trackAlpha.LargeChange = 32;
-            trackAlpha.Location = new Point(456, 44);
-            trackAlpha.Margin = new Padding(4, 2, 4, 2);
+            trackAlpha.Location = new Point(442, 36);
+            trackAlpha.Margin = new Padding(2);
             trackAlpha.Maximum = 255;
             trackAlpha.Name = "trackAlpha";
-            trackAlpha.Size = new Size(424, 60);
+            trackAlpha.Size = new Size(436, 48);
             trackAlpha.SmallChange = 8;
             trackAlpha.TabIndex = 5;
             trackAlpha.TickFrequency = 16;
-            trackAlpha.TickStyle = TickStyle.TopLeft;
+            trackAlpha.TickStyle = TickStyle.None;
             trackAlpha.Value = 128;
+            //
+            // tableAppearance
+            //
+            tableAppearance.AutoSize = true;
+            tableAppearance.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            tableAppearance.ColumnCount = 2;
+            tableAppearance.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            tableAppearance.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            tableAppearance.Controls.Add(labelFontTitle, 0, 0);
+            tableAppearance.Controls.Add(labelStyleTitle, 1, 0);
+            tableAppearance.Controls.Add(comboFont, 0, 1);
+            tableAppearance.Controls.Add(comboStyle, 1, 1);
+            tableAppearance.Dock = DockStyle.Top;
+            tableAppearance.Location = new Point(10, 440);
+            tableAppearance.Margin = new Padding(0, 0, 0, 8);
+            tableAppearance.Name = "tableAppearance";
+            tableAppearance.RowCount = 2;
+            tableAppearance.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));
+            tableAppearance.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));
+            tableAppearance.Size = new Size(880, 78);
+            tableAppearance.TabIndex = 4;
             // 
             // labelFontTitle
             // 
             labelFontTitle.AutoSize = true;
-            labelFontTitle.Location = new Point(10, 114);
-            labelFontTitle.Margin = new Padding(4, 0, 4, 0);
+            labelFontTitle.Dock = DockStyle.Fill;
+            labelFontTitle.Location = new Point(2, 2);
+            labelFontTitle.Margin = new Padding(2);
             labelFontTitle.Name = "labelFontTitle";
-            labelFontTitle.Size = new Size(180, 28);
-            labelFontTitle.TabIndex = 6;
+            labelFontTitle.Size = new Size(436, 28);
+            labelFontTitle.TabIndex = 0;
             labelFontTitle.Text = "HUD Typography Font:";
-            // 
-            // comboFont
-            // 
-            comboFont.DropDownStyle = ComboBoxStyle.DropDownList;
-            comboFont.FlatStyle = FlatStyle.Flat;
-            comboFont.Location = new Point(6, 146);
-            comboFont.Margin = new Padding(4);
-            comboFont.Name = "comboFont";
-            comboFont.Size = new Size(424, 38);
-            comboFont.TabIndex = 7;
             // 
             // labelStyleTitle
             // 
             labelStyleTitle.AutoSize = true;
-            labelStyleTitle.Location = new Point(460, 114);
-            labelStyleTitle.Margin = new Padding(4, 0, 4, 0);
+            labelStyleTitle.Dock = DockStyle.Fill;
+            labelStyleTitle.Location = new Point(442, 2);
+            labelStyleTitle.Margin = new Padding(2);
             labelStyleTitle.Name = "labelStyleTitle";
-            labelStyleTitle.Size = new Size(240, 28);
-            labelStyleTitle.TabIndex = 8;
-            labelStyleTitle.Text = "HUD Backdrop & Border Style:";
+            labelStyleTitle.Size = new Size(436, 28);
+            labelStyleTitle.TabIndex = 1;
+            labelStyleTitle.Text = "HUD Theme && Backdrop Style:";
+            // 
+            // comboFont
+            // 
+            comboFont.Dock = DockStyle.Fill;
+            comboFont.DropDownStyle = ComboBoxStyle.DropDownList;
+            comboFont.FlatStyle = FlatStyle.Flat;
+            comboFont.Location = new Point(2, 34);
+            comboFont.Margin = new Padding(2);
+            comboFont.Name = "comboFont";
+            comboFont.Size = new Size(436, 38);
+            comboFont.TabIndex = 2;
             // 
             // comboStyle
             // 
+            comboStyle.Dock = DockStyle.Fill;
             comboStyle.DropDownStyle = ComboBoxStyle.DropDownList;
             comboStyle.FlatStyle = FlatStyle.Flat;
-            comboStyle.Location = new Point(456, 146);
-            comboStyle.Margin = new Padding(4);
+            comboStyle.Location = new Point(442, 34);
+            comboStyle.Margin = new Padding(2);
             comboStyle.Name = "comboStyle";
-            comboStyle.Size = new Size(424, 38);
-            comboStyle.TabIndex = 9;
+            comboStyle.Size = new Size(436, 38);
+            comboStyle.TabIndex = 3;
             //
             // tableColors
             //
@@ -796,11 +856,12 @@ namespace GHelper
             //
             AutoScaleDimensions = new SizeF(192F, 192F);
             AutoScaleMode = AutoScaleMode.Dpi;
-            ClientSize = new Size(900, 820);
+            ClientSize = new Size(900, 840);
             AutoScroll = true;
             Controls.Add(panelHotkeys);
             Controls.Add(tableColors);
             Controls.Add(tableCorners);
+            Controls.Add(tableAppearance);
             Controls.Add(panelSliders);
             Controls.Add(tableBlocks);
             Controls.Add(tableModes);
@@ -832,7 +893,7 @@ namespace GHelper
 
         #endregion
 
-        private Panel panelToggles;
+        private TableLayoutPanel panelToggles;
         private UI.RCheckBox checkEnable;
         private UI.RCheckBox checkGameOnly;
         private TableLayoutPanel tableModes;
@@ -859,13 +920,16 @@ namespace GHelper
         private UI.RCheckBox checkClock;
         private UI.RCheckBox checkVram;
         private UI.RCheckBox checkMidFan;
-        private Panel panelSliders;
+        private TableLayoutPanel panelSliders;
         private Label labelSizeTitle;
         private Label labelSize;
         private RTrackBar trackScale;
         private Label labelAlphaTitle;
         private Label labelAlpha;
         private RTrackBar trackAlpha;
+        private Panel panelSizeHeader;
+        private Panel panelAlphaHeader;
+        private TableLayoutPanel tableAppearance;
         private Label labelFontTitle;
         private UI.RComboBox comboFont;
         private Label labelStyleTitle;
