@@ -173,6 +173,72 @@ namespace GHelper.UI
                     chartGrid = Color.FromArgb(255, 45, 80, 105);
                     break;
 
+                case "nordic_frost":
+                    buttonMain = Color.FromArgb(255, 24, 34, 48);
+                    buttonSecond = Color.FromArgb(255, 16, 24, 34);
+                    formBack = Color.FromArgb(255, 17, 21, 28);
+                    foreMain = Color.FromArgb(255, 230, 242, 250);
+                    borderMain = Color.FromArgb(255, 52, 115, 150);
+                    borderSecond = Color.FromArgb(255, 36, 80, 106);
+                    chartMain = Color.FromArgb(255, 20, 26, 36);
+                    chartGrid = Color.FromArgb(255, 45, 88, 118);
+                    break;
+
+                case "synthwave_neon":
+                    buttonMain = Color.FromArgb(255, 38, 20, 52);
+                    buttonSecond = Color.FromArgb(255, 26, 14, 36);
+                    formBack = Color.FromArgb(255, 18, 12, 28);
+                    foreMain = Color.FromArgb(255, 255, 238, 250);
+                    borderMain = Color.FromArgb(255, 180, 35, 120);
+                    borderSecond = Color.FromArgb(255, 125, 24, 85);
+                    chartMain = Color.FromArgb(255, 24, 15, 38);
+                    chartGrid = Color.FromArgb(255, 120, 30, 90);
+                    break;
+
+                case "dracula_vampire":
+                    buttonMain = Color.FromArgb(255, 40, 42, 54);
+                    buttonSecond = Color.FromArgb(255, 30, 31, 41);
+                    formBack = Color.FromArgb(255, 24, 25, 34);
+                    foreMain = Color.FromArgb(255, 248, 248, 242);
+                    borderMain = Color.FromArgb(255, 98, 114, 164);
+                    borderSecond = Color.FromArgb(255, 68, 71, 90);
+                    chartMain = Color.FromArgb(255, 28, 29, 39);
+                    chartGrid = Color.FromArgb(255, 75, 82, 115);
+                    break;
+
+                case "crimson_carbon":
+                    buttonMain = Color.FromArgb(255, 30, 22, 24);
+                    buttonSecond = Color.FromArgb(255, 22, 16, 18);
+                    formBack = Color.FromArgb(255, 14, 14, 16);
+                    foreMain = Color.FromArgb(255, 248, 240, 240);
+                    borderMain = Color.FromArgb(255, 180, 28, 38);
+                    borderSecond = Color.FromArgb(255, 110, 20, 28);
+                    chartMain = Color.FromArgb(255, 20, 16, 18);
+                    chartGrid = Color.FromArgb(255, 95, 25, 32);
+                    break;
+
+                case "forest_moss":
+                    buttonMain = Color.FromArgb(255, 24, 36, 26);
+                    buttonSecond = Color.FromArgb(255, 16, 26, 18);
+                    formBack = Color.FromArgb(255, 15, 20, 16);
+                    foreMain = Color.FromArgb(255, 235, 248, 238);
+                    borderMain = Color.FromArgb(255, 60, 115, 70);
+                    borderSecond = Color.FromArgb(255, 42, 82, 50);
+                    chartMain = Color.FromArgb(255, 18, 25, 20);
+                    chartGrid = Color.FromArgb(255, 48, 90, 58);
+                    break;
+
+                case "tokyo_night":
+                    buttonMain = Color.FromArgb(255, 28, 32, 50);
+                    buttonSecond = Color.FromArgb(255, 20, 23, 37);
+                    formBack = Color.FromArgb(255, 19, 20, 31);
+                    foreMain = Color.FromArgb(255, 230, 237, 255);
+                    borderMain = Color.FromArgb(255, 61, 102, 178);
+                    borderSecond = Color.FromArgb(255, 44, 73, 130);
+                    chartMain = Color.FromArgb(255, 22, 25, 40);
+                    chartGrid = Color.FromArgb(255, 50, 78, 135);
+                    break;
+
                 default: // "default" and "flat"
                     buttonMain = Color.FromArgb(255, 46, 46, 46);
                     buttonSecond = Color.FromArgb(255, 36, 36, 36);
@@ -190,7 +256,7 @@ namespace GHelper.UI
         {
             string? style = AppConfig.GetString("theme")?.ToLower();
             if (style == "light") return false;
-            if (style is "rog_cyber" or "nebula_blue" or "amoled" or "flat" or "default" or "emerald_matrix" or "solar_amber" or "vapor_violet" or "frost_titanium")
+            if (!string.IsNullOrEmpty(style))
             {
                 string? modeOverride = AppConfig.GetString("ui_mode")?.ToLower();
                 if (modeOverride == "light") return false;

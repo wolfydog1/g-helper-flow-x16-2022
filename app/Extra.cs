@@ -196,13 +196,14 @@ namespace GHelper
             labelBindings.Text = Properties.Strings.KeyBindings;
             buttonResetBindings.Text = Properties.Strings.Reset;
             labelBacklightTitle.Text = Properties.Strings.LaptopBacklight;
-            labelSettings.Text = Properties.Strings.Other;
+            labelSettings.Text = "Hardware & Posture Automations";
+            labelAppearance.Text = "Interface & Customization";
 
             checkAwake.Text = Properties.Strings.Awake;
             checkSleep.Text = Properties.Strings.Sleep;
             checkBoot.Text = checkBootLogo.Text = checkBootBar.Text = checkBootLid.Text = Properties.Strings.Boot + "/" + Properties.Strings.Shutdown;
             checkBattery.Text = checkBatteryLogo.Text = checkBatteryBar.Text = checkBatteryLid.Text = Properties.Strings.Battery;
-            checkBootSound.Text = Properties.Strings.BootSound;
+            checkBootSound.Text = "ASUS Startup Chime (play audio fanfare during boot)";
             checkKeystoneSound.Text = Properties.Strings.KeystoneSound;
             checkStatusLed.Text = Properties.Strings.LEDStatusIndicators;
 
@@ -212,22 +213,22 @@ namespace GHelper
             labelBacklightTimeout.Text = Properties.Strings.BacklightTimeout;
             //labelBacklightTimeoutPlugged.Text = Properties.Strings.BacklightTimeoutPlugged;
 
-            checkNoOverdrive.Text = Properties.Strings.DisableOverdrive;
-            checkELMB.Text = Properties.Strings.ExtremeLowMotionBlur;
-            checkTopmost.Text = Properties.Strings.WindowTop;
-            checkUSBC.Text = Properties.Strings.OptimizedUSBC;
-            checkUSBCPowerLimit.Text = "Auto-limit power on USB-C charger (prevents battery discharge under load)";
-            checkAutoToggleClamshellMode.Text = Properties.Strings.ToggleClamshellMode;
+            checkNoOverdrive.Text = "Disable Display Overdrive (reduces pixel overshoot ghosting)";
+            checkELMB.Text = "Extreme Low Motion Blur (ELMB backlight strobing for high-speed gaming)";
+            checkTopmost.Text = "Keep G-Helper Window Pinned on Top of Other Windows";
+            checkUSBC.Text = "Keep Discrete GPU Asleep on USB-C Chargers (Optimized Mode)";
+            checkUSBCPowerLimit.Text = "Cap Power Draw on USB-C (prevents battery discharge under load)";
+            checkAutoToggleClamshellMode.Text = "Clamshell Mode: Keep laptop running with lid closed when external display is connected";
 
             labelBacklightKeyboard.Text = Properties.Strings.Keyboard;
             labelBacklightBar.Text = Properties.Strings.Lightbar;
             labelBacklightLid.Text = Properties.Strings.Lid;
             labelBacklightLogo.Text = Properties.Strings.Logo;
 
-            checkGpuApps.Text = Properties.Strings.KillGpuApps;
-            checkAspm.Text = Properties.Strings.DisablePCIeASPM;
-            checkStandbyNetworking.Text = Properties.Strings.DisableStandbyNetworking;
-            checkNVPlatform.Text = Properties.Strings.StopStartNVServices;
+            checkGpuApps.Text = "Auto-Close Apps Using GPU When Switching to Eco Mode";
+            checkAspm.Text = "Disable PCIe Power Savings (ASPM) on AC Power (reduces micro-stutter)";
+            checkStandbyNetworking.Text = "Turn Off Wi-Fi in Sleep Mode (prevents hot laptop battery drain in bag)";
+            checkNVPlatform.Text = "Pause NVIDIA Background Services When Discrete GPU is Inactive";
             numericBacklightTime.OffText = Properties.Strings.Off;
             numericBacklightPluggedTime.OffText = Properties.Strings.Off;
 
@@ -643,7 +644,7 @@ namespace GHelper
 
             // Tab 4 (UI & Appearance): UI, Graphs & Alerts
             CreateExtraCheckBox(
-                "Show Live 60s Sensor Sparkline Graph in Main Window",
+                "Live Sensor Graph: Show 60s rolling temperature & battery graph in main window",
                 AppConfig.Is("show_main_sparkline"),
                 (s, e) =>
                 {
@@ -657,7 +658,7 @@ namespace GHelper
             );
 
             CreateExtraCheckBox(
-                "Smart Battery Alert toast when battery reaches Charge Limit target",
+                "Battery Charge Alert: Show Windows notification when battery limit is reached",
                 AppConfig.Is("battery_alert_enabled"),
                 (s, e) =>
                 {
@@ -671,7 +672,7 @@ namespace GHelper
             );
 
             CreateExtraCheckBox(
-                "Smart Thermal Alert toast when CPU ≥ 92°C or GPU ≥ 88°C sustained",
+                "Thermal Warning Alert: Show Windows notification if CPU or GPU stays critically hot",
                 AppConfig.Is("thermal_alert_enabled"),
                 (s, e) =>
                 {
@@ -685,7 +686,7 @@ namespace GHelper
             );
 
             CreateExtraCheckBox(
-                "Auto Creator Studio Profile (512-Zone Mini-LED + 165Hz in Photoshop / Premiere / Resolve / Blender)",
+                "Creator Mode: Auto-enable 512-Zone Mini-LED & 165Hz in creative apps",
                 GameWatcher.IsCreatorAppsEnabled(),
                 (s, e) => GameWatcher.ToggleCreatorApps(((RCheckBox)s!).Checked),
                 "Automatically enables 512-Zone Mini-LED local dimming and maximum refresh rate when creative applications are in the foreground on AC power.",
@@ -693,7 +694,7 @@ namespace GHelper
             );
 
             CreateExtraCheckBox(
-                "Auto Windows Power Saver at ≤ 20% battery",
+                "Low Battery Saver: Auto-enable Windows Power Saver at 20% battery or lower",
                 AppConfig.Get("auto_low_battery_saver", 1) == 1,
                 (s, e) => AppConfig.Set("auto_low_battery_saver", ((RCheckBox)s!).Checked ? 1 : 0),
                 "Automatically enables Windows Power Saver & Energy Saver when battery drops to 20% or below while discharging.",
@@ -702,7 +703,7 @@ namespace GHelper
 
             // Tab 3 (System): Flow X16 Posture & Hardware Automations
             CreateExtraCheckBox(
-                "Show Convertible Posture Touch Bar when folded into Tablet or Tent mode",
+                "Posture Touch Bar: Floating quick controls when folded to Tablet or Tent",
                 AppConfig.IsNotFalse("posture_osd_enabled"),
                 (s, e) =>
                 {
@@ -714,7 +715,7 @@ namespace GHelper
             );
 
             CreateExtraCheckBox(
-                "Auto Pen-Only (palm rejection) in Drawing & Note apps",
+                "Palm Rejection: Auto-disable finger touch (stylus only) in drawing & note apps",
                 AppConfig.Is("auto_pen_drawing_apps"),
                 (s, e) =>
                 {
@@ -727,14 +728,14 @@ namespace GHelper
             if (AppConfig.HasTabletMode() || AutoRotationControl.IsSupported())
             {
                 CreateExtraCheckBox(
-                    "Auto-unlock Screen Rotation in Tablet / Tent posture",
+                    "Auto-Rotate Screen: Enable in Tablet & Tent postures (locked in Laptop mode)",
                     AppConfig.Get("auto_tablet_rotation", 1) == 1,
                     (s, e) => AppConfig.Set("auto_tablet_rotation", ((RCheckBox)s!).Checked ? 1 : 0),
                     "Automatically unlocks screen auto-rotation when folded into Tablet or Tent mode, and locks rotation in Laptop mode."
                 );
 
                 CreateExtraCheckBox(
-                    "Auto-Silent performance mode in Tablet posture",
+                    "Tablet Mode: Auto-switch to Silent Mode (keeps chassis cool & quiet in hands)",
                     AppConfig.Get("auto_tablet_silent", 1) == 1,
                     (s, e) => AppConfig.Set("auto_tablet_silent", ((RCheckBox)s!).Checked ? 1 : 0),
                     "Automatically switches to Silent mode when folded into Tablet mode to keep the chassis cool and quiet in your hands, and restores your previous mode in Laptop posture."
@@ -742,7 +743,7 @@ namespace GHelper
             }
 
             CreateExtraCheckBox(
-                "Wi-Fi Low-Latency Gaming Mode (eliminates MediaTek/Intel Wi-Fi power-saving ping spikes)",
+                "Wi-Fi Low-Latency Mode: Disable adapter power savings to prevent ping spikes",
                 WifiLatencyHelper.IsLowLatencyActive(),
                 (s, e) =>
                 {
@@ -754,7 +755,7 @@ namespace GHelper
             );
 
             CreateExtraCheckBox(
-                "Auto Low-Latency Wi-Fi when a game is running",
+                "Game Detection: Auto-enable Low-Latency Wi-Fi while playing games",
                 AppConfig.Is("auto_wifi_gaming"),
                 (s, e) =>
                 {
@@ -1064,6 +1065,12 @@ namespace GHelper
                 { "solar_amber", "Solaris Cyberpunk Gold" },
                 { "vapor_violet", "Vaporwave Twilight Violet" },
                 { "frost_titanium", "Frost Titanium Silver" },
+                { "nordic_frost", "Nordic Glacier Frost" },
+                { "synthwave_neon", "Synthwave 80s Neon" },
+                { "dracula_vampire", "Dracula Dark Velvet" },
+                { "crimson_carbon", "Crimson Carbon Fiber" },
+                { "forest_moss", "Deep Forest Moss" },
+                { "tokyo_night", "Tokyo Night Storm" },
                 { "light", "Clean Daylight Light" }
             };
             string curStyle = AppConfig.GetString("theme")?.ToLower() ?? "default";
@@ -1079,16 +1086,26 @@ namespace GHelper
             {
                 { "Segoe UI", "Segoe UI (Default)" },
                 { "Segoe UI Semibold", "Segoe UI Semibold" },
-                { "Segoe UI Variable Display", "Segoe UI Variable (Win11)" },
+                { "Segoe UI Variable Text", "Segoe UI Variable Text" },
+                { "Segoe UI Variable Display", "Segoe UI Variable Display" },
+                { "Segoe UI Variable Small", "Segoe UI Variable Small" },
+                { "Aptos", "Aptos (Modern Office)" },
+                { "Aptos Display", "Aptos Display" },
                 { "Bahnschrift", "Bahnschrift (Geometric Sans)" },
                 { "Cascadia Code", "Cascadia Code (Modern Terminal)" },
                 { "Cascadia Mono", "Cascadia Mono" },
                 { "Consolas", "Consolas (Technical Mono)" },
+                { "Lucida Console", "Lucida Console (Retro Mono)" },
                 { "Verdana", "Verdana (High Legibility)" },
                 { "Calibri", "Calibri (Clean Sans)" },
                 { "Arial", "Arial (Clean Universal)" },
                 { "Century Gothic", "Century Gothic (Wide Geometric)" },
-                { "Trebuchet MS", "Trebuchet MS" }
+                { "Corbel", "Corbel (Soft Sans)" },
+                { "Candara", "Candara (Fluent Sans)" },
+                { "Franklin Gothic Medium", "Franklin Gothic Medium" },
+                { "Tahoma", "Tahoma (Classic Clean)" },
+                { "Trebuchet MS", "Trebuchet MS" },
+                { "Microsoft Sans Serif", "Microsoft Sans Serif" }
             };
             string curFont = AppConfig.GetString("ui_font_family") ?? "Segoe UI";
             var cbFont = MakeCombo(fontMap, curFont, val =>
@@ -1202,7 +1219,7 @@ namespace GHelper
             panelBackupBtns.Controls.Add(btnExport, 0, 0);
             panelBackupBtns.Controls.Add(btnImport, 1, 0);
 
-            table.Controls.Add(MakeRowHeader("UI Theme & Color Style:", "Choose a dark, cyber, midnight blue, emerald, amber, violet, titanium, AMOLED, or daylight theme.",
+            table.Controls.Add(MakeRowHeader("Theme & Color Palette:", "Choose from 16 curated themes including Nordic, Synthwave, Dracula, Crimson, Forest, Tokyo Night, ROG Cyber, Nebula, or Daylight.",
                 (g, r, fg) =>
                 {
                     using var pen = new Pen(fg, 1.6f);
@@ -1235,7 +1252,7 @@ namespace GHelper
                 }), 0, 0);
             table.Controls.Add(cbStyle, 1, 0);
 
-            table.Controls.Add(MakeRowHeader("Interface Font Family:", "Select your preferred font family across all G-Helper windows.",
+            table.Controls.Add(MakeRowHeader("Typography & Font Family:", "Select your preferred font family across all G-Helper windows.",
                 (g, r, fg) =>
                 {
                     using var fLarge = new Font("Segoe UI", r.Height * 0.62f, FontStyle.Bold, GraphicsUnit.Pixel);
@@ -1247,7 +1264,7 @@ namespace GHelper
                 }), 0, 1);
             table.Controls.Add(cbFont, 1, 1);
 
-            table.Controls.Add(MakeRowHeader("Text Scale & Readability:", "Scale UI text size from Extra Compact (85%) to Extra Large (120%).",
+            table.Controls.Add(MakeRowHeader("Interface Text Size Scale:", "Scale UI text size from Extra Compact (85%) to Extra Large (120%).",
                 (g, r, fg) =>
                 {
                     using var pen = new Pen(fg, 1.6f);
@@ -1267,7 +1284,7 @@ namespace GHelper
                 }), 0, 2);
             table.Controls.Add(cbScale, 1, 2);
 
-            table.Controls.Add(MakeRowHeader("Button Corner Style:", "Adjust the corner radius of buttons and cards from Sharp (1px) to Capsule (18px).",
+            table.Controls.Add(MakeRowHeader("Button Corner Radius:", "Adjust the corner radius of buttons and cards from Sharp (1px) to Capsule (18px).",
                 (g, r, fg) =>
                 {
                     using var pen = new Pen(fg, 1.6f);
@@ -1291,7 +1308,7 @@ namespace GHelper
                 }), 0, 3);
             table.Controls.Add(cbRadius, 1, 3);
 
-            table.Controls.Add(MakeRowHeader("System Tray Icon Display:", "Show live CPU temp, GPU temp, Battery Wattage, Fan RPM, RAM, or CPU Power in the Windows system tray.",
+            table.Controls.Add(MakeRowHeader("System Tray Sensor Icon:", "Show live CPU temp, GPU temp, Battery Wattage, Fan RPM, RAM, or CPU Power in the Windows system tray.",
                 (g, r, fg) =>
                 {
                     using var pen = new Pen(fg, 1.5f);

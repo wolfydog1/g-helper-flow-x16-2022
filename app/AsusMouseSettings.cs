@@ -238,30 +238,17 @@ namespace GHelper
 
         private void Mouse_MouseReadyChanged(object? sender, EventArgs e)
         {
-            if (Disposing || IsDisposed)
-            {
-                return;
-            }
+            if (!IsHandleCreated || Disposing || IsDisposed) return;
             if (!mouse.IsDeviceReady)
             {
-                this.Invoke(delegate
-                {
-                    Close();
-                });
+                BeginInvoke((Action)Close);
             }
         }
 
         private void Mouse_BatteryUpdated(object? sender, EventArgs e)
         {
-            if (Disposing || IsDisposed)
-            {
-                return;
-            }
-            this.Invoke(delegate
-            {
-                VisualizeBatteryState();
-            });
-
+            if (!IsHandleCreated || Disposing || IsDisposed) return;
+            BeginInvoke((Action)VisualizeBatteryState);
         }
 
         private void ComboProfile_DropDownClosed(object? sender, EventArgs e)
@@ -622,10 +609,8 @@ namespace GHelper
                 return;
             }
             //Mouse disconnected. Bye bye.
-            this.Invoke(delegate
-            {
-                this.Close();
-            });
+            if (!IsHandleCreated || Disposing || IsDisposed) return;
+            BeginInvoke((Action)Close);
 
         }
 

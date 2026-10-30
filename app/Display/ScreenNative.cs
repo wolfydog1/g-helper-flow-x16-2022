@@ -51,14 +51,22 @@ namespace GHelper.Display
         {
             var err = DisplayNative.GetDisplayConfigBufferSizes(
                 DisplayNative.QUERY_DEVICE_CONFIG_FLAGS.QDC_ONLY_ACTIVE_PATHS, out uint pathCount, out uint modeCount);
-            if (err != 0) throw new Win32Exception(err);
+            if (err != 0)
+            {
+                Logger.WriteLine("GetDisplayConfigBufferSizes error: " + new Win32Exception(err).Message);
+                yield break;
+            }
 
             var paths = new DisplayNative.DISPLAYCONFIG_PATH_INFO[pathCount];
             var modes = new DisplayNative.DISPLAYCONFIG_MODE_INFO[modeCount];
             err = DisplayNative.QueryDisplayConfig(
                 DisplayNative.QUERY_DEVICE_CONFIG_FLAGS.QDC_ONLY_ACTIVE_PATHS,
                 ref pathCount, paths, ref modeCount, modes, nint.Zero);
-            if (err != 0) throw new Win32Exception(err);
+            if (err != 0)
+            {
+                Logger.WriteLine("QueryDisplayConfig error: " + new Win32Exception(err).Message);
+                yield break;
+            }
 
             for (int i = 0; i < modeCount; i++)
             {
@@ -90,14 +98,22 @@ namespace GHelper.Display
             {
                 var err = DisplayNative.GetDisplayConfigBufferSizes(
                     DisplayNative.QUERY_DEVICE_CONFIG_FLAGS.QDC_ONLY_ACTIVE_PATHS, out uint pathCount, out uint modeCount);
-                if (err != 0) throw new Win32Exception(err);
+                if (err != 0)
+                {
+                    if (log) Logger.WriteLine("GetDisplayConfigBufferSizes error: " + new Win32Exception(err).Message);
+                    return null;
+                }
 
                 var paths = new DisplayNative.DISPLAYCONFIG_PATH_INFO[pathCount];
                 var modes = new DisplayNative.DISPLAYCONFIG_MODE_INFO[modeCount];
                 err = DisplayNative.QueryDisplayConfig(
                     DisplayNative.QUERY_DEVICE_CONFIG_FLAGS.QDC_ONLY_ACTIVE_PATHS,
                     ref pathCount, paths, ref modeCount, modes, nint.Zero);
-                if (err != 0) throw new Win32Exception(err);
+                if (err != 0)
+                {
+                    if (log) Logger.WriteLine("QueryDisplayConfig error: " + new Win32Exception(err).Message);
+                    return null;
+                }
 
                 foreach (var path in paths)
                 {
@@ -113,7 +129,7 @@ namespace GHelper.Display
                     if (log) Logger.WriteLine(targetName.monitorDevicePath + " " + targetName.outputTechnology);
                     AppConfig.Set("internal_display", targetName.monitorFriendlyDeviceName);
 
-                    // Resolve GDI device name directly from the source path entry — no EnumDisplayDevices needed
+                    // Resolve GDI device name directly from the source path entry â€” no EnumDisplayDevices needed
                     var sourceName = new DisplayNative.DISPLAYCONFIG_SOURCE_DEVICE_NAME();
                     sourceName.header.type = DisplayNative.DISPLAYCONFIG_DEVICE_INFO_TYPE.DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
                     sourceName.header.size = (uint)Marshal.SizeOf(sourceName);

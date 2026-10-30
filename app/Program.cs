@@ -264,10 +264,7 @@ namespace GHelper
                     Task.Run(async () =>
                     {
                         await ColorProfileHelper.InstallProfile();
-                        settingsForm.Invoke(delegate
-                        {
-                            settingsForm.InitVisual();
-                        });
+                        Program.RunOnUI(() => settingsForm.InitVisual());
                     });
                     break;
                 default:
