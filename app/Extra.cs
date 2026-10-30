@@ -548,9 +548,51 @@ namespace GHelper
                 if (Program.settingsForm?.fansForm is { Text.Length: > 0 } ff) ff.InitFans();
             };
 
+            // Add Guided Safety Interlock Button and Hardware Latch Guard to panelXGM
+            var buttonXGMSafety = new RButton
+            {
+                AutoSize = false,
+                Size = new Size(390, 42),
+                Location = new Point(checkXGMIndepFan.Left, checkXGMIndepFan.Bottom + 8),
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                Text = (Program.acpi.IsXGConnected() || XGM.IsConnected()) ? "⏏ Safely Undock XG Mobile (Park PCIe)" : "⚡ Handshake & Dock XG Mobile",
+                BorderColor = (Program.acpi.IsXGConnected() || XGM.IsConnected()) ? RForm.colorTurbo : RForm.colorEco
+            };
+            buttonXGMSafety.Click += (s, e) =>
+            {
+                if (Program.acpi.DeviceGet(AsusACPI.GPUXG) == 1)
+                {
+                    Program.settingsForm?.gpuControl.SafelyUndockXGM();
+                }
+                else
+                {
+                    Program.settingsForm?.gpuControl.ToggleXGM();
+                }
+            };
+
+            var checkXGMLatchInterlock = new RCheckBox
+            {
+                AutoSize = true,
+                Location = new Point(buttonXGMSafety.Left, buttonXGMSafety.Bottom + 6),
+                Font = checkXGMBattery.Font,
+                ForeColor = checkXGMBattery.ForeColor,
+                BackColor = checkXGMBattery.BackColor,
+                Text = "XG Mobile Hardware Latch Interlock (Auto-park PCIe before undock)",
+                Checked = AppConfig.Get("xgm_latch_interlock", 1) == 1
+            };
+            checkXGMLatchInterlock.CheckedChanged += (s, e) =>
+            {
+                AppConfig.Set("xgm_latch_interlock", checkXGMLatchInterlock.Checked ? 1 : 0);
+            };
+
+            toolTip.SetToolTip(buttonXGMSafety, "Initiates a guided, safe software undocking sequence: closes all GPU apps, flushes PCIe bus, and notifies you when it is safe to release the physical cable latch.");
+            toolTip.SetToolTip(checkXGMLatchInterlock, "Guards against sudden PCIe bus disconnects and BSODs by ensuring apps are stopped and PCIe lanes are gracefully parked before physical separation.");
+
             panelXGM.Controls.Add(checkXGMIndepFan);
             panelXGM.Controls.Add(checkXGMShowFan);
-            panelXGM.Height = checkXGMIndepFan.Bottom + 8;
+            panelXGM.Controls.Add(buttonXGMSafety);
+            panelXGM.Controls.Add(checkXGMLatchInterlock);
+            panelXGM.Height = checkXGMLatchInterlock.Bottom + 12;
 
             numericBacklightTime.Value = AppConfig.Get("keyboard_timeout", 60);
             numericBacklightPluggedTime.Value = AppConfig.Get("keyboard_ac_timeout", 0);

@@ -338,40 +338,71 @@ namespace GHelper.Gpu
         }
 
 
+        public void SafelyUndockXGM(bool silent = false)
+        {
+            Task.Run(async () =>
+            {
+                settings.LockGPUModes();
+                try
+                {
+                    Logger.WriteLine("XGM Safety Interlock: Initiating safe undock sequence...");
+                    Program.toast?.RunToast("Safely Parking ROG XG Mobile PCIe Link...");
+
+                    // 1. Terminate any lingering GPU applications to ensure VRAM is released cleanly
+                    HardwareControl.KillGPUApps();
+                    XGM.Reset();
+                    await Task.Delay(500);
+
+                    // 2. Command ASUS ACPI to disconnect PCIe bus
+                    Program.acpi.DeviceSet(AsusACPI.GPUXG, 0, "GPU XGM");
+                    Logger.WriteLine("XGM Safety Interlock: PCIe bus disconnected via ACPI");
+
+                    // 3. Allow bus negotiation and driver teardown
+                    await Task.Delay(TimeSpan.FromSeconds(12));
+
+                    // 4. Reinitialize internal laptop graphics control
+                    HardwareControl.RecreateGpuControl();
+                    Battery.BatteryControl.OnXgmDisconnected();
+
+                    // 5. Signal user that physical detachment is safe
+                    Logger.WriteLine("XGM Safety Interlock: Safe to unlatch");
+                    Program.toast?.RunToast("SAFE TO UNLATCH: XG Mobile PCIe bus parked. Unlock cable latch now.");
+                    try { System.Media.SystemSounds.Asterisk.Play(); } catch { }
+                }
+                catch (Exception ex)
+                {
+                    Logger.WriteLine("XGM Safety Interlock error: " + ex.Message);
+                }
+                finally
+                {
+                    settings.Invoke(delegate
+                    {
+                        InitGPUMode();
+                    });
+                }
+            });
+        }
+
         public void ToggleXGM(bool silent = false)
         {
+            if (Program.acpi.DeviceGet(AsusACPI.GPUXG) == 1)
+            {
+                if (silent)
+                {
+                    SafelyUndockXGM(true);
+                    return;
+                }
+                DialogResult dialogResult = settings.ShowMessage("Are you ready to safely undock your ROG XG Mobile? Active GPU applications will be closed and the PCIe connection will be parked.", "ROG XG Mobile Safety Interlock", MessageBoxButtons.YesNo);
+                if (dialogResult == DialogResult.Yes)
+                {
+                    SafelyUndockXGM(false);
+                }
+                return;
+            }
 
             Task.Run(async () =>
             {
                 settings.LockGPUModes();
-
-                if (Program.acpi.DeviceGet(AsusACPI.GPUXG) == 1)
-                {
-                    XGM.Reset();
-                    HardwareControl.KillGPUApps();
-
-                    if (silent)
-                    {
-                        Program.acpi.DeviceSet(AsusACPI.GPUXG, 0, "GPU XGM");
-                        await Task.Delay(TimeSpan.FromSeconds(15));
-                        HardwareControl.RecreateGpuControl();
-                        Battery.BatteryControl.OnXgmDisconnected();
-                        Program.toast?.RunToast("XG Mobile Safe to Disconnect");
-                    }
-                    else
-                    {
-                        DialogResult dialogResult = settings.ShowMessage("Did you close all applications running on XG Mobile?", "Disabling XG Mobile", MessageBoxButtons.YesNo);
-                        if (dialogResult == DialogResult.Yes)
-                        {
-                            Program.acpi.DeviceSet(AsusACPI.GPUXG, 0, "GPU XGM");
-                            await Task.Delay(TimeSpan.FromSeconds(15));
-                            HardwareControl.RecreateGpuControl();
-                            Battery.BatteryControl.OnXgmDisconnected();
-                            Program.toast?.RunToast("XG Mobile Safe to Disconnect");
-                        }
-                    }
-                }
-                else
                 {
                     // If in Eco mode, wake up graphics subsystem first so the PCIe link can handshake
                     if (Program.acpi.DeviceGet(AsusACPI.GPUEco) == 1)

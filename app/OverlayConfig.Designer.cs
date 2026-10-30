@@ -63,6 +63,10 @@ namespace GHelper
             labelAlphaTitle = new Label();
             labelAlpha = new Label();
             trackAlpha = new RTrackBar();
+            labelFontTitle = new Label();
+            comboFont = new GHelper.UI.RComboBox();
+            labelStyleTitle = new Label();
+            comboStyle = new GHelper.UI.RComboBox();
             tableColors = new TableLayoutPanel();
             buttonCpuColor = new GHelper.UI.RColorButton();
             buttonGpuColor = new GHelper.UI.RColorButton();
@@ -474,10 +478,14 @@ namespace GHelper
             panelSliders.Controls.Add(labelAlphaTitle);
             panelSliders.Controls.Add(labelAlpha);
             panelSliders.Controls.Add(trackAlpha);
+            panelSliders.Controls.Add(labelFontTitle);
+            panelSliders.Controls.Add(comboFont);
+            panelSliders.Controls.Add(labelStyleTitle);
+            panelSliders.Controls.Add(comboStyle);
             panelSliders.Dock = DockStyle.Top;
             panelSliders.Location = new Point(10, 340);
             panelSliders.Name = "panelSliders";
-            panelSliders.Size = new Size(880, 120);
+            panelSliders.Size = new Size(880, 200);
             panelSliders.TabIndex = 3;
             //
             // labelSizeTitle
@@ -550,6 +558,46 @@ namespace GHelper
             trackAlpha.TickFrequency = 16;
             trackAlpha.TickStyle = TickStyle.TopLeft;
             trackAlpha.Value = 128;
+            // 
+            // labelFontTitle
+            // 
+            labelFontTitle.AutoSize = true;
+            labelFontTitle.Location = new Point(10, 114);
+            labelFontTitle.Margin = new Padding(4, 0, 4, 0);
+            labelFontTitle.Name = "labelFontTitle";
+            labelFontTitle.Size = new Size(180, 28);
+            labelFontTitle.TabIndex = 6;
+            labelFontTitle.Text = "HUD Typography Font:";
+            // 
+            // comboFont
+            // 
+            comboFont.DropDownStyle = ComboBoxStyle.DropDownList;
+            comboFont.FlatStyle = FlatStyle.Flat;
+            comboFont.Location = new Point(6, 146);
+            comboFont.Margin = new Padding(4);
+            comboFont.Name = "comboFont";
+            comboFont.Size = new Size(424, 38);
+            comboFont.TabIndex = 7;
+            // 
+            // labelStyleTitle
+            // 
+            labelStyleTitle.AutoSize = true;
+            labelStyleTitle.Location = new Point(460, 114);
+            labelStyleTitle.Margin = new Padding(4, 0, 4, 0);
+            labelStyleTitle.Name = "labelStyleTitle";
+            labelStyleTitle.Size = new Size(240, 28);
+            labelStyleTitle.TabIndex = 8;
+            labelStyleTitle.Text = "HUD Backdrop & Border Style:";
+            // 
+            // comboStyle
+            // 
+            comboStyle.DropDownStyle = ComboBoxStyle.DropDownList;
+            comboStyle.FlatStyle = FlatStyle.Flat;
+            comboStyle.Location = new Point(456, 146);
+            comboStyle.Margin = new Padding(4);
+            comboStyle.Name = "comboStyle";
+            comboStyle.Size = new Size(424, 38);
+            comboStyle.TabIndex = 9;
             //
             // tableColors
             //
@@ -748,14 +796,15 @@ namespace GHelper
             //
             AutoScaleDimensions = new SizeF(192F, 192F);
             AutoScaleMode = AutoScaleMode.Dpi;
-            ClientSize = new Size(900, 780);
-            Controls.Add(panelToggles);
+            ClientSize = new Size(900, 820);
+            AutoScroll = true;
             Controls.Add(panelHotkeys);
-            Controls.Add(tableCorners);
             Controls.Add(tableColors);
+            Controls.Add(tableCorners);
             Controls.Add(panelSliders);
             Controls.Add(tableBlocks);
             Controls.Add(tableModes);
+            Controls.Add(panelToggles);
             MaximizeBox = false;
             MinimizeBox = false;
             Name = "OverlayConfig";
@@ -817,6 +866,10 @@ namespace GHelper
         private Label labelAlphaTitle;
         private Label labelAlpha;
         private RTrackBar trackAlpha;
+        private Label labelFontTitle;
+        private UI.RComboBox comboFont;
+        private Label labelStyleTitle;
+        private UI.RComboBox comboStyle;
         private TableLayoutPanel tableColors;
         private UI.RColorButton buttonCpuColor;
         private UI.RColorButton buttonGpuColor;

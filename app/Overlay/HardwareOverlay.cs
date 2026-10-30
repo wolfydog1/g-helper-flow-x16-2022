@@ -164,14 +164,16 @@ namespace GHelper.Overlay
         private SolidBrush _gpuFillBrush = new(Color.FromArgb(128, 0, 85, 27));
         private SolidBrush _cpuFillBrush = new(Color.FromArgb(128, 20, 73, 85));
 
-        // Cached drawing resources — recreated only when the scale changes
+        // Cached drawing resources  recreated only when the scale changes
         private float _lastScale = 0f;
+        private string? _lastFontName = null;
         private float _charW;
         private Font? _font;
         private Font? _rpmFont;
         private Font? _fpsBold;
         private Pen? _totalPen;
         private Pen? _axPen;
+        private Pen? _borderPen;
 
         // Pre-allocated chart point arrays — reused every repaint to avoid GC pressure
         private readonly PointF[] _basePts = new PointF[HistoryLength];
@@ -708,13 +710,19 @@ namespace GHelper.Overlay
             g.TextRenderingHint = _scalePercent <= 75 ? TextRenderingHint.ClearTypeGridFit : TextRenderingHint.AntiAliasGridFit;
 
             g.FillRoundedRectangle(_dragModeActive && _bgAlpha < DragMinAlpha ? _dragBgBrush : _bgBrush, Bound, radius);
+            if (_borderPen != null && !_dragModeActive)
+            {
+                g.DrawRoundedRectangle(_borderPen, Bound, radius);
+            }
 
-            if (sc != _lastScale)
+            string fontName = AppConfig.GetString("overlay_font", "Consolas");
+            if (sc != _lastScale || _lastFontName != fontName)
             {
                 _lastScale = sc;
-                _font?.Dispose();    _font    = new Font("Consolas", BaseFontSize * sc, FontStyle.Regular, GraphicsUnit.Pixel);
-                _rpmFont?.Dispose(); _rpmFont = new Font("Consolas", BaseRpmFontSize * sc, FontStyle.Regular, GraphicsUnit.Pixel);
-                _fpsBold?.Dispose(); _fpsBold = new Font("Consolas", (lineH * 2 + lineGap) / 1.15f, FontStyle.Bold, GraphicsUnit.Pixel);
+                _lastFontName = fontName;
+                _font?.Dispose();    _font    = new Font(fontName, BaseFontSize * sc, FontStyle.Regular, GraphicsUnit.Pixel);
+                _rpmFont?.Dispose(); _rpmFont = new Font(fontName, BaseRpmFontSize * sc, FontStyle.Regular, GraphicsUnit.Pixel);
+                _fpsBold?.Dispose(); _fpsBold = new Font(fontName, (lineH * 2 + lineGap) / 1.15f, FontStyle.Bold, GraphicsUnit.Pixel);
                 _totalPen?.Dispose(); _totalPen = new Pen(Color.FromArgb(255, 200, 200, 200), sc * 0.75f) { DashStyle = DashStyle.Dot };
                 _axPen?.Dispose();    _axPen    = new Pen(Color.FromArgb(255, 80, 80, 80), sc * 0.5f);
                 _charW = g.MeasureString("XX", _font).Width - g.MeasureString("X", _font).Width;
@@ -1215,8 +1223,10 @@ namespace GHelper.Overlay
         public void RefreshSettings()
         {
             if (!_active) return;
-            _mode = (OverlayMode)Math.Clamp(AppConfig.Get("overlay_mode", 0), 0, 3);
+            _mode = (OverlayMode)Math.Clamp(AppConfig.Get("overlay_mode", 0), 0, 4);
             _scalePercent = Math.Clamp(AppConfig.Get("overlay_scale_percent", 100), MinScalePercent, MaxScalePercent);
+            _lastScale = 0f;
+            _lastFontName = null;
             ApplyColors();
             ApplyPreset(_mode);
             ApplySensorFlags();
@@ -1269,7 +1279,37 @@ namespace GHelper.Overlay
             // Chart fill = base color at 1/3 brightness, alpha 128
             _gpuFillBrush.Dispose(); _gpuFillBrush = new SolidBrush(Color.FromArgb(128, gpu.R / 3, gpu.G / 3, gpu.B / 3));
             _cpuFillBrush.Dispose(); _cpuFillBrush = new SolidBrush(Color.FromArgb(128, cpu.R / 3, cpu.G / 3, cpu.B / 3));
-            _bgBrush.Dispose();      _bgBrush = new SolidBrush(Color.FromArgb(_bgAlpha, 0, 0, 0));
+
+            string overlayStyle = AppConfig.GetString("overlay_style", "translucent_dark");
+            _bgBrush.Dispose();
+            _borderPen?.Dispose();
+            switch (overlayStyle)
+            {
+                case "frosted_glass":
+                    _bgBrush = new SolidBrush(Color.FromArgb(Math.Min(235, Math.Max(40, _bgAlpha)), 16, 24, 38));
+                    _borderPen = new Pen(Color.FromArgb(Math.Min(255, _bgAlpha + 60), 0, 190, 240), 1.2f);
+                    break;
+                case "neon_cyber":
+                    _bgBrush = new SolidBrush(Color.FromArgb(_bgAlpha, 20, 10, 14));
+                    _borderPen = new Pen(Color.FromArgb(Math.Min(255, _bgAlpha + 70), 240, 40, 60), 1.2f);
+                    break;
+                case "minimal_frameless":
+                    _bgBrush = new SolidBrush(Color.FromArgb(Math.Min(25, _bgAlpha / 4), 0, 0, 0));
+                    _borderPen = null;
+                    break;
+                case "solid_black":
+                    _bgBrush = new SolidBrush(Color.FromArgb(255, 0, 0, 0));
+                    _borderPen = new Pen(Color.FromArgb(200, 60, 60, 60), 1f);
+                    break;
+                case "nebula_tint":
+                    _bgBrush = new SolidBrush(Color.FromArgb(_bgAlpha, 14, 20, 36));
+                    _borderPen = new Pen(Color.FromArgb(Math.Min(255, _bgAlpha + 50), 55, 110, 200), 1.2f);
+                    break;
+                default: // "translucent_dark"
+                    _bgBrush = new SolidBrush(Color.FromArgb(_bgAlpha, 12, 14, 18));
+                    _borderPen = new Pen(Color.FromArgb(Math.Min(255, _bgAlpha / 2 + 30), 70, 80, 100), 1f);
+                    break;
+            }
         }
 
         public static string ModeKey(string key, int mode) => key + "_" + mode;
@@ -1442,6 +1482,9 @@ namespace GHelper.Overlay
             _fpsBold?.Dispose();  _fpsBold  = null;
             _totalPen?.Dispose(); _totalPen = null;
             _axPen?.Dispose();    _axPen    = null;
+            _borderPen?.Dispose(); _borderPen = null;
+            _lastFontName = null;
+            _lastScale = 0f;
             _lastScale = 0f;
             base.Hide();
         }

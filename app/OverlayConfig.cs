@@ -15,30 +15,34 @@ namespace GHelper
             InitializeComponent();
             InitTheme(true);
 
-            Text = Properties.Strings.Overlay;
-            checkEnable.Text = Properties.Strings.Overlay;
-            checkGameOnly.Text = Properties.Strings.OverlayOnlyInGames;
+            Text = "Overlay Settings & Telemetry HUD";
+            checkEnable.Text = "⚡ Enable In-Game Telemetry Overlay";
+            checkGameOnly.Text = "🎮 Show Only While Gaming (auto-hide on desktop)";
             buttonLight.Text = Properties.Strings.OverlayModeLight;
             buttonDefault.Text = Properties.Strings.Default;
             buttonFull.Text = Properties.Strings.OverlayModeFull;
             buttonComplete.Text = Properties.Strings.OverlayModeComplete;
-            checkTemp.Text = Properties.Strings.OverlayTemperatures;
-            checkFans.Text = Properties.Strings.FanSpeed;
-            checkChart.Text = Properties.Strings.OverlayChart;
-            checkPower.Text = Properties.Strings.Power;
-            checkUsage.Text = Properties.Strings.OverlayLoad;
-            checkBattery.Text = Properties.Strings.Battery;
-            checkLabels.Text = Properties.Strings.OverlayLabels;
+            checkFps.Text = "FPS Counter";
+            checkTemp.Text = "CPU & GPU Temps";
+            checkFans.Text = "Main Fan Speeds";
+            checkChart.Text = "Load History Graph";
+            checkPower.Text = "Power Draw (W)";
+            checkUsage.Text = "Hardware Load %";
+            checkRam.Text = "RAM Usage (GB)";
+            checkBattery.Text = "Battery Wattage";
+            checkLabels.Text = "Component Labels";
             check1PercentLow.Text = "1% Low FPS";
             checkJitter.Text = "Frame Pacing";
-            checkShadow.Text = "Text Shadow";
+            checkShadow.Text = "Text Drop Shadow";
             checkHdrBadge.Text = "HDR / 512Z Badge";
             checkFrametime.Text = "Frametime (ms)";
             checkClock.Text = "System Clock";
-            checkVram.Text = "VRAM Usage";
-            checkMidFan.Text = "Mid Fan RPM";
-            labelSizeTitle.Text = Properties.Strings.OverlaySize;
-            labelAlphaTitle.Text = Properties.Strings.OverlayTransparency;
+            checkVram.Text = "VRAM Usage (GB)";
+            checkMidFan.Text = "Mid System Fan";
+            labelSizeTitle.Text = "HUD Scale Size:";
+            labelAlphaTitle.Text = "HUD Transparency:";
+            labelFontTitle.Text = "HUD Typography Font:";
+            labelStyleTitle.Text = "HUD Theme & Backdrop Style:";
             labelHotkeys.Text = "•  Ctrl + Shift + Alt + O - Toggle overlay\n•  Ctrl + Shift + Alt + Mouse Drag - Move overlay\n•  Ctrl + Shift + Alt + Mouse Click - Switch mode\n•  Ctrl + Shift + Alt + Wheel - Resize overlay\n•  Ctrl + Shift + Alt + Wheel Click - Reset size";
             buttonCpuColor.Text = "CPU " + Properties.Strings.Color;
             buttonGpuColor.Text = "GPU " + Properties.Strings.Color;
@@ -87,6 +91,50 @@ namespace GHelper
             trackAlpha.Value = Math.Clamp(AppConfig.Get("overlay_alpha", 128), trackAlpha.Minimum, trackAlpha.Maximum);
             labelSize.Text = trackScale.Value + "%";
             labelAlpha.Text = AlphaText();
+
+            var fontList = new Dictionary<string, string>
+            {
+                { "Consolas", "Consolas (Tech Monospace)" },
+                { "Cascadia Code", "Cascadia Code (Modern Coding)" },
+                { "Cascadia Mono", "Cascadia Mono (Clean Terminal)" },
+                { "Segoe UI", "Segoe UI (Fluent Sans)" },
+                { "Segoe UI Variable Display", "Segoe UI Variable (Win11)" },
+                { "Bahnschrift", "Bahnschrift (Compact Sans)" },
+                { "Trebuchet MS", "Trebuchet MS (High Contrast)" },
+                { "Arial", "Arial (Universal Clean)" }
+            };
+            comboFont.Items.Clear();
+            foreach (var kv in fontList) comboFont.Items.Add(new ComboOption(kv.Key, kv.Value));
+            SelectComboKey(comboFont, AppConfig.GetString("overlay_font", "Consolas"));
+            comboFont.SelectionChangeCommitted += (s, e) =>
+            {
+                if (comboFont.SelectedItem is ComboOption opt)
+                {
+                    AppConfig.Set("overlay_font", opt.Key);
+                    Program.hardwareOverlay?.RefreshSettings();
+                }
+            };
+
+            var styleList = new Dictionary<string, string>
+            {
+                { "translucent_dark", "Translucent Stealth Dark" },
+                { "frosted_glass", "Frosted Glassmorphism (Cyan)" },
+                { "neon_cyber", "ROG Cyber Red Glow" },
+                { "minimal_frameless", "Minimal Frameless (HUD)" },
+                { "solid_black", "Solid Contrast Black (Esports)" },
+                { "nebula_tint", "Nebula Sapphire Tint (Blue)" }
+            };
+            comboStyle.Items.Clear();
+            foreach (var kv in styleList) comboStyle.Items.Add(new ComboOption(kv.Key, kv.Value));
+            SelectComboKey(comboStyle, AppConfig.GetString("overlay_style", "translucent_dark"));
+            comboStyle.SelectionChangeCommitted += (s, e) =>
+            {
+                if (comboStyle.SelectedItem is ComboOption opt)
+                {
+                    AppConfig.Set("overlay_style", opt.Key);
+                    Program.hardwareOverlay?.RefreshSettings();
+                }
+            };
 
             buttonCpuColor.SwatchColor = HardwareOverlay.CpuColor;
             buttonGpuColor.SwatchColor = HardwareOverlay.GpuColor;
@@ -142,6 +190,10 @@ namespace GHelper
             AppConfig.Remove("overlay_alpha");
             AppConfig.Remove("overlay_color_cpu");
             AppConfig.Remove("overlay_color_gpu");
+            AppConfig.Remove("overlay_font");
+            AppConfig.Remove("overlay_style");
+            SelectComboKey(comboFont, "Consolas");
+            SelectComboKey(comboStyle, "translucent_dark");
 
             VisualiseBlocks();
             trackScale.Value = 100;
@@ -209,6 +261,27 @@ namespace GHelper
                 Program.hardwareOverlay?.RefreshSettings();
             };
             colorDlg.ShowDialog(this);
+        }
+
+        private sealed class ComboOption
+        {
+            public string Key { get; }
+            public string Label { get; }
+            public ComboOption(string key, string label) { Key = key; Label = label; }
+            public override string ToString() => Label;
+        }
+
+        private static void SelectComboKey(ComboBox cb, string key)
+        {
+            for (int i = 0; i < cb.Items.Count; i++)
+            {
+                if (cb.Items[i] is ComboOption opt && string.Equals(opt.Key, key, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (cb.SelectedIndex != i) cb.SelectedIndex = i;
+                    return;
+                }
+            }
+            if (cb.Items.Count > 0 && cb.SelectedIndex < 0) cb.SelectedIndex = 0;
         }
     }
 }

@@ -38,6 +38,14 @@ namespace GHelper.Helpers
                 graphics.FillPath(brush, path);
             }
         }
+
+        public static void DrawRoundedRectangle(this Graphics graphics, Pen pen, Rectangle bounds, int cornerRadius)
+        {
+            using (GraphicsPath path = RoundedRect(bounds, cornerRadius))
+            {
+                graphics.DrawPath(pen, path);
+            }
+        }
     }
 
     public enum ToastIcon
