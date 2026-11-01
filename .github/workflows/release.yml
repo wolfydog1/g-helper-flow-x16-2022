@@ -1,71 +1,89 @@
 name: Release
 
 on:
+  push:
+    tags:
+      - 'v*'
   release:
     types: [ published ]
   workflow_dispatch:
 
 permissions:
   contents: write
-  id-token: write
-  attestations: write
 
 jobs:
   release:
     runs-on: windows-2022
     steps:
-    - uses: actions/checkout@v7
-    - name: Setup dotnet
-      uses: actions/setup-dotnet@v5
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '10.0.x'
 
-    - name: Check tag matches version
-      if: github.event_name == 'release'
+    - name: Publish Single-File Executable
+      run: |
+        dotnet publish app/GHelper.sln --configuration Release --runtime win-x64 -p:PublishSingleFile=true --no-self-contained -o ./publish
+
+    - name: Package Release Archives & Checksums
+      shell: pwsh
       run: |
         $version = ([xml](Get-Content app/GHelper.csproj)).Project.PropertyGroup.AssemblyVersion
-        $tag = "${{ github.event.release.tag_name }}"
-        if ($tag -ne "v$version") { throw "Tag $tag does not match AssemblyVersion $version" }
+        $tag = if ("${{ github.ref_name }}" -like "v*") { "${{ github.ref_name }}" } else { "v$version" }
+        Compress-Archive -Path ./publish/GHelper.exe -DestinationPath ./publish/GHelper.zip -Force
+        Copy-Item ./publish/GHelper.zip ./publish/GHelper-FlowX16-Edition.zip -Force
 
-    - name: Publish
-      run: |
-        dotnet publish app/GHelper.sln --configuration Release --runtime win-x64 -p:PublishSingleFile=true --no-self-contained
+        $exeHash = (Get-FileHash ./publish/GHelper.exe -Algorithm SHA256).Hash.ToLower()
+        $zipHash = (Get-FileHash ./publish/GHelper.zip -Algorithm SHA256).Hash.ToLower()
 
-    - name: Upload unsigned EXE
-      id: upload-unsigned
-      uses: actions/upload-artifact@v7
+        $notes = @"
+        ## ⚡ G-Helper $tag — ROG Flow X16 & Convertible Edition
+
+        Lightweight, zero-bloat Armoury Crate replacement tailored for the **ASUS ROG Flow X16 (GV601)** and ROG convertible laptops.
+
+        ### 📥 Direct Downloads
+        - **[📦 Download GHelper.zip (Recommended)](https://github.com/${{ github.repository }}/releases/download/$tag/GHelper.zip)** — Extract `GHelper.exe` to any folder and run!
+        - **[⚡ Download GHelper.exe (Standalone Executable)](https://github.com/${{ github.repository }}/releases/download/$tag/GHelper.exe)**
+        - **[📖 Read the New User Guide](https://github.com/${{ github.repository }}/blob/main/docs/USER_GUIDE.md)**
+
+        ### 🔐 SHA-256 Checksums
+        | File | SHA-256 |
+        | :--- | :--- |
+        | `GHelper.exe` | ``$exeHash`` |
+        | `GHelper.zip` | ``$zipHash`` |
+
+        ### 🛠️ Requirements
+        - Windows 10 / 11 (64-bit)
+        - [.NET 10.0 Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)
+        - ASUS System Control Interface v3 driver (installed via Windows Update or MyASUS)
+        "@
+        Set-Content -Path ./release_notes.md -Value $notes -Encoding UTF8
+        echo "TAG=$tag" >> $env:GITHUB_ENV
+        echo "VERSION=$version" >> $env:GITHUB_ENV
+
+    - name: Upload Build Artifact
+      uses: actions/upload-artifact@v4
       with:
-        path: app/bin/x64/Release/net10.0-windows/win-x64/publish/GHelper.exe
+        name: GHelper-${{ env.TAG }}
+        path: |
+          ./publish/GHelper.exe
+          ./publish/GHelper.zip
+          ./publish/GHelper-FlowX16-Edition.zip
 
-    - id: sign-exe
-      uses: signpath/github-action-submit-signing-request@v2
-      with:
-        api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-        organization-id: ${{ secrets.SIGNPATH_ORG_ID }}
-        project-slug: ${{ secrets.SIGNPATH_PROJECT }}
-        signing-policy-slug: ${{ secrets.SIGNPATH_POLICY }}
-        github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
-        wait-for-completion: true
-        output-artifact-directory: './signed'
-
-    - name: Create ZIP from signed EXE
-      run: powershell Compress-Archive ./signed/GHelper.exe ./signed/GHelper.zip
-
-    - name: Upload signed EXE as workflow artifact
-      uses: actions/upload-artifact@v7
-      with:
-        name: GHelper-signed
-        path: ./signed/GHelper.exe
-
-    - name: Upload signed EXE and ZIP
-      if: github.event_name == 'release'
+    - name: Create or Update GitHub Release
       env:
         GH_TOKEN: ${{ github.token }}
+      shell: pwsh
       run: |
-        gh release upload "${{ github.event.release.tag_name }}" ./signed/GHelper.exe ./signed/GHelper.zip --clobber
-    - name: Generate SLSA build provenance attestation
-      uses: actions/attest-build-provenance@v4
-      with:
-        subject-path: |
-          ./signed/GHelper.exe
-          ./signed/GHelper.zip
+        $tag = $env:TAG
+        $version = $env:VERSION
+        gh release view "$tag" > $null 2>&1
+        if ($LASTEXITCODE -ne 0) {
+          gh release create "$tag" ./publish/GHelper.exe ./publish/GHelper.zip ./publish/GHelper-FlowX16-Edition.zip --title "G-Helper $tag (Flow X16 & Convertible Edition)" --notes-file ./release_notes.md --latest
+        } else {
+          gh release upload "$tag" ./publish/GHelper.exe ./publish/GHelper.zip ./publish/GHelper-FlowX16-Edition.zip --clobber
+          gh release edit "$tag" --title "G-Helper $tag (Flow X16 & Convertible Edition)" --notes-file ./release_notes.md --latest
+        }
