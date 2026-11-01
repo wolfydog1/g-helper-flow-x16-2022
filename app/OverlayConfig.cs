@@ -18,19 +18,37 @@ namespace GHelper
         {
             InitializeComponent();
 
-            // Fix high-DPI TrackBar height overlap over HUD Typography Font / HUD Theme labels
-            float dpiScale = DeviceDpi / 96f;
-            trackScale.AutoSize = false;
-            trackScale.Height = (int)Math.Round(34 * dpiScale);
-            trackAlpha.AutoSize = false;
-            trackAlpha.Height = (int)Math.Round(34 * dpiScale);
-            panelSliders.AutoSize = false;
-            panelSliders.Height = (int)Math.Round(66 * dpiScale);
-            panelSliders.Margin = new Padding(0, (int)Math.Round(6 * dpiScale), 0, (int)Math.Round(6 * dpiScale));
+            AutoScroll = false;
+
+            panelSliders.RowStyles.Clear();
+            panelSliders.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            panelSliders.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            panelSliders.AutoSize = true;
+            panelSliders.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            panelSizeHeader.AutoSize = true;
+            panelAlphaHeader.AutoSize = true;
+
+            tableAppearance.RowStyles.Clear();
+            tableAppearance.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            tableAppearance.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             tableAppearance.AutoSize = true;
-            tableAppearance.Margin = new Padding(0, (int)Math.Round(4 * dpiScale), 0, (int)Math.Round(6 * dpiScale));
-            labelFontTitle.Margin = new Padding(0, (int)Math.Round(2 * dpiScale), 0, (int)Math.Round(3 * dpiScale));
-            labelStyleTitle.Margin = new Padding(0, (int)Math.Round(2 * dpiScale), 0, (int)Math.Round(3 * dpiScale));
+            tableAppearance.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+
+            labelFontTitle.AutoSize = true;
+            labelFontTitle.Dock = DockStyle.Fill;
+            labelFontTitle.TextAlign = ContentAlignment.MiddleLeft;
+            labelFontTitle.Margin = new Padding(2, 4, 2, 6);
+            labelFontTitle.UseMnemonic = false;
+
+            labelStyleTitle.AutoSize = true;
+            labelStyleTitle.Dock = DockStyle.Fill;
+            labelStyleTitle.TextAlign = ContentAlignment.MiddleLeft;
+            labelStyleTitle.Margin = new Padding(2, 4, 2, 6);
+            labelStyleTitle.UseMnemonic = false;
+
+            panelHotkeys.AutoSize = true;
+            panelHotkeys.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            labelHotkeys.UseMnemonic = false;
 
             // Add 4 new HUD telemetry block checkboxes (Hotspot, Clocks, Ping, Battery ETA)
             RCheckBox CreateTelemetryCheck(string name, string text)
@@ -216,7 +234,22 @@ namespace GHelper
             buttonGpuColor.Click += (s, e) => PickColor("overlay_color_gpu", buttonGpuColor, HardwareOverlay.GpuColor);
             buttonReset.Click += ButtonReset_Click;
 
-            Shown += (s, e) => { FormPosition(); UpdateCornerButtons(); };
+            Shown += (s, e) =>
+            {
+                PerformLayout();
+                int maxBottom = 0;
+                foreach (Control c in Controls)
+                {
+                    if (c.Visible && c.Bottom + c.Margin.Bottom > maxBottom)
+                        maxBottom = c.Bottom + c.Margin.Bottom;
+                }
+                if (maxBottom > 0)
+                {
+                    ClientSize = new Size(ClientSize.Width, maxBottom + Padding.Bottom + 6);
+                }
+                FormPosition();
+                UpdateCornerButtons();
+            };
         }
 
         public void FormPosition()

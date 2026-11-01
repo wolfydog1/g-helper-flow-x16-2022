@@ -2066,15 +2066,23 @@ namespace GHelper
             var bar = new TableLayoutPanel
             {
                 Dock = DockStyle.Top,
-                Height = 32,
-                ColumnCount = 5,
+                Height = 46,
+                ColumnCount = 6,
                 RowCount = 1,
                 Margin = new Padding(4, 2, 4, 2),
-                Padding = new Padding(4, 2, 4, 2),
-                BackColor = Color.Transparent
+                Padding = new Padding(10, 3, 6, 3),
+                BackColor = formBack
             };
+            bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             for (int i = 0; i < 5; i++)
                 bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20F));
+            bar.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
+            panelFans.Controls.Remove(checkFanClamp);
+            checkFanClamp.Dock = DockStyle.Fill;
+            checkFanClamp.AutoSize = true;
+            checkFanClamp.Margin = new Padding(2, 2, 8, 2);
+            checkFanClamp.Padding = new Padding(4, 0, 2, 0);
 
             RButton MakePresetBtn(string text, Color accent, Action onClick)
             {
@@ -2082,8 +2090,11 @@ namespace GHelper
                 {
                     Text = text,
                     Dock = DockStyle.Fill,
-                    Margin = new Padding(2, 1, 2, 1),
+                    Margin = new Padding(3, 2, 3, 2),
                     Secondary = true,
+                    BackColor = buttonSecond,
+                    ForeColor = foreMain,
+                    UseVisualStyleBackColor = false,
                     BorderRadius = Math.Min(CurrentButtonRadius, 8),
                     BorderColor = accent,
                     FlatStyle = FlatStyle.Flat,
@@ -2094,21 +2105,21 @@ namespace GHelper
                 return btn;
             }
 
-            var btnZeroRpm = MakePresetBtn("🍃 0-RPM <55°C", colorEco, () =>
+            var btnZeroRpm = MakePresetBtn("0-RPM <55°C", colorEco, () =>
             {
                 byte[] cpuGpu = [30, 40, 50, 55, 65, 75, 85, 95, 0, 0, 0, 0, 22, 40, 62, 82];
                 byte[] mid    = [30, 40, 50, 55, 65, 75, 85, 95, 0, 0, 0, 8, 24, 38, 54, 72];
                 ApplyCoordinatedFanPreset("0-RPM Silent (<55°C)", cpuGpu, cpuGpu, mid);
             });
 
-            var btnWhisper = MakePresetBtn("🤫 38dB Whisper", colorStandard, () =>
+            var btnWhisper = MakePresetBtn("38dB Whisper", colorStandard, () =>
             {
                 byte[] cpuGpu = [30, 40, 50, 60, 70, 80, 88, 96, 0, 0, 12, 22, 32, 42, 48, 56];
                 byte[] mid    = [30, 40, 50, 60, 70, 80, 88, 96, 0, 8, 16, 26, 36, 44, 50, 58];
                 ApplyCoordinatedFanPreset("38dB Whisper Cap", cpuGpu, cpuGpu, mid);
             });
 
-            var btnFrostForce = MakePresetBtn("❄️ Frost Force", colorStandard, () =>
+            var btnFrostForce = MakePresetBtn("Frost Force", colorStandard, () =>
             {
                 byte[] cpu = [30, 40, 50, 60, 70, 78, 86, 94, 0, 10, 22, 36, 52, 68, 82, 94];
                 byte[] gpu = [30, 40, 50, 60, 70, 78, 86, 94, 0, 12, 24, 38, 54, 70, 84, 96];
@@ -2116,21 +2127,21 @@ namespace GHelper
                 ApplyCoordinatedFanPreset("Frost Force Tri-Fan Balanced", cpu, gpu, mid);
             });
 
-            var btnMax = MakePresetBtn("🚀 Max Cooling", colorTurbo, () =>
+            var btnMax = MakePresetBtn("Max Cooling", colorTurbo, () =>
             {
                 byte[] max = [30, 40, 50, 60, 70, 78, 85, 92, 40, 55, 70, 82, 92, 98, 100, 100];
                 ApplyCoordinatedFanPreset("Max Cooling", max, max, max);
             });
 
             RButton? btnSmooth = null;
-            btnSmooth = MakePresetBtn("🌊 Anti-Pulse", colorCustom, () =>
+            btnSmooth = MakePresetBtn("Anti-Pulse", colorCustom, () =>
             {
                 bool next = !AppConfig.IsNotFalse("smart_fan_hysteresis");
                 AppConfig.Set("smart_fan_hysteresis", next ? 1 : 0);
                 if (btnSmooth != null)
                 {
                     btnSmooth.Activated = next;
-                    btnSmooth.Text = next ? "🌊 Anti-Pulse: ON" : "🌊 Anti-Pulse: OFF";
+                    btnSmooth.Text = next ? "Anti-Pulse: ON" : "Anti-Pulse: OFF";
                 }
                 if (next)
                 {
@@ -2149,21 +2160,23 @@ namespace GHelper
             });
             bool smoothActive = AppConfig.IsNotFalse("smart_fan_hysteresis");
             btnSmooth.Activated = smoothActive;
-            btnSmooth.Text = smoothActive ? "🌊 Anti-Pulse: ON" : "🌊 Anti-Pulse: OFF";
+            btnSmooth.Text = smoothActive ? "Anti-Pulse: ON" : "Anti-Pulse: OFF";
 
-            bar.Controls.Add(btnZeroRpm, 0, 0);
-            bar.Controls.Add(btnWhisper, 1, 0);
-            bar.Controls.Add(btnFrostForce, 2, 0);
-            bar.Controls.Add(btnMax, 3, 0);
-            bar.Controls.Add(btnSmooth, 4, 0);
+            bar.Controls.Add(checkFanClamp, 0, 0);
+            bar.Controls.Add(btnZeroRpm, 1, 0);
+            bar.Controls.Add(btnWhisper, 2, 0);
+            bar.Controls.Add(btnFrostForce, 3, 0);
+            bar.Controls.Add(btnMax, 4, 0);
+            bar.Controls.Add(btnSmooth, 5, 0);
 
             panelFans.SuspendLayout();
             panelFans.Controls.Add(bar);
-            // In WinForms DockStyle.Top stacking, higher ChildIndex docks below lower ChildIndex;
-            // place bar just above tableFanCharts and below panelTitleFans
+            // In WinForms DockStyle.Top stacking, higher ChildIndex docks first (at the top)
             panelFans.Controls.SetChildIndex(panelTitleFans, panelFans.Controls.Count - 1);
             panelFans.Controls.SetChildIndex(bar, panelFans.Controls.Count - 2);
             panelFans.ResumeLayout(true);
+
+            ControlHelper.Adjust(this);
         }
 
         private void ApplyCoordinatedFanPreset(string presetName, byte[] cpuCurve, byte[] gpuCurve, byte[] midCurve)

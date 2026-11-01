@@ -28,6 +28,13 @@ namespace GHelper
         private bool _hasACPI = false;
         private bool _hasOptimalBrightness = false;
 
+        private RButton buttonTabAuto = null!;
+        private Panel panelAutoHeader = null!;
+        private PictureBox pictureAuto = null!;
+        private Label labelAuto = null!;
+        private Panel panelAuto = null!;
+        private TableLayoutPanel? barAuraTelemetry;
+
 
         private void SetKeyCombo(ComboBox combo, TextBox txbox, string name)
         {
@@ -193,10 +200,93 @@ namespace GHelper
         {
             InitializeComponent();
 
+            // Create 6th tab (Auto: Smart Posture & Game Automations) to balance tab heights
+            buttonTabAuto = new RButton
+            {
+                BorderColor = Color.FromArgb(230, 0, 35),
+                Dock = DockStyle.Fill,
+                FlatStyle = FlatStyle.Flat,
+                Font = buttonTabSystem.Font,
+                Margin = buttonTabSystem.Margin,
+                Name = "buttonTabAuto",
+                Size = buttonTabSystem.Size,
+                TabIndex = 3,
+                Text = "🤖 Auto",
+                UseVisualStyleBackColor = false
+            };
+            buttonTabAuto.FlatAppearance.BorderSize = 0;
+
+            buttonTabKeyboard.Text = "⌨ Keys";
+            buttonTabLighting.Text = "💡 Light";
+            buttonTabPower.Text = "⚡ Power";
+            buttonTabSystem.Text = "⚙ System";
+            buttonTabAppearance.Text = "🎨 Style";
+
+            tableTabs.SuspendLayout();
+            tableTabs.Controls.Clear();
+            tableTabs.ColumnStyles.Clear();
+            tableTabs.ColumnCount = 6;
+            for (int i = 0; i < 6; i++)
+                tableTabs.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 16.666F));
+            tableTabs.Controls.Add(buttonTabKeyboard, 0, 0);
+            tableTabs.Controls.Add(buttonTabLighting, 1, 0);
+            tableTabs.Controls.Add(buttonTabPower, 2, 0);
+            tableTabs.Controls.Add(buttonTabAuto, 3, 0);
+            tableTabs.Controls.Add(buttonTabSystem, 4, 0);
+            tableTabs.Controls.Add(buttonTabAppearance, 5, 0);
+            tableTabs.Dock = DockStyle.Bottom;
+            tableTabs.Margin = new Padding(0, 8, 0, 0);
+            tableTabs.Padding = new Padding(0, 6, 0, 2);
+            tableTabs.ResumeLayout(true);
+
+            panelAutoHeader = new Panel
+            {
+                AccessibleRole = AccessibleRole.Grouping,
+                AutoSize = true,
+                BackColor = panelSettingsHeader.BackColor,
+                Dock = DockStyle.Top,
+                Name = "panelAutoHeader",
+                Padding = panelSettingsHeader.Padding,
+                Size = panelSettingsHeader.Size
+            };
+            pictureAuto = new PictureBox
+            {
+                BackgroundImage = Properties.Resources.icons8_automation_32,
+                BackgroundImageLayout = ImageLayout.Zoom,
+                Location = pictureSettings.Location,
+                Name = "pictureAuto",
+                Size = pictureSettings.Size,
+                TabStop = false
+            };
+            labelAuto = new Label
+            {
+                AutoSize = true,
+                Font = labelSettings.Font,
+                Location = labelSettings.Location,
+                Name = "labelAuto",
+                Text = "Smart Posture & Game Automations",
+                UseMnemonic = false
+            };
+            panelAutoHeader.Controls.Add(pictureAuto);
+            panelAutoHeader.Controls.Add(labelAuto);
+
+            panelAuto = new Panel
+            {
+                AccessibleRole = AccessibleRole.Grouping,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Dock = DockStyle.Top,
+                Name = "panelAuto",
+                Padding = panelSettings.Padding,
+                Size = new Size(panelSettings.Width, 100)
+            };
+            Controls.Add(panelAuto);
+            Controls.Add(panelAutoHeader);
+
             labelBindings.Text = Properties.Strings.KeyBindings;
             buttonResetBindings.Text = Properties.Strings.Reset;
             labelBacklightTitle.Text = Properties.Strings.LaptopBacklight;
-            labelSettings.Text = "Hardware & Posture Automations";
+            labelSettings.Text = "System & Hardware Controls";
             labelAppearance.Text = "Interface & Customization";
 
             checkAwake.Text = Properties.Strings.Awake;
@@ -214,11 +304,11 @@ namespace GHelper
             //labelBacklightTimeoutPlugged.Text = Properties.Strings.BacklightTimeoutPlugged;
 
             checkNoOverdrive.Text = "Disable Display Overdrive (reduces pixel overshoot ghosting)";
-            checkELMB.Text = "Extreme Low Motion Blur (ELMB backlight strobing for high-speed gaming)";
+            checkELMB.Text = "Extreme Low Motion Blur (ELMB backlight strobing)";
             checkTopmost.Text = "Keep G-Helper Window Pinned on Top of Other Windows";
             checkUSBC.Text = "Keep Discrete GPU Asleep on USB-C Chargers (Optimized Mode)";
             checkUSBCPowerLimit.Text = "Cap Power Draw on USB-C (prevents battery discharge under load)";
-            checkAutoToggleClamshellMode.Text = "Clamshell Mode: Keep laptop running with lid closed when external display is connected";
+            checkAutoToggleClamshellMode.Text = "Clamshell Mode: Keep running with lid closed on external display";
 
             labelBacklightKeyboard.Text = Properties.Strings.Keyboard;
             labelBacklightBar.Text = Properties.Strings.Lightbar;
@@ -684,9 +774,9 @@ namespace GHelper
             panelSettings.Controls.Remove(checkTopmost);
             panelAppearance.Controls.Add(checkTopmost);
 
-            // Tab 4 (UI & Appearance): UI, Graphs & Alerts
-            CreateExtraCheckBox(
-                "Live Sensor Graph: Show 60s rolling temperature & battery graph in main window",
+            // Tab 5 (Style): UI, Graphs & Alerts (4 checkboxes + 6 dropdown rows = 10 items)
+            var cbSparkline = CreateExtraCheckBox(
+                "Live Sensor Graph: Show 60s rolling temp & battery graph in main window",
                 AppConfig.Is("show_main_sparkline"),
                 (s, e) =>
                 {
@@ -699,8 +789,8 @@ namespace GHelper
                 panelAppearance
             );
 
-            CreateExtraCheckBox(
-                "Battery Charge Alert: Show Windows notification when battery limit is reached",
+            var cbBatAlert = CreateExtraCheckBox(
+                "Battery Charge Alert: Notify when battery reaches Charge Limit target",
                 AppConfig.Is("battery_alert_enabled"),
                 (s, e) =>
                 {
@@ -713,8 +803,8 @@ namespace GHelper
                 panelAppearance
             );
 
-            CreateExtraCheckBox(
-                "Thermal Warning Alert: Show Windows notification if CPU or GPU stays critically hot",
+            var cbThermAlert = CreateExtraCheckBox(
+                "Thermal Warning Alert: Notify if CPU or GPU stays critically hot",
                 AppConfig.Is("thermal_alert_enabled"),
                 (s, e) =>
                 {
@@ -727,25 +817,30 @@ namespace GHelper
                 panelAppearance
             );
 
-            CreateExtraCheckBox(
-                "Creator Mode: Auto-enable 512-Zone Mini-LED & 165Hz in creative apps",
-                GameWatcher.IsCreatorAppsEnabled(),
-                (s, e) => GameWatcher.ToggleCreatorApps(((RCheckBox)s!).Checked),
-                "Automatically enables 512-Zone Mini-LED local dimming and maximum refresh rate when creative applications are in the foreground on AC power.",
-                panelAppearance
-            );
+            // Order panelAppearance top-to-bottom: panelTheme -> Sparkline -> Battery Alert -> Thermal Alert -> Topmost
+            panelTheme.BringToFront();
+            cbSparkline.BringToFront();
+            cbBatAlert.BringToFront();
+            cbThermAlert.BringToFront();
+            checkTopmost.BringToFront();
 
-            CreateExtraCheckBox(
-                "Low Battery Saver: Auto-enable Windows Power Saver at 20% battery or lower",
-                AppConfig.Get("auto_low_battery_saver", 1) == 1,
-                (s, e) => AppConfig.Set("auto_low_battery_saver", ((RCheckBox)s!).Checked ? 1 : 0),
-                "Automatically enables Windows Power Saver & Energy Saver when battery drops to 20% or below while discharging.",
-                panelAppearance
-            );
+            // Tab 3 (Auto): Smart Posture, Stylus, Game & Battery Automations (1 button + 9 checkboxes = 10 items)
+            var btnAppRules = new RButton
+            {
+                Dock = DockStyle.Top,
+                Height = 36,
+                Margin = new Padding(6, 4, 6, 6),
+                Secondary = true,
+                BorderRadius = CurrentButtonRadius,
+                BorderColor = colorStandard,
+                Text = "Manage Per-App Custom Performance & Fan Profiles (.exe Rules)..."
+            };
+            btnAppRules.Click += (s, e) => AppProfileRulesForm.ShowManager(this);
+            toolTip.SetToolTip(btnAppRules, "Assign specific game or application .exe files to Silent 35W (Indie), Balanced + 512-Zone (Creator), Turbo + 512-Zone + 165Hz (AAA), or Excluded.");
+            panelAuto.Controls.Add(btnAppRules);
 
-            // Tab 3 (System): Flow X16 Posture & Hardware Automations
-            CreateExtraCheckBox(
-                "Posture Touch Bar: Floating quick controls when folded to Tablet or Tent",
+            var cbPostureBar = CreateExtraCheckBox(
+                "Posture Touch Bar: Floating quick controls in Tablet or Tent mode",
                 AppConfig.IsNotFalse("posture_osd_enabled"),
                 (s, e) =>
                 {
@@ -753,87 +848,76 @@ namespace GHelper
                     AppConfig.Set("posture_osd_enabled", en ? 1 : 0);
                     Program.settingsForm?.SetContextMenu();
                 },
-                "Displays a sleek, draggable, pinnable touch-friendly bar when folding into Tablet or Tent mode with 1-tap Touch/Pen, Rotate, Silent, 1Z/512Z, OSK, Snip, Volume, and Brightness controls."
+                "Displays a sleek, draggable, pinnable touch-friendly bar when folding into Tablet or Tent mode with 1-tap Touch/Pen, Rotate, Silent, 1Z/512Z, OSK, Snip, Volume, and Brightness controls.",
+                panelAuto
             );
 
-            CreateExtraCheckBox(
-                "Tent Mode Thermal Boost: Auto-unlock higher sustained cooling in Tent posture",
+            RCheckBox? cbTabletSilent = null;
+            RCheckBox? cbTabletRotate = null;
+            if (AppConfig.HasTabletMode() || AutoRotationControl.IsSupported())
+            {
+                cbTabletSilent = CreateExtraCheckBox(
+                    "Tablet Mode: Auto-switch to Silent Mode (cool & quiet in hands)",
+                    AppConfig.Get("auto_tablet_silent", 1) == 1,
+                    (s, e) => AppConfig.Set("auto_tablet_silent", ((RCheckBox)s!).Checked ? 1 : 0),
+                    "Automatically switches to Silent mode when folded into Tablet mode to keep the chassis cool and quiet in your hands, and restores your previous mode in Laptop posture.",
+                    panelAuto
+                );
+
+                cbTabletRotate = CreateExtraCheckBox(
+                    "Auto-Rotate Screen: Enable in Tablet & Tent (locked in Laptop mode)",
+                    AppConfig.Get("auto_tablet_rotation", 1) == 1,
+                    (s, e) => AppConfig.Set("auto_tablet_rotation", ((RCheckBox)s!).Checked ? 1 : 0),
+                    "Automatically unlocks screen auto-rotation when folded into Tablet or Tent mode, and locks rotation in Laptop mode.",
+                    panelAuto
+                );
+            }
+
+            var cbTentBoost = CreateExtraCheckBox(
+                "Tent Mode Thermal Boost: Higher sustained cooling in Tent posture",
                 AppConfig.Is("auto_tent_boost"),
                 (s, e) =>
                 {
                     bool en = ((RCheckBox)s!).Checked;
                     AppConfig.Set("auto_tent_boost", en ? 1 : 0);
                 },
-                "When folded into Tent posture on AC power, bottom intake vents are completely unobstructed (dropping temps 4-8°C). Automatically engages higher sustained thermal headroom and restores your previous mode in Laptop posture."
+                "When folded into Tent posture on AC power, bottom intake vents are completely unobstructed (dropping temps 4-8°C). Automatically engages higher sustained thermal headroom and restores your previous mode in Laptop posture.",
+                panelAuto
             );
 
-            CreateExtraCheckBox(
-                "Indie & 2D Games: Auto-run in Silent Mode with 35W CPU cap (0-RPM quiet)",
-                AppConfig.IsNotFalse("auto_indie_silent"),
-                (s, e) =>
-                {
-                    bool en = ((RCheckBox)s!).Checked;
-                    AppConfig.Set("auto_indie_silent", en ? 1 : 0);
-                },
-                "Automatically runs lightweight Indie and 2D games (Hades, Balatro, Hollow Knight, Celeste, Stardew Valley, Terraria, etc.) in Silent Mode with a 35W CPU power limit for whisper-quiet gaming."
-            );
-
-            // Per-App Custom Performance & Fan Profile Rules button in System tab
-            var btnAppRules = new RButton
-            {
-                Dock = DockStyle.Top,
-                Height = 32,
-                Margin = new Padding(8, 4, 8, 4),
-                Secondary = true,
-                BorderRadius = CurrentButtonRadius,
-                BorderColor = colorStandard,
-                Text = "🎮 Manage Per-App Custom Performance & Fan Profiles (.exe Rules)..."
-            };
-            btnAppRules.Click += (s, e) => AppProfileRulesForm.ShowManager(this);
-            toolTip.SetToolTip(btnAppRules, "Assign specific game or application .exe files to Silent 35W (Indie), Balanced + 512-Zone (Creator), Turbo + 512-Zone + 165Hz (AAA), or Excluded.");
-            panelSettings.Controls.Add(btnAppRules);
-
-            CreateExtraCheckBox(
-                "Palm Rejection: Auto-disable finger touch (stylus only) in drawing & note apps",
+            var cbPalmReject = CreateExtraCheckBox(
+                "Palm Rejection: Auto-disable finger touch in drawing & note apps",
                 AppConfig.Is("auto_pen_drawing_apps"),
                 (s, e) =>
                 {
                     bool en = ((RCheckBox)s!).Checked;
                     GameWatcher.TogglePenDrawingApps(en);
                 },
-                "Automatically switches touchscreen to Pen-Only Mode (disables finger touch, keeps stylus active) when OneNote, Drawboard PDF, Krita, Photoshop, or Journal is in the foreground."
+                "Automatically switches touchscreen to Pen-Only Mode (disables finger touch, keeps stylus active) when OneNote, Drawboard PDF, Krita, Photoshop, or Journal is in the foreground.",
+                panelAuto
             );
 
-            if (AppConfig.HasTabletMode() || AutoRotationControl.IsSupported())
-            {
-                CreateExtraCheckBox(
-                    "Auto-Rotate Screen: Enable in Tablet & Tent postures (locked in Laptop mode)",
-                    AppConfig.Get("auto_tablet_rotation", 1) == 1,
-                    (s, e) => AppConfig.Set("auto_tablet_rotation", ((RCheckBox)s!).Checked ? 1 : 0),
-                    "Automatically unlocks screen auto-rotation when folded into Tablet or Tent mode, and locks rotation in Laptop mode."
-                );
-
-                CreateExtraCheckBox(
-                    "Tablet Mode: Auto-switch to Silent Mode (keeps chassis cool & quiet in hands)",
-                    AppConfig.Get("auto_tablet_silent", 1) == 1,
-                    (s, e) => AppConfig.Set("auto_tablet_silent", ((RCheckBox)s!).Checked ? 1 : 0),
-                    "Automatically switches to Silent mode when folded into Tablet mode to keep the chassis cool and quiet in your hands, and restores your previous mode in Laptop posture."
-                );
-            }
-
-            CreateExtraCheckBox(
-                "Wi-Fi Low-Latency Mode: Disable adapter power savings to prevent ping spikes",
-                WifiLatencyHelper.IsLowLatencyActive(),
+            var cbIndieSilent = CreateExtraCheckBox(
+                "Indie & 2D Games: Auto-run in Silent Mode with 35W CPU cap (0-RPM)",
+                AppConfig.IsNotFalse("auto_indie_silent"),
                 (s, e) =>
                 {
                     bool en = ((RCheckBox)s!).Checked;
-                    WifiLatencyHelper.SetLowLatency(en, true);
-                    Program.settingsForm?.SetContextMenu();
+                    AppConfig.Set("auto_indie_silent", en ? 1 : 0);
                 },
-                "Forces Wireless Adapter Power Saving Mode to Maximum Performance (0) and enables WLAN Media Streaming Mode to prevent packet latency spikes."
+                "Automatically runs lightweight Indie and 2D games (Hades, Balatro, Hollow Knight, Celeste, Stardew Valley, Terraria, etc.) in Silent Mode with a 35W CPU power limit for whisper-quiet gaming.",
+                panelAuto
             );
 
-            CreateExtraCheckBox(
+            var cbCreator = CreateExtraCheckBox(
+                "Creator Mode: Auto-enable 512-Zone Mini-LED & 165Hz in creative apps",
+                GameWatcher.IsCreatorAppsEnabled(),
+                (s, e) => GameWatcher.ToggleCreatorApps(((RCheckBox)s!).Checked),
+                "Automatically enables 512-Zone Mini-LED local dimming and maximum refresh rate when creative applications are in the foreground on AC power.",
+                panelAuto
+            );
+
+            var cbGameWifi = CreateExtraCheckBox(
                 "Game Detection: Auto-enable Low-Latency Wi-Fi while playing games",
                 AppConfig.Is("auto_wifi_gaming"),
                 (s, e) =>
@@ -842,11 +926,59 @@ namespace GHelper
                     AppConfig.Set("auto_wifi_gaming", en ? 1 : 0);
                     Program.settingsForm?.SetContextMenu();
                 },
-                "Automatically switches Wi-Fi to Low-Latency Maximum Performance mode while gaming and restores Eco power saving afterwards."
+                "Automatically switches Wi-Fi to Low-Latency Maximum Performance mode while gaming and restores Eco power saving afterwards.",
+                panelAuto
             );
 
-            // Keep Appearance & Backup card at the very top of the UI & Style tab
-            panelAppearance.Controls.SetChildIndex(panelTheme, panelAppearance.Controls.Count - 1);
+            var cbLowBatSaver = CreateExtraCheckBox(
+                "Low Battery Saver: Auto-enable Windows Power Saver at ≤ 20% battery",
+                AppConfig.Get("auto_low_battery_saver", 1) == 1,
+                (s, e) => AppConfig.Set("auto_low_battery_saver", ((RCheckBox)s!).Checked ? 1 : 0),
+                "Automatically enables Windows Power Saver & Energy Saver when battery drops to 20% or below while discharging.",
+                panelAuto
+            );
+
+            // Order panelAuto top-to-bottom
+            btnAppRules.BringToFront();
+            cbPostureBar.BringToFront();
+            cbTabletSilent?.BringToFront();
+            cbTabletRotate?.BringToFront();
+            cbTentBoost.BringToFront();
+            cbPalmReject.BringToFront();
+            cbIndieSilent.BringToFront();
+            cbCreator.BringToFront();
+            cbGameWifi.BringToFront();
+            cbLowBatSaver.BringToFront();
+
+            // Tab 4 (System): Hardware, GPU & System Controls
+            var cbWifiLatency = CreateExtraCheckBox(
+                "Wi-Fi Low-Latency Mode: Disable adapter power savings (anti-ping spike)",
+                WifiLatencyHelper.IsLowLatencyActive(),
+                (s, e) =>
+                {
+                    bool en = ((RCheckBox)s!).Checked;
+                    WifiLatencyHelper.SetLowLatency(en, true);
+                    Program.settingsForm?.SetContextMenu();
+                },
+                "Forces Wireless Adapter Power Saving Mode to Maximum Performance (0) and enables WLAN Media Streaming Mode to prevent packet latency spikes.",
+                panelSettings
+            );
+
+            // Order panelSettings top-to-bottom
+            cbWifiLatency.BringToFront();
+            checkStandbyNetworking.BringToFront();
+            checkAspm.BringToFront();
+            checkNVPlatform.BringToFront();
+            checkGpuApps.BringToFront();
+            checkUSBC.BringToFront();
+            checkUSBCPowerLimit.BringToFront();
+            checkAutoToggleClamshellMode.BringToFront();
+            checkNoOverdrive.BringToFront();
+            checkELMB.BringToFront();
+            checkBootSound.BringToFront();
+            checkKeystoneSound.BringToFront();
+            checkNumberPad.BringToFront();
+            checkStatusLed.BringToFront();
 
             toolTip.SetToolTip(checkAutoToggleClamshellMode, Properties.Strings.ClamshellModeTooltip);
             toolTip.SetToolTip(checkNVPlatform, Properties.Strings.NVPlatformTooltip);
@@ -871,14 +1003,14 @@ namespace GHelper
             InitVramMem();
 
             // Add Reactive Telemetry Aura Quick Bar to Lighting tab (panelBacklight)
-            var barAuraTelemetry = new TableLayoutPanel
+            barAuraTelemetry = new TableLayoutPanel
             {
                 AutoSize = true,
-                Dock = DockStyle.Bottom,
+                Dock = DockStyle.Top,
                 ColumnCount = 2,
                 RowCount = 1,
-                Margin = new Padding(8, 6, 8, 4),
-                Padding = new Padding(4, 4, 4, 4)
+                Margin = new Padding(8, 4, 8, 4),
+                Padding = new Padding(4, 2, 4, 2)
             };
             barAuraTelemetry.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
             barAuraTelemetry.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
@@ -886,11 +1018,11 @@ namespace GHelper
             var btnHeatmapAura = new RButton
             {
                 Dock = DockStyle.Fill,
-                Height = 32,
+                Height = 36,
                 Secondary = true,
                 BorderRadius = CurrentButtonRadius,
                 BorderColor = colorTurbo,
-                Text = "🌡️ Thermal Heatmap Aura (CPU/GPU)",
+                Text = "Thermal Heatmap Aura (CPU/GPU)",
                 Margin = new Padding(3, 2, 3, 2)
             };
             btnHeatmapAura.Click += (s, e) =>
@@ -905,11 +1037,11 @@ namespace GHelper
             var btnBatteryAura = new RButton
             {
                 Dock = DockStyle.Fill,
-                Height = 32,
+                Height = 36,
                 Secondary = true,
                 BorderRadius = CurrentButtonRadius,
                 BorderColor = colorEco,
-                Text = "🔋 Battery Charge Level Aura",
+                Text = "Battery Charge Level Aura",
                 Margin = new Padding(3, 2, 3, 2)
             };
             btnBatteryAura.Click += (s, e) =>
@@ -925,17 +1057,23 @@ namespace GHelper
             barAuraTelemetry.Controls.Add(btnBatteryAura, 1, 0);
             panelBacklight.Controls.Add(barAuraTelemetry);
 
+            // Order panelBacklight top-to-bottom: tableBacklight -> panelBacklightExtra -> barAuraTelemetry -> panelXGM
+            tableBacklight.BringToFront();
+            panelBacklightExtra.BringToFront();
+            barAuraTelemetry.BringToFront();
+            panelXGM.BringToFront();
+
             InitACPITesting();
             InitTheme();
 
             buttonTabKeyboard.Click += (s, e) => ShowTab(0);
             buttonTabLighting.Click += (s, e) => ShowTab(1);
             buttonTabPower.Click += (s, e) => ShowTab(2);
-            buttonTabSystem.Click += (s, e) => ShowTab(3);
-            buttonTabAppearance.Click += (s, e) => ShowTab(4);
+            buttonTabAuto.Click += (s, e) => ShowTab(3);
+            buttonTabSystem.Click += (s, e) => ShowTab(4);
+            buttonTabAppearance.Click += (s, e) => ShowTab(5);
 
-            int savedTab = Math.Clamp(AppConfig.Get("extra_tab", 0), 0, 4);
-            tableTabs.BringToFront();
+            int savedTab = Math.Clamp(AppConfig.Get("extra_tab", 0), 0, 5);
             ShowTab(savedTab);
 
             ControlHelper.Adjust(this);
@@ -964,6 +1102,7 @@ namespace GHelper
 
         private Action? _syncAppearanceCombos;
         private int _baseFormClientWidth = 0;
+        private int _unifiedTabClientHeight = 0;
 
         public void ShowTab(int index)
         {
@@ -972,28 +1111,39 @@ namespace GHelper
             SuspendLayout();
             try
             {
-                tableTabs.BringToFront();
                 AutoScrollPosition = new Point(0, 0);
 
                 buttonTabKeyboard.Activated = (index == 0);
                 buttonTabLighting.Activated = (index == 1);
                 buttonTabPower.Activated = (index == 2);
-                buttonTabSystem.Activated = (index == 3);
-                buttonTabAppearance.Activated = (index == 4);
+                buttonTabAuto.Activated = (index == 3);
+                buttonTabSystem.Activated = (index == 4);
+                buttonTabAppearance.Activated = (index == 5);
 
                 buttonTabKeyboard.BorderColor = RForm.colorStandard;
                 buttonTabLighting.BorderColor = RForm.colorStandard;
                 buttonTabPower.BorderColor = RForm.colorEco;
+                buttonTabAuto.BorderColor = RForm.colorStandard;
                 buttonTabSystem.BorderColor = RForm.colorTurbo;
                 buttonTabAppearance.BorderColor = RForm.colorCustom;
 
-                // Tab 0: Keyboard
+                // Tab 0: Keys
                 panelBindingsHeader.Visible = (index == 0);
                 panelBindings.Visible = (index == 0);
+                if (index == 0)
+                {
+                    panelBindingsHeader.BringToFront();
+                    panelBindings.BringToFront();
+                }
 
-                // Tab 1: Lighting
+                // Tab 1: Light
                 panelBacklightHeader.Visible = (index == 1);
                 panelBacklight.Visible = (index == 1);
+                if (index == 1)
+                {
+                    panelBacklightHeader.BringToFront();
+                    panelBacklight.BringToFront();
+                }
 
                 // Tab 2: Power
                 panelPowerHeader.Visible = (index == 2);
@@ -1001,19 +1151,43 @@ namespace GHelper
                 panelAPU.Visible = (index == 2 && _hasAPU);
                 panelCores.Visible = (index == 2 && _hasCores);
                 panelACPI.Visible = (index == 2 && _hasACPI);
+                if (index == 2)
+                {
+                    panelPower.BringToFront();
+                    panelAPU.BringToFront();
+                    panelCores.BringToFront();
+                    panelACPI.BringToFront();
+                }
 
-                // Tab 3: System
-                panelServices.Visible = (index == 3);
-                panelSettingsHeader.Visible = (index == 3);
-                panelSettings.Visible = (index == 3);
-                panelOptimalBrightness.Visible = (index == 3 && _hasOptimalBrightness);
+                // Tab 3: Auto (Smart Posture & Game Automations)
+                panelAutoHeader.Visible = (index == 3);
+                panelAuto.Visible = (index == 3);
+                if (index == 3)
+                {
+                    panelAutoHeader.BringToFront();
+                    panelAuto.BringToFront();
+                }
 
-                // Tab 4: UI & Style
-                panelAppearanceHeader.Visible = (index == 4);
-                panelAppearance.Visible = (index == 4);
-
+                // Tab 4: System (Hardware, GPU & Services)
+                panelSettingsHeader.Visible = (index == 4);
+                panelServices.Visible = (index == 4);
+                panelOptimalBrightness.Visible = (index == 4 && _hasOptimalBrightness);
+                panelSettings.Visible = (index == 4);
                 if (index == 4)
                 {
+                    panelSettingsHeader.BringToFront();
+                    panelServices.BringToFront();
+                    panelOptimalBrightness.BringToFront();
+                    panelSettings.BringToFront();
+                }
+
+                // Tab 5: Style (UI, Themes, Backup & Alerts)
+                panelAppearanceHeader.Visible = (index == 5);
+                panelAppearance.Visible = (index == 5);
+                if (index == 5)
+                {
+                    panelAppearanceHeader.BringToFront();
+                    panelAppearance.BringToFront();
                     _syncAppearanceCombos?.Invoke();
                 }
             }
@@ -1054,18 +1228,27 @@ namespace GHelper
             ClientSize = new Size(_baseFormClientWidth, ClientSize.Height);
             PerformLayout();
 
-            int contentHeight = Padding.Top + Padding.Bottom;
-            int maxBottom = 0;
-            foreach (Control ctrl in Controls)
+            if (_unifiedTabClientHeight <= 0)
             {
-                if (!ctrl.Visible) continue;
-                ctrl.PerformLayout();
-                contentHeight += ctrl.Height + ctrl.Margin.Vertical;
-                if (ctrl.Bottom + ctrl.Margin.Bottom > maxBottom)
-                    maxBottom = ctrl.Bottom + ctrl.Margin.Bottom;
+                int basePad = Padding.Top + Padding.Bottom + tableTabs.Height + tableTabs.Margin.Vertical + 14;
+                int h0 = basePad + panelBindingsHeader.PreferredSize.Height + panelBindings.PreferredSize.Height;
+                int h1 = basePad + panelBacklightHeader.PreferredSize.Height + panelBacklight.PreferredSize.Height;
+                int h2 = basePad + panelPower.PreferredSize.Height;
+                int h3 = basePad + panelAutoHeader.PreferredSize.Height + panelAuto.PreferredSize.Height;
+                int h4 = basePad + panelSettingsHeader.PreferredSize.Height + panelServices.PreferredSize.Height + panelSettings.PreferredSize.Height;
+                int h5 = basePad + panelAppearanceHeader.PreferredSize.Height + panelAppearance.PreferredSize.Height;
+                _unifiedTabClientHeight = new[] { h0, h1, h2, h3, h4, h5 }.Max();
             }
 
-            int measuredClientHeight = Math.Max(contentHeight, maxBottom + Padding.Bottom) + 6;
+            int contentHeight = Padding.Top + Padding.Bottom + tableTabs.Height + tableTabs.Margin.Vertical;
+            foreach (Control ctrl in Controls)
+            {
+                if (!ctrl.Visible || ctrl == tableTabs) continue;
+                ctrl.PerformLayout();
+                contentHeight += ctrl.Height + ctrl.Margin.Vertical;
+            }
+
+            int measuredClientHeight = Math.Max(contentHeight + 8, _unifiedTabClientHeight);
             int desiredTotalHeight = measuredClientHeight + borderChromeHeight;
 
             if (desiredTotalHeight > maxAllowedHeight)
@@ -1858,41 +2041,30 @@ namespace GHelper
                 PopulatePowerButtonCombo(comboPowerBtnAC, PowerNative.GetPowerButtonAction(true), val => PowerNative.SetPowerButtonAction(val, true));
                 PopulatePowerButtonCombo(comboPowerBtnDC, PowerNative.GetPowerButtonAction(false), val => PowerNative.SetPowerButtonAction(val, false));
 
-                // USB-C PD Power Cap Selector & Battery Health Analytics Card
-                var cardPowerExtra = new TableLayoutPanel
-                {
-                    AutoSize = true,
-                    AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                    Dock = DockStyle.Bottom,
-                    ColumnCount = 2,
-                    RowCount = 3,
-                    Margin = new Padding(4, 8, 4, 4),
-                    Padding = new Padding(6, 6, 6, 4)
-                };
-                cardPowerExtra.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 54F));
-                cardPowerExtra.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 46F));
-
+                // Add USB-C PD Power Cap Selector & Battery Health Analytics rows directly into tablePower for pixel-perfect column alignment
                 bool isPlugged = SystemInformation.PowerStatus.PowerLineStatus == PowerLineStatus.Online;
                 bool isUsbC = isPlugged && Program.currentSource == Program.PowerSource.USBC;
-                string chargerText = !isPlugged ? "🔋 Discharging on Battery"
-                                   : isUsbC ? "🔌 USB-C PD Charger (65W–100W)"
-                                   : "⚡ 240W Barrel AC Adapter";
+                string chargerText = !isPlugged ? "On Battery"
+                                   : isUsbC ? "USB-C PD 65–100W"
+                                   : "240W Barrel AC";
 
                 var lblUsbcCap = new Label
                 {
-                    AutoSize = true,
                     Dock = DockStyle.Fill,
                     TextAlign = ContentAlignment.MiddleLeft,
-                    Text = $"USB-C CPU Power Cap ({chargerText}):",
-                    Margin = new Padding(3, 4, 3, 4)
+                    Text = $"USB-C CPU Power Cap ({chargerText})",
+                    Margin = labelPowerBtnAction.Margin,
+                    UseMnemonic = false
                 };
 
                 var cbUsbcCap = new RComboBox
                 {
+                    BorderColor = Color.White,
+                    ButtonColor = SystemColors.ControlLight,
                     Dock = DockStyle.Fill,
                     DropDownStyle = ComboBoxStyle.DropDownList,
                     FlatStyle = FlatStyle.Flat,
-                    Margin = new Padding(3, 4, 3, 4)
+                    Margin = comboPowerBtnAC.Margin
                 };
                 var usbcCapOptions = new (int watts, string label)[]
                 {
@@ -1923,39 +2095,44 @@ namespace GHelper
                 decimal healthPct = designCap > 0 ? Math.Clamp((fullCap / designCap) * 100m, 0m, 105m) : 100m;
                 decimal wearPct = Math.Max(0m, 100m - healthPct);
                 decimal rateW = HardwareControl.batteryRate ?? 0m;
-                string etaStr = !string.IsNullOrEmpty(HardwareControl.batteryTimeStr)
-                    ? HardwareControl.batteryTimeStr
-                    : (isPlugged ? "AC Connected" : "Calculating...");
 
                 var lblBatAnalytics = new Label
                 {
-                    AutoSize = true,
                     Dock = DockStyle.Fill,
                     TextAlign = ContentAlignment.MiddleLeft,
-                    Font = new Font(CurrentFontFamily, 8.2f, FontStyle.Regular),
-                    Text = $"🔋 Health: {healthPct:0.0}% ({fullCap:0.0}/{designCap:0.0} Wh • {wearPct:0.0}% Wear)  |  Rate: {(rateW >= 0 ? "+" : "")}{rateW:0.0}W  |  {etaStr}",
-                    Margin = new Padding(3, 6, 3, 4)
+                    Text = $"Battery Health: {healthPct:0.0}% ({fullCap:0.0}/{designCap:0.0} Wh • {wearPct:0.0}% Wear • {(rateW >= 0 ? "+" : "")}{rateW:0.0}W)",
+                    Margin = labelPowerBtnAction.Margin,
+                    UseMnemonic = false
                 };
 
                 var btnBatInspector = new RButton
                 {
                     Dock = DockStyle.Fill,
-                    Height = 32,
+                    Height = 36,
                     Secondary = true,
                     BorderRadius = CurrentButtonRadius,
                     BorderColor = colorEco,
-                    Text = "📊 Battery Health Inspector & Report...",
-                    Margin = new Padding(3, 4, 3, 4)
+                    Text = "Battery Health Inspector & Report...",
+                    Margin = comboPowerBtnAC.Margin,
+                    UseVisualStyleBackColor = false
                 };
                 btnBatInspector.Click += (s, e) => new GHelper.Battery.BatteryHealthForm().ShowDialog(this);
                 toolTip.SetToolTip(btnBatInspector, "Open the detailed Battery Health & Power Analytics Inspector or generate a Windows HTML battery report.");
 
-                cardPowerExtra.Controls.Add(lblUsbcCap, 0, 0);
-                cardPowerExtra.Controls.Add(cbUsbcCap, 1, 0);
-                cardPowerExtra.Controls.Add(lblBatAnalytics, 0, 1);
-                cardPowerExtra.Controls.Add(btnBatInspector, 1, 1);
+                tablePower.SuspendLayout();
+                tablePower.RowCount = 10;
+                while (tablePower.RowStyles.Count < 10)
+                    tablePower.RowStyles.Add(new RowStyle());
+                tablePower.Controls.Add(lblUsbcCap, 0, 8);
+                tablePower.Controls.Add(cbUsbcCap, 1, 8);
+                tablePower.SetColumnSpan(cbUsbcCap, 2);
+                tablePower.Controls.Add(lblBatAnalytics, 0, 9);
+                tablePower.Controls.Add(btnBatInspector, 1, 9);
+                tablePower.SetColumnSpan(btnBatInspector, 2);
+                tablePower.ResumeLayout(true);
 
-                panelPower.Controls.Add(cardPowerExtra);
+                panelPowerHeader.BringToFront();
+                tablePower.BringToFront();
             }
             catch (Exception ex)
             {

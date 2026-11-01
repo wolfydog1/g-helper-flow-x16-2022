@@ -130,6 +130,7 @@ public static class ControlHelper
             var button = control as RButton;
             if (button != null)
             {
+                button.UseMnemonic = false;
                 button.BackColor = button.Secondary ? RForm.buttonSecond : RForm.buttonMain;
                 button.ForeColor = RForm.foreMain;
                 button.BorderRadius = RForm.CurrentButtonRadius;
@@ -208,6 +209,7 @@ public static class ControlHelper
             var chk = control as CheckBox;
             if (chk != null)
             {
+                chk.UseMnemonic = false;
                 chk.ForeColor = RForm.foreMain;
                 if (chk.Parent is Panel parentPn && parentPn.Name.Contains("Header"))
                 {
@@ -228,6 +230,7 @@ public static class ControlHelper
             var lbl = control as Label;
             if (lbl != null)
             {
+                lbl.UseMnemonic = false;
                 if (lbl.ForeColor == SystemColors.ControlText || lbl.ForeColor == Color.FromArgb(255, 240, 240, 240) || lbl.ForeColor == Color.FromArgb(255, 24, 28, 34) || lbl.ForeColor == Color.FromArgb(255, 248, 240, 242) || lbl.ForeColor == Color.FromArgb(255, 236, 244, 255) || lbl.ForeColor == Color.FromArgb(255, 245, 245, 248))
                 {
                     lbl.ForeColor = RForm.foreMain;

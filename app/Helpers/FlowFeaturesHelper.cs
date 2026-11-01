@@ -43,6 +43,12 @@ namespace GHelper.Helpers
         private static IntPtr _lastCustomTrayHIcon = IntPtr.Zero;
         private static string _lastRenderedTrayText = "";
         private static Color _lastRenderedTrayColor = Color.Empty;
+        private static readonly StringFormat _trayStringFormat = new() { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+        private static readonly Font _trayTopFontSmall = new("Segoe UI", 10.5f, FontStyle.Bold, GraphicsUnit.Pixel);
+        private static readonly Font _trayTopFontLarge = new("Segoe UI", 12f, FontStyle.Bold, GraphicsUnit.Pixel);
+        private static readonly Font _trayBotFont = new("Segoe UI", 8.5f, FontStyle.Bold, GraphicsUnit.Pixel);
+        private static readonly SolidBrush _trayBgBrush = new(Color.FromArgb(235, 20, 22, 26));
+        private static readonly SolidBrush _trayWhiteBrush = new(Color.White);
 
         // Snapshot for Undo Last Scenario
         private static bool _hasSnapshot = false;
@@ -257,22 +263,18 @@ namespace GHelper.Helpers
                     g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
                     g.Clear(Color.Transparent);
 
-                    using (var bgBrush = new SolidBrush(Color.FromArgb(235, 20, 22, 26)))
                     using (var borderPen = new Pen(accent, 2f))
                     using (var path = RComboBox.RoundedRect(new Rectangle(1, 1, 30, 30), 6, 6))
                     {
-                        g.FillPath(bgBrush, path);
+                        g.FillPath(_trayBgBrush, path);
                         g.DrawPath(borderPen, path);
                     }
 
-                    using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-                    using var topFont = new Font("Segoe UI", topText.Length >= 3 ? 10.5f : 12f, FontStyle.Bold, GraphicsUnit.Pixel);
-                    using var botFont = new Font("Segoe UI", 8.5f, FontStyle.Bold, GraphicsUnit.Pixel);
-                    using var whiteBrush = new SolidBrush(Color.White);
+                    var topFont = topText.Length >= 3 ? _trayTopFontSmall : _trayTopFontLarge;
                     using var accentBrush = new SolidBrush(accent);
 
-                    g.DrawString(topText, topFont, whiteBrush, new RectangleF(0, 2, 32, 18), sf);
-                    g.DrawString(bottomText, botFont, accentBrush, new RectangleF(0, 18, 32, 12), sf);
+                    g.DrawString(topText, topFont, _trayWhiteBrush, new RectangleF(0, 2, 32, 18), _trayStringFormat);
+                    g.DrawString(bottomText, _trayBotFont, accentBrush, new RectangleF(0, 18, 32, 12), _trayStringFormat);
                 }
 
                 IntPtr newHIcon = bmp.GetHicon();

@@ -63,24 +63,39 @@ namespace GHelper.Helpers
             "Spelunky2", "AnimalWell", "Blasphemous", "Katana ZERO", "NineSols"
         };
 
-        public static Dictionary<string, string> GetCustomAppRules()
+        private static Dictionary<string, string>? _cachedCustomRules;
+        private static string _cachedCustomRulesRaw = "\0";
+        private static int _lastCheckedPid = 0;
+        private static string _lastCheckedProcName = "";
+
+        private static IReadOnlyDictionary<string, string> GetCustomAppRulesInternal()
         {
+            string raw = AppConfig.GetString("custom_app_rules", "") ?? "";
+            if (_cachedCustomRules != null && string.Equals(raw, _cachedCustomRulesRaw, StringComparison.Ordinal))
+                return _cachedCustomRules;
+
             var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            string raw = AppConfig.GetString("custom_app_rules", "");
-            if (string.IsNullOrWhiteSpace(raw)) return dict;
-            foreach (string entry in raw.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            if (!string.IsNullOrWhiteSpace(raw))
             {
-                int eq = entry.IndexOf('=');
-                if (eq > 0 && eq < entry.Length - 1)
+                foreach (string entry in raw.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 {
-                    string key = Path.GetFileNameWithoutExtension(entry.Substring(0, eq).Trim());
-                    string val = entry.Substring(eq + 1).Trim();
-                    if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(val))
-                        dict[key] = val;
+                    int eq = entry.IndexOf('=');
+                    if (eq > 0 && eq < entry.Length - 1)
+                    {
+                        string key = Path.GetFileNameWithoutExtension(entry.Substring(0, eq).Trim());
+                        string val = entry.Substring(eq + 1).Trim();
+                        if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(val))
+                            dict[key] = val;
+                    }
                 }
             }
+            _cachedCustomRulesRaw = raw;
+            _cachedCustomRules = dict;
             return dict;
         }
+
+        public static Dictionary<string, string> GetCustomAppRules() =>
+            new Dictionary<string, string>(GetCustomAppRulesInternal(), StringComparer.OrdinalIgnoreCase);
 
         public static void SaveCustomAppRules(Dictionary<string, string> rules)
         {
@@ -90,7 +105,10 @@ namespace GHelper.Helpers
                 if (sb.Length > 0) sb.Append(';');
                 sb.Append(kv.Key).Append('=').Append(kv.Value);
             }
-            AppConfig.Set("custom_app_rules", sb.ToString());
+            string raw = sb.ToString();
+            _cachedCustomRulesRaw = raw;
+            _cachedCustomRules = new Dictionary<string, string>(rules, StringComparer.OrdinalIgnoreCase);
+            AppConfig.Set("custom_app_rules", raw);
         }
 
         public static void SetCustomAppRule(string procName, string rule)
@@ -300,13 +318,22 @@ namespace GHelper.Helpers
                 int pid = (int)pidRaw;
                 if (pid == 0 || pid == Environment.ProcessId) return;
 
-                string procName = "";
-                try
+                string procName;
+                if (pid == _lastCheckedPid && !string.IsNullOrEmpty(_lastCheckedProcName))
                 {
-                    using var p = Process.GetProcessById(pid);
-                    procName = p.ProcessName;
+                    procName = _lastCheckedProcName;
                 }
-                catch { return; }
+                else
+                {
+                    try
+                    {
+                        using var p = Process.GetProcessById(pid);
+                        procName = p.ProcessName;
+                        _lastCheckedPid = pid;
+                        _lastCheckedProcName = procName;
+                    }
+                    catch { return; }
+                }
 
                 if (string.IsNullOrEmpty(procName)) return;
 
@@ -387,7 +414,7 @@ namespace GHelper.Helpers
                 }
 
                 // 3. Check Auto Game Mode & Per-App Custom Rules Engine
-                var customRules = GetCustomAppRules();
+                var customRules = GetCustomAppRulesInternal();
                 bool hasCustomRule = customRules.TryGetValue(procName, out string? customRule);
                 if (hasCustomRule && string.Equals(customRule, "ignore", StringComparison.OrdinalIgnoreCase))
                 {

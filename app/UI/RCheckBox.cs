@@ -14,6 +14,7 @@ namespace GHelper.UI
         public RCheckBox()
         {
             DoubleBuffered = true;
+            UseMnemonic = false;
         }
 
         protected override void OnPaint(PaintEventArgs pevent)

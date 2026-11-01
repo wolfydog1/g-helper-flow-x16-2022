@@ -77,6 +77,7 @@ namespace GHelper.UI
         public RButton()
         {
             DoubleBuffered = true;
+            UseMnemonic = false;
             FlatStyle = FlatStyle.Flat;
             FlatAppearance.BorderSize = 0;
             BackColorChanged += (s, e) => UpdateHoverColor();
@@ -163,21 +164,26 @@ namespace GHelper.UI
 
             if (isCompactTextButton)
             {
-                Color fill = !Enabled ? BackColor
-                           : _isPressed ? FlatAppearance.MouseDownBackColor
-                           : _isHovered ? FlatAppearance.MouseOverBackColor
-                           : BackColor;
-                if (Parent != null && !Enabled)
+                Color baseBg = BackColor.A == 255 ? BackColor : (secondary ? RForm.buttonSecond : RForm.buttonMain);
+                if (baseBg.A < 255) baseBg = Color.FromArgb(255, 36, 36, 36);
+                Color fill = !Enabled ? baseBg
+                           : _isPressed ? Shift(baseBg, Color.White, HoverShiftAmount * 2f)
+                           : _isHovered ? Shift(baseBg, Color.White, HoverShiftAmount)
+                           : baseBg;
+                Color parentBg = (Parent != null && Parent.BackColor.A == 255) ? Parent.BackColor : RForm.formBack;
+                if (parentBg.A < 255) parentBg = Color.FromArgb(255, 28, 28, 28);
+                using (var parentBrush = new SolidBrush(parentBg))
                 {
-                    using var parentBrush = new SolidBrush(Parent.BackColor);
                     pevent.Graphics.FillRectangle(parentBrush, rectSurface);
                 }
                 using var surfaceBrush = new SolidBrush(fill);
                 pevent.Graphics.FillRectangle(surfaceBrush, rectSurface);
             }
 
+            Color ClearParentColor = (Parent != null && Parent.BackColor.A == 255) ? Parent.BackColor : RForm.formBack;
+            if (ClearParentColor.A < 255) ClearParentColor = Color.FromArgb(255, 28, 28, 28);
             using (GraphicsPath pathSurface = GetFigurePath(rectSurface, totalRadius))
-            using (Pen penSurface = new Pen(Parent?.BackColor ?? BackColor, border))
+            using (Pen penSurface = new Pen(ClearParentColor, border))
             {
                 pevent.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
                 if (_lastRegionSize != rectSurface.Size || _lastRegionRadius != totalRadius)
@@ -230,7 +236,7 @@ namespace GHelper.UI
             {
                 int padX = border + 2;
                 Rectangle textRect = new Rectangle(padX, border, Math.Max(4, rectSurface.Width - 2 * padX), Math.Max(4, rectSurface.Height - 2 * border));
-                TextFormatFlags flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding;
+                TextFormatFlags flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
 
                 Font drawFont = Font;
                 float curSize = drawFont.Size;
@@ -243,7 +249,9 @@ namespace GHelper.UI
                     drawFont = ControlHelper.GetCachedFont(drawFont.Name, curSize, drawFont.Style, drawFont.Unit);
                 }
 
-                Color textColor = Enabled ? ForeColor : Color.Gray;
+                Color fg = (ForeColor.A == 255 && ForeColor != SystemColors.ControlText) ? ForeColor : RForm.foreMain;
+                if (fg.A < 255) fg = Color.White;
+                Color textColor = Enabled ? fg : Color.Gray;
                 TextRenderer.DrawText(pevent.Graphics, Text, drawFont, textRect, textColor, flags);
             }
             else if (!Enabled && ForeColor != SystemColors.ControlText)
@@ -261,7 +269,7 @@ namespace GHelper.UI
                     using (var brush = new SolidBrush(BackColor))
                         pevent.Graphics.FillRectangle(brush, rect);
                 }
-                TextFormatFlags flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak;
+                TextFormatFlags flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix;
                 TextRenderer.DrawText(pevent.Graphics, Text, Font, rect, Color.Gray, flags);
             }
 
