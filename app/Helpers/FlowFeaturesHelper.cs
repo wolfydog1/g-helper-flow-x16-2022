@@ -71,12 +71,13 @@ namespace GHelper.Helpers
         private static readonly object _histLock = new();
 
         public static TrayTelemetryMode GetTrayMode() =>
-            (TrayTelemetryMode)Math.Clamp(AppConfig.Get("tray_icon_mode", 0), 0, 4);
+            (TrayTelemetryMode)Math.Clamp(AppConfig.Get("tray_icon_mode", 0), 0, 8);
 
         public static bool NeedsBackgroundSensorPolling() =>
             GetTrayMode() != TrayTelemetryMode.DefaultLogo ||
             AppConfig.Is("thermal_alert_enabled") ||
-            AppConfig.Is("battery_alert_enabled");
+            AppConfig.Is("battery_alert_enabled") ||
+            AppConfig.Is("show_main_sparkline");
 
         public static void SetTrayMode(TrayTelemetryMode mode)
         {

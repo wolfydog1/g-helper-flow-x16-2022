@@ -635,9 +635,10 @@ namespace GHelper.Overlay
             int powGap = S(sc, BasePowerGap);
 
             bool showFps = _showFps, showTemp = _showTemp, showFans = _showFans, showChart = _showChart;
-            bool showPower = _showPower, showUsageMetric = _showUsage, showMem = _showRam, showNames = _showNames;
+            bool showPower = _showPower, showUsageMetric = _showUsage, showMem = _showRam || _showVram, showNames = _showNames;
             bool showBat = _showBattery && _onBattery;
-            bool showUsage = _showUsage || _showRam; // bar sizing is shared by the usage and ram bars
+            bool showClock = _showClock;
+            bool showUsage = _showUsage || _showRam || _showVram; // bar sizing is shared by the usage and ram/vram bars
 
             bool showMidRow = _showMidFan && (_midTempStr.Length > 0 || _midFanNum.Length > 0) && (showTemp || showFans);
             bool showXgmRow = (_xgmTempStr.Length > 0 || _xgmFanNum.Length > 0 || _xgmPow.Length > 0 || _xgmUsage.HasValue) && (showTemp || showFans || showPower || showUsageMetric);
@@ -699,21 +700,20 @@ namespace GHelper.Overlay
                 cursor = batIconX + S(sc, BaseBatIconWidth);
             }
 
-            int width = cursor + padX;
+            int clockColW = S(sc, 44);
+            int clockX = cursor;
+            if (showClock)
+            {
+                clockX = cursor + S(sc, BaseBatColGap);
+                cursor = clockX + clockColW;
+            }
 
-            if (Size.Width != width || Size.Height != totalH)
-                Size = new Size(width, totalH);
+            int width = cursor + padX;
 
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
             g.TextRenderingHint = _scalePercent <= 75 ? TextRenderingHint.ClearTypeGridFit : TextRenderingHint.AntiAliasGridFit;
-
-            g.FillRoundedRectangle(_dragModeActive && _bgAlpha < DragMinAlpha ? _dragBgBrush : _bgBrush, Bound, radius);
-            if (_borderPen != null && !_dragModeActive)
-            {
-                g.DrawRoundedRectangle(_borderPen, Bound, radius);
-            }
 
             string fontName = AppConfig.GetString("overlay_font", "Consolas");
             if (sc != _lastScale || _lastFontName != fontName)
@@ -743,6 +743,13 @@ namespace GHelper.Overlay
             {
                 int barRowH = lineH;
                 int barTotalH = padY * 2 + barRowH;
+
+                g.FillRoundedRectangle(_dragModeActive && _bgAlpha < DragMinAlpha ? _dragBgBrush : _bgBrush, Bound, radius);
+                if (_borderPen != null && !_dragModeActive)
+                {
+                    g.DrawRoundedRectangle(_borderPen, Bound, radius);
+                }
+
                 int barCursor = padX;
 
                 // FPS
@@ -793,6 +800,20 @@ namespace GHelper.Overlay
                     barCursor += (int)g.MeasureString(gpuText, font).Width + colGap;
                 }
 
+                // RAM / VRAM in Bar mode
+                if (_showRam && _ramUsedMb.HasValue)
+                {
+                    string ramStr = $"RAM {(_ramUsedMb.Value / 1024.0):F1}G";
+                    DrawStringWithShadow(g, ramStr, font, _cpuBrush, new PointF(barCursor, textY));
+                    barCursor += (int)g.MeasureString(ramStr, font).Width + colGap;
+                }
+                if (_showVram && _vramUsedMb.HasValue)
+                {
+                    string vramStr = $"VRAM {(_vramUsedMb.Value / 1024.0):F1}G";
+                    DrawStringWithShadow(g, vramStr, font, _gpuBrush, new PointF(barCursor, textY));
+                    barCursor += (int)g.MeasureString(vramStr, font).Width + colGap;
+                }
+
                 // HDR badge
                 if (_showHdrBadge)
                 {
@@ -807,14 +828,31 @@ namespace GHelper.Overlay
                 {
                     string batText = _batLevel + (_batRate.Length > 0 ? " " + _batRate + "W" : "");
                     DrawStringWithShadow(g, batText, font, _batBrush, new PointF(barCursor, textY));
-                    barCursor += (int)g.MeasureString(batText, font).Width;
+                    barCursor += (int)g.MeasureString(batText, font).Width + colGap;
                 }
 
-                int finalBarW = barCursor + padX;
+                // System Clock
+                if (showClock)
+                {
+                    string clockStr = DateTime.Now.ToString("HH:mm");
+                    DrawStringWithShadow(g, clockStr, font, _batBrush, new PointF(barCursor, textY));
+                    barCursor += (int)g.MeasureString(clockStr, font).Width;
+                }
+
+                int finalBarW = Math.Max(S(sc, 60), barCursor + padX);
                 if (Size.Width != finalBarW || Size.Height != barTotalH)
                     Size = new Size(finalBarW, barTotalH);
 
                 return;
+            }
+
+            if (Size.Width != width || Size.Height != totalH)
+                Size = new Size(width, totalH);
+
+            g.FillRoundedRectangle(_dragModeActive && _bgAlpha < DragMinAlpha ? _dragBgBrush : _bgBrush, Bound, radius);
+            if (_borderPen != null && !_dragModeActive)
+            {
+                g.DrawRoundedRectangle(_borderPen, Bound, radius);
             }
 
             // FPS
@@ -945,14 +983,19 @@ namespace GHelper.Overlay
                         DrawUsagePercent(g, font, usageNumX, usageNumColW, GetRowY(xgmRow), _xgmUsage, _xgmBrush);
                 }
 
-                // VRAM (GPU row) / RAM (CPU row) — complete mode only
+                // VRAM (GPU row) / RAM (CPU row)
                 if (showMem)
                 {
-                    DrawMemGb(g, font, memNumX, memNumColW, GetRowY(gpuRow), _vramUsedMb, _gpuBrush);
-                    DrawMemGb(g, font, memNumX, memNumColW, GetRowY(cpuRow), _ramUsedMb, _cpuBrush);
-
-                    DrawUsageBar(g, memBarX, GetBarY(gpuRow), barW, cellH, sepH, numCells, _vramUsage ?? 0, _gpuBrush, _gpuFillBrush);
-                    DrawUsageBar(g, memBarX, GetBarY(cpuRow), barW, cellH, sepH, numCells, _ramUsage ?? 0, _cpuBrush, _cpuFillBrush);
+                    if (_showVram)
+                    {
+                        DrawMemGb(g, font, memNumX, memNumColW, GetRowY(gpuRow), _vramUsedMb, _gpuBrush);
+                        DrawUsageBar(g, memBarX, GetBarY(gpuRow), barW, cellH, sepH, numCells, _vramUsage ?? 0, _gpuBrush, _gpuFillBrush);
+                    }
+                    if (_showRam)
+                    {
+                        DrawMemGb(g, font, memNumX, memNumColW, GetRowY(cpuRow), _ramUsedMb, _cpuBrush);
+                        DrawUsageBar(g, memBarX, GetBarY(cpuRow), barW, cellH, sepH, numCells, _ramUsage ?? 0, _cpuBrush, _cpuFillBrush);
+                    }
                 }
             }
 
@@ -971,6 +1014,16 @@ namespace GHelper.Overlay
 
                 int batIconH = S(sc, BaseBatIconHeight);
                 DrawBatteryIcon(g, batIconX, topY + (lineH - batIconH) / 2 - S(sc, BaseUsageBarYNudge), batIconH, sc, _batPercent, _batCharging);
+            }
+
+            if (showClock)
+            {
+                string clockTime = DateTime.Now.ToString("HH:mm");
+                string clockSec = DateTime.Now.ToString(":ss");
+                DrawStringWithShadow(g, clockTime, font, _batBrush,
+                    new PointF(clockX + clockColW - g.MeasureString(clockTime, font).Width, GetRowY(0)));
+                DrawStringWithShadow(g, clockSec, rpmFont, _batBrush,
+                    new PointF(clockX + clockColW - g.MeasureString(clockSec, rpmFont).Width, GetRowY(1) + 2f * sc));
             }
         }
 
@@ -1418,7 +1471,7 @@ namespace GHelper.Overlay
             _hidden = false;
             _shownPid = 0;
             _fgDesktop = false;
-            _mode = (OverlayMode)Math.Clamp(AppConfig.Get("overlay_mode", 0), 0, 3);
+            _mode = (OverlayMode)Math.Clamp(AppConfig.Get("overlay_mode", 0), 0, 4);
             _scalePercent = Math.Clamp(AppConfig.Get("overlay_scale_percent", 100), MinScalePercent, MaxScalePercent);
             ApplyColors();
             ApplyPreset(_mode);

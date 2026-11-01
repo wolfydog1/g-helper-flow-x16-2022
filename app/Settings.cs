@@ -2070,11 +2070,12 @@ namespace GHelper
                 var itemXgmMidBoost = new ToolStripMenuItem("Boost Laptop Mid Fan to Match CPU when Docked")
                 {
                     Margin = padding,
-                    Checked = AppConfig.Get("xgm_mid_fan_boost", 1) == 1
+                    Checked = AppConfig.Get("xgm_mid_boost", AppConfig.Get("xgm_mid_fan_boost", 1)) == 1
                 };
                 itemXgmMidBoost.Click += (s, e) =>
                 {
-                    bool next = AppConfig.Get("xgm_mid_fan_boost", 1) != 1;
+                    bool next = AppConfig.Get("xgm_mid_boost", AppConfig.Get("xgm_mid_fan_boost", 1)) != 1;
+                    AppConfig.Set("xgm_mid_boost", next ? 1 : 0);
                     AppConfig.Set("xgm_mid_fan_boost", next ? 1 : 0);
                     Program.modeControl?.AutoFans();
                     Program.toast?.RunToast(next ? "XGM Docked Mid-Fan Boost: On" : "XGM Docked Mid-Fan Boost: Off");
@@ -3140,6 +3141,12 @@ namespace GHelper
                 ("solar_amber", "Solaris Cyberpunk Gold"),
                 ("vapor_violet", "Vaporwave Twilight Violet"),
                 ("frost_titanium", "Frost Titanium Silver"),
+                ("nordic_frost", "Nordic Glacier Frost"),
+                ("synthwave_neon", "Synthwave 80s Neon"),
+                ("dracula_vampire", "Dracula Dark Velvet"),
+                ("crimson_carbon", "Crimson Carbon Fiber"),
+                ("forest_moss", "Deep Forest Moss"),
+                ("tokyo_night", "Tokyo Night Storm"),
                 ("light", "Clean Daylight Light")
             };
             foreach (var st in styleOpts)

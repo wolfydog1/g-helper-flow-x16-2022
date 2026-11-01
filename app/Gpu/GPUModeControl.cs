@@ -375,10 +375,13 @@ namespace GHelper.Gpu
                 }
                 finally
                 {
-                    settings.Invoke(delegate
+                    if (settings.IsHandleCreated && !settings.IsDisposed)
                     {
-                        InitGPUMode();
-                    });
+                        settings.BeginInvoke(delegate
+                        {
+                            InitGPUMode();
+                        });
+                    }
                 }
             });
         }
@@ -439,10 +442,13 @@ namespace GHelper.Gpu
                     Program.toast?.RunToast("XG Mobile Activated");
                 }
 
-                settings.Invoke(delegate
+                if (settings.IsHandleCreated && !settings.IsDisposed)
                 {
-                    InitGPUMode();
-                });
+                    settings.BeginInvoke(delegate
+                    {
+                        InitGPUMode();
+                    });
+                }
             });
         }
 

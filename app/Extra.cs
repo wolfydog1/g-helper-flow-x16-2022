@@ -1812,7 +1812,7 @@ namespace GHelper
             Task.Run(() =>
             {
                 int servicesCount = AsusService.GetRunningCount();
-                if (!IsDisposed) Invoke(() => VisualiseServices(servicesCount));
+                if (IsHandleCreated && !IsDisposed) BeginInvoke(() => VisualiseServices(servicesCount));
             });
         }
 
@@ -1933,7 +1933,9 @@ namespace GHelper
 
         private void CheckXGMMidBoost_CheckedChanged(object? sender, EventArgs e)
         {
-            AppConfig.Set("xgm_mid_boost", checkXGMMidBoost.Checked ? 1 : 0);
+            int v = checkXGMMidBoost.Checked ? 1 : 0;
+            AppConfig.Set("xgm_mid_boost", v);
+            AppConfig.Set("xgm_mid_fan_boost", v);
             if (Program.modeControl is not null && AppConfig.IsApplyFans())
             {
                 Program.modeControl.AutoFans();

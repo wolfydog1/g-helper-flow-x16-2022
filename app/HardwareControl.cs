@@ -1224,7 +1224,57 @@ public static class HardwareControl
         ramUsage = ram?.percent;
         ramUsedMb = ram?.usedMb;
 
+        if (FlowFeaturesHelper.GetTrayMode() == TrayTelemetryMode.CpuPower)
+        {
+            SampleCpuAndGpuPower(includeGpuPower: false);
+        }
+
         ReadBatteryState();
+    }
+
+    private static void SampleCpuAndGpuPower(bool includeGpuPower)
+    {
+        InitCPUPowerAsync();
+
+        float? newCpu = GetCPUPower() ?? GetIntelMsrPower() ?? GetAmdApuPower();
+        float? iGpuPower = null;
+
+        if (isAMDiGPU && GpuControl is null)
+        {
+            float? apu = _apuChannel?.Sample();
+            if (apu > 0) newCpu = apu;
+            float? cores = _cpuChannel?.Sample() ?? GetCoresPower();
+            if (cores > 0 && newCpu > cores)
+            {
+                iGpuPower = newCpu - cores;
+                newCpu = cores;
+            }
+            else
+                try
+                {
+                    var (_, _, gfxPower, corePower, asicPower) = AmdApu().GetiGpuSensors();
+                    if (gfxPower > 0) iGpuPower = gfxPower;
+                    if (corePower > 0) newCpu = corePower;
+                    else if (asicPower > gfxPower) newCpu = asicPower - gfxPower;
+                }
+                catch { }
+        }
+
+        if (newCpu > 0)
+        {
+            cpuPower = newCpu;
+            _cpuPowerNullTicks = 0;
+        }
+        else
+        {
+            if (++_cpuPowerNullTicks >= 5)
+                cpuPower = null;
+        }
+
+        if (includeGpuPower)
+        {
+            gpuPower = iGpuPower ?? GetGPUPower();
+        }
     }
 
     // Lightweight sensor read used by the overlay timer - skips battery health, WMI and design capacity
@@ -1322,46 +1372,9 @@ public static class HardwareControl
 
         if (readPower)
         {
-            InitCPUPowerAsync();
-
-            float? newCpu = GetCPUPower() ?? GetIntelMsrPower() ?? GetAmdApuPower();
-            float? iGpuPower = null;
-
-            if (isAMDiGPU && GpuControl is null)
-            {
-                float? apu = _apuChannel?.Sample();
-                if (apu > 0) newCpu = apu;
-                float? cores = _cpuChannel?.Sample() ?? GetCoresPower();
-                if (cores > 0 && newCpu > cores)
-                {
-                    iGpuPower = newCpu - cores;
-                    newCpu = cores;
-                }
-                else
-                    try
-                    {
-                        var (_, _, gfxPower, corePower, asicPower) = AmdApu().GetiGpuSensors();
-                        if (gfxPower > 0) iGpuPower = gfxPower;
-                        if (corePower > 0) newCpu = corePower;
-                        else if (asicPower > gfxPower) newCpu = asicPower - gfxPower;
-                    }
-                    catch { }
-            }
-
-            if (newCpu > 0)
-            {
-                cpuPower = newCpu;
-                _cpuPowerNullTicks = 0;
-            }
-            else
-            {
-                if (++_cpuPowerNullTicks >= 5)
-                    cpuPower = null;
-            }
-
-            gpuPower = iGpuPower ?? GetGPUPower();
+            SampleCpuAndGpuPower(includeGpuPower: true);
         }
-        else
+        else if (FlowFeaturesHelper.GetTrayMode() != TrayTelemetryMode.CpuPower)
         {
             cpuPower = null;
             gpuPower = null;
