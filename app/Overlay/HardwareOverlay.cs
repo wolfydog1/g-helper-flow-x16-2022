@@ -228,6 +228,13 @@ namespace GHelper.Overlay
         private bool _gameOnly;
         private bool _showNames;
         private bool _showFps, _showTemp, _showFans, _showChart, _showPower, _showUsage, _showRam, _showBattery, _show1PercentLow, _showShadow, _showJitter, _showHdrBadge, _showFrametime, _showClock, _showVram, _showMidFan;
+        private bool _showHotspot, _showClocks, _showPing, _showBatEta;
+        private string _gpuClockStr = "";
+        private string _cpuClockStr = "";
+        private string _batEtaStr = "";
+        private volatile int _lastPingMs = -1;
+        private int _pingTickCounter = 0;
+        private int _pingBusy = 0;
         private bool _onBattery;
         private int _overlayBattery = -1;
         private static readonly bool _isAlly = AppConfig.IsAlly();
@@ -491,10 +498,52 @@ namespace GHelper.Overlay
             double cpuTemp = D(HardwareControl.cpuTemp);
             bool gpuActive = gpuTemp > 0;
 
-            _gpuTempStr = "GPU:" + FmtTemp(gpuTemp) + " ";
+            if (_showHotspot && gpuActive && HardwareControl.gpuHotspotTemp is int hs && hs > 0)
+                _gpuTempStr = "GPU:" + FmtTemp(gpuTemp) + "/" + hs + "° ";
+            else
+                _gpuTempStr = "GPU:" + FmtTemp(gpuTemp) + " ";
             _cpuTempStr = "CPU:" + FmtTemp(cpuTemp) + " ";
             _gpuFanNum = FormatFan(HardwareControl.gpuFanRPM);
             _cpuFanNum = FormatFan(HardwareControl.cpuFanRPM);
+
+            if (_showClocks)
+            {
+                _gpuClockStr = gpuActive && HardwareControl.gpuCoreClockMhz is int gc && gc > 0 ? $"{gc}MHz" : "";
+                _cpuClockStr = HardwareControl.cpuClockMhz is int cc && cc > 0 ? $"{cc / 1000.0:F2}GHz" : "";
+            }
+            else
+            {
+                _gpuClockStr = "";
+                _cpuClockStr = "";
+            }
+
+            if (_showBatEta)
+            {
+                _batEtaStr = !string.IsNullOrEmpty(HardwareControl.batteryTimeStr) ? HardwareControl.batteryTimeStr : "";
+            }
+            else
+            {
+                _batEtaStr = "";
+            }
+
+            if (_showPing && (++_pingTickCounter >= 3 || _lastPingMs < 0))
+            {
+                _pingTickCounter = 0;
+                if (Interlocked.Exchange(ref _pingBusy, 1) == 0)
+                {
+                    Task.Run(() =>
+                    {
+                        try
+                        {
+                            using var ping = new System.Net.NetworkInformation.Ping();
+                            var reply = ping.Send("1.1.1.1", 750);
+                            _lastPingMs = reply.Status == System.Net.NetworkInformation.IPStatus.Success ? (int)reply.RoundtripTime : -1;
+                        }
+                        catch { _lastPingMs = -1; }
+                        finally { Interlocked.Exchange(ref _pingBusy, 0); }
+                    });
+                }
+            }
 
             bool hasMid = AppConfig.IsMidFan();
             if (hasMid)
@@ -668,7 +717,17 @@ namespace GHelper.Overlay
             if (showNames) cursor += nameColW + colGap;
 
             int leftX = cursor;
-            cursor += S(sc, showTemp && showFans ? BaseLeftColWidth : showTemp || showFans ? BaseLightLeftColWidth : 0);
+            int baseLeftW = (showTemp && showFans ? BaseLeftColWidth : showTemp || showFans ? BaseLightLeftColWidth : 0)
+                          + (_showHotspot && showTemp ? 28 : 0);
+            cursor += S(sc, baseLeftW);
+
+            int freqColW = S(sc, 56);
+            int freqX = cursor;
+            if (_showClocks && (_gpuClockStr.Length > 0 || _cpuClockStr.Length > 0))
+            {
+                freqX = cursor + S(sc, 4);
+                cursor = freqX + freqColW;
+            }
 
             int chartX = cursor;
             if (showChart) cursor += chartColW;
@@ -700,9 +759,10 @@ namespace GHelper.Overlay
                 cursor = batIconX + S(sc, BaseBatIconWidth);
             }
 
-            int clockColW = S(sc, 44);
+            bool showExtraCol = showClock || _showPing || (_showBatEta && _batEtaStr.Length > 0);
+            int clockColW = S(sc, (_showBatEta && _batEtaStr.Length > 0) ? 52 : 44);
             int clockX = cursor;
-            if (showClock)
+            if (showExtraCol)
             {
                 clockX = cursor + S(sc, BaseBatColGap);
                 cursor = clockX + clockColW;
@@ -785,17 +845,23 @@ namespace GHelper.Overlay
                 }
 
                 // CPU
-                if (showTemp || showPower || showUsageMetric)
+                if (showTemp || showPower || showUsageMetric || _showClocks)
                 {
-                    string cpuText = "CPU: " + (showTemp ? _cpuTempStr.Replace("CPU:", "").Trim() : "") + (showPower && _cpuPow.Length > 0 ? " " + _cpuPow : "") + (showUsageMetric && _cpuUsage.HasValue ? " " + _cpuUsage.Value + "%" : "");
+                    string cpuText = "CPU: " + (showTemp ? _cpuTempStr.Replace("CPU:", "").Trim() : "")
+                                   + (_showClocks && _cpuClockStr.Length > 0 ? " " + _cpuClockStr : "")
+                                   + (showPower && _cpuPow.Length > 0 ? " " + _cpuPow : "")
+                                   + (showUsageMetric && _cpuUsage.HasValue ? " " + _cpuUsage.Value + "%" : "");
                     DrawStringWithShadow(g, cpuText, font, _cpuBrush, new PointF(barCursor, textY));
                     barCursor += (int)g.MeasureString(cpuText, font).Width + colGap;
                 }
 
                 // GPU
-                if (showTemp || showPower || showUsageMetric)
+                if (showTemp || showPower || showUsageMetric || _showClocks)
                 {
-                    string gpuText = "GPU: " + (showTemp ? _gpuTempStr.Replace("GPU:", "").Trim() : "") + (showPower && _gpuPow.Length > 0 ? " " + _gpuPow : "") + (showUsageMetric && _gpuUsage.HasValue ? " " + _gpuUsage.Value + "%" : "");
+                    string gpuText = "GPU: " + (showTemp ? _gpuTempStr.Replace("GPU:", "").Trim() : "")
+                                   + (_showClocks && _gpuClockStr.Length > 0 ? " " + _gpuClockStr : "")
+                                   + (showPower && _gpuPow.Length > 0 ? " " + _gpuPow : "")
+                                   + (showUsageMetric && _gpuUsage.HasValue ? " " + _gpuUsage.Value + "%" : "");
                     DrawStringWithShadow(g, gpuText, font, _gpuBrush, new PointF(barCursor, textY));
                     barCursor += (int)g.MeasureString(gpuText, font).Width + colGap;
                 }
@@ -826,9 +892,24 @@ namespace GHelper.Overlay
                 // Battery
                 if (showBat && _batLevel.Length > 0)
                 {
-                    string batText = _batLevel + (_batRate.Length > 0 ? " " + _batRate + "W" : "");
+                    string batText = _batLevel + (_batRate.Length > 0 ? " " + _batRate + "W" : "")
+                                   + (_showBatEta && _batEtaStr.Length > 0 ? " " + _batEtaStr : "");
                     DrawStringWithShadow(g, batText, font, _batBrush, new PointF(barCursor, textY));
                     barCursor += (int)g.MeasureString(batText, font).Width + colGap;
+                }
+                else if (_showBatEta && _batEtaStr.Length > 0)
+                {
+                    DrawStringWithShadow(g, _batEtaStr, font, _batBrush, new PointF(barCursor, textY));
+                    barCursor += (int)g.MeasureString(_batEtaStr, font).Width + colGap;
+                }
+
+                // Network Ping
+                if (_showPing && _lastPingMs >= 0)
+                {
+                    string pingStr = $"{_lastPingMs}ms";
+                    var pBrush = _lastPingMs < 40 ? _jitterGreenBrush : (_lastPingMs < 90 ? _jitterYellowBrush : _jitterRedBrush);
+                    DrawStringWithShadow(g, pingStr, font, pBrush, new PointF(barCursor, textY));
+                    barCursor += (int)g.MeasureString(pingStr, font).Width + colGap;
                 }
 
                 // System Clock
@@ -939,6 +1020,16 @@ namespace GHelper.Overlay
             if (showXgmRow)
                 DrawTempFan(g, font, rpmFont, charW, sc, leftX, GetRowY(xgmRow), xgmTempLabel, xgmFanStr, _xgmBrush);
 
+            if (_showClocks && (_gpuClockStr.Length > 0 || _cpuClockStr.Length > 0))
+            {
+                if (_gpuClockStr.Length > 0)
+                    DrawStringWithShadow(g, _gpuClockStr, font, _gpuBrush,
+                        new PointF(freqX + freqColW - g.MeasureString(_gpuClockStr, font).Width, GetRowY(gpuRow)));
+                if (_cpuClockStr.Length > 0)
+                    DrawStringWithShadow(g, _cpuClockStr, font, _cpuBrush,
+                        new PointF(freqX + freqColW - g.MeasureString(_cpuClockStr, font).Width, GetRowY(cpuRow)));
+            }
+
             // Chart — hidden in Light mode
             if (showChart)
                 DrawStackedChart(g, chartX, topY, chartColW, innerH, sc);
@@ -1016,14 +1107,30 @@ namespace GHelper.Overlay
                 DrawBatteryIcon(g, batIconX, topY + (lineH - batIconH) / 2 - S(sc, BaseUsageBarYNudge), batIconH, sc, _batPercent, _batCharging);
             }
 
-            if (showClock)
+            if (showExtraCol)
             {
-                string clockTime = DateTime.Now.ToString("HH:mm");
-                string clockSec = DateTime.Now.ToString(":ss");
-                DrawStringWithShadow(g, clockTime, font, _batBrush,
-                    new PointF(clockX + clockColW - g.MeasureString(clockTime, font).Width, GetRowY(0)));
-                DrawStringWithShadow(g, clockSec, rpmFont, _batBrush,
-                    new PointF(clockX + clockColW - g.MeasureString(clockSec, rpmFont).Width, GetRowY(1) + 2f * sc));
+                string row0Text = showClock ? DateTime.Now.ToString("HH:mm")
+                                : (_showPing && _lastPingMs >= 0 ? $"{_lastPingMs}ms" : "");
+                string row1Text = (_showPing && _lastPingMs >= 0 && showClock) ? $"{_lastPingMs}ms"
+                                : (_showBatEta && _batEtaStr.Length > 0 ? _batEtaStr
+                                : (showClock ? DateTime.Now.ToString(":ss") : ""));
+
+                if (row0Text.Length > 0)
+                {
+                    Brush r0Brush = (!showClock && _showPing && _lastPingMs >= 0)
+                        ? (_lastPingMs < 40 ? _jitterGreenBrush : (_lastPingMs < 90 ? _jitterYellowBrush : _jitterRedBrush))
+                        : _batBrush;
+                    DrawStringWithShadow(g, row0Text, font, r0Brush,
+                        new PointF(clockX + clockColW - g.MeasureString(row0Text, font).Width, GetRowY(0)));
+                }
+                if (row1Text.Length > 0)
+                {
+                    Brush r1Brush = (_showPing && _lastPingMs >= 0 && showClock)
+                        ? (_lastPingMs < 40 ? _jitterGreenBrush : (_lastPingMs < 90 ? _jitterYellowBrush : _jitterRedBrush))
+                        : _batBrush;
+                    DrawStringWithShadow(g, row1Text, rpmFont, r1Brush,
+                        new PointF(clockX + clockColW - g.MeasureString(row1Text, rpmFont).Width, GetRowY(1) + 2f * sc));
+                }
             }
         }
 
@@ -1382,6 +1489,10 @@ namespace GHelper.Overlay
                 "overlay_show_clock" => false,
                 "overlay_show_vram" => m == OverlayMode.Complete,
                 "overlay_show_mid_fan" => true,
+                "overlay_show_hotspot" => m == OverlayMode.Complete,
+                "overlay_show_clocks" => m == OverlayMode.Complete,
+                "overlay_show_ping" => false,
+                "overlay_show_bat_eta" => false,
                 "overlay_text_shadow" => true,
                 "overlay_names" => false,
                 _ => true,
@@ -1411,6 +1522,10 @@ namespace GHelper.Overlay
             _showClock = BlockShown("overlay_show_clock", m);
             _showVram = BlockShown("overlay_show_vram", m);
             _showMidFan = BlockShown("overlay_show_mid_fan", m);
+            _showHotspot = BlockShown("overlay_show_hotspot", m);
+            _showClocks = BlockShown("overlay_show_clocks", m);
+            _showPing = BlockShown("overlay_show_ping", m);
+            _showBatEta = BlockShown("overlay_show_bat_eta", m);
             _showShadow = BlockShown("overlay_text_shadow", m);
             _overlayBattery = BatteryState(m);
             _showBattery = _overlayBattery != 0;
@@ -1423,7 +1538,39 @@ namespace GHelper.Overlay
             HardwareControl.readUsage  = _showUsage;
             HardwareControl.readMemory = _showRam || _showVram;
             HardwareControl.readPower  = _showPower || _showChart;
-            HardwareControl.readBattery = _showBattery && _onBattery;
+            HardwareControl.readBattery = (_showBattery && _onBattery) || _showBatEta;
+            HardwareControl.readClocks = _showClocks;
+        }
+
+        public void CycleModeFromHotkey()
+        {
+            _mode = _mode switch
+            {
+                OverlayMode.Light    => OverlayMode.Bar,
+                OverlayMode.Bar      => OverlayMode.Default,
+                OverlayMode.Default  => OverlayMode.Full,
+                OverlayMode.Full     => OverlayMode.Complete,
+                _                    => OverlayMode.Light,
+            };
+            AppConfig.Set("overlay_mode", (int)_mode);
+            if (!AppConfig.IsOverlay())
+            {
+                Program.settingsForm?.ToggleOverlay(true);
+            }
+            else
+            {
+                RefreshSettings();
+            }
+            string modeLabel = _mode switch
+            {
+                OverlayMode.Light => "Light (Minimal)",
+                OverlayMode.Bar => "Strip (Horizontal Bar)",
+                OverlayMode.Default => "Default (Standard)",
+                OverlayMode.Full => "Full (Detailed)",
+                OverlayMode.Complete => "Complete (All Sensors)",
+                _ => _mode.ToString()
+            };
+            Program.toast?.RunToast($"Overlay Preset: {modeLabel}");
         }
 
         // Started for the FPS block, or for Auto Show to detect a game even with FPS hidden. Only
@@ -1514,6 +1661,7 @@ namespace GHelper.Overlay
             HardwareControl.readMemory = false;
             HardwareControl.readPower = false;
             HardwareControl.readBattery = false;
+            HardwareControl.readClocks = false;
             SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
             _timer.Stop();
             _dragModeActive = false;

@@ -52,6 +52,65 @@ namespace GHelper.Helpers
             "krita", "CLIPStudioPaint", "ZBrush", "Cinema 4D", "UnrealEditor", "SubstancePainter"
         };
 
+        // Indie & 2D games that run effortlessly at 60-165 FPS in Silent mode with a 35W CPU cap and near-0 RPM fans
+        public static readonly HashSet<string> IndieAnd2DGames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "Hades", "Hades2", "Balatro", "Hollow Knight", "Hollow_Knight", "Silksong",
+            "Celeste", "Stardew Valley", "StardewValley", "Terraria", "SlayTheSpire",
+            "DeadCells", "Factorio", "Cuphead", "isaac-ng", "BindingOfIsaac",
+            "VampireSurvivors", "Undertale", "Deltarune", "Ori", "OriAndTheWillOfTheWisps",
+            "Brotato", "DaveTheDiver", "IntoTheBreach", "FTLGame", "ShovelKnight",
+            "Spelunky2", "AnimalWell", "Blasphemous", "Katana ZERO", "NineSols"
+        };
+
+        public static Dictionary<string, string> GetCustomAppRules()
+        {
+            var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            string raw = AppConfig.GetString("custom_app_rules", "");
+            if (string.IsNullOrWhiteSpace(raw)) return dict;
+            foreach (string entry in raw.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                int eq = entry.IndexOf('=');
+                if (eq > 0 && eq < entry.Length - 1)
+                {
+                    string key = Path.GetFileNameWithoutExtension(entry.Substring(0, eq).Trim());
+                    string val = entry.Substring(eq + 1).Trim();
+                    if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(val))
+                        dict[key] = val;
+                }
+            }
+            return dict;
+        }
+
+        public static void SaveCustomAppRules(Dictionary<string, string> rules)
+        {
+            var sb = new StringBuilder();
+            foreach (var kv in rules)
+            {
+                if (sb.Length > 0) sb.Append(';');
+                sb.Append(kv.Key).Append('=').Append(kv.Value);
+            }
+            AppConfig.Set("custom_app_rules", sb.ToString());
+        }
+
+        public static void SetCustomAppRule(string procName, string rule)
+        {
+            string clean = Path.GetFileNameWithoutExtension(procName.Trim());
+            if (string.IsNullOrEmpty(clean)) return;
+            var rules = GetCustomAppRules();
+            rules[clean] = rule;
+            SaveCustomAppRules(rules);
+            if (_timer != null) _timer.Enabled = ShouldTimerRun();
+        }
+
+        public static void RemoveCustomAppRule(string procName)
+        {
+            string clean = Path.GetFileNameWithoutExtension(procName.Trim());
+            var rules = GetCustomAppRules();
+            if (rules.Remove(clean))
+                SaveCustomAppRules(rules);
+        }
+
         // Common desktop applications, Windows system hosts, media players, and store launchers that should never trigger game mode
         private static readonly HashSet<string> ExcludedProcesses = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -77,7 +136,8 @@ namespace GHelper.Helpers
         private static bool ShouldTimerRun() =>
             AppConfig.Is("auto_game_mode") ||
             AppConfig.Is("auto_pen_drawing_apps") ||
-            AppConfig.Is("auto_creator_apps");
+            AppConfig.Is("auto_creator_apps") ||
+            !string.IsNullOrWhiteSpace(AppConfig.GetString("custom_app_rules", ""));
 
         public static void Init()
         {
@@ -326,10 +386,21 @@ namespace GHelper.Helpers
                     }
                 }
 
-                // 3. Check Auto Game Mode
-                if (AppConfig.Is("auto_game_mode"))
+                // 3. Check Auto Game Mode & Per-App Custom Rules Engine
+                var customRules = GetCustomAppRules();
+                bool hasCustomRule = customRules.TryGetValue(procName, out string? customRule);
+                if (hasCustomRule && string.Equals(customRule, "ignore", StringComparison.OrdinalIgnoreCase))
                 {
-                    bool isGame = !ExcludedProcesses.Contains(procName);
+                    if (_gameModeActive && ++_nonGameStreak >= 3) RevertMode();
+                    return;
+                }
+
+                if (AppConfig.Is("auto_game_mode") || hasCustomRule)
+                {
+                    bool isIndie = (hasCustomRule && customRule == "silent_35w") ||
+                                   (!hasCustomRule && AppConfig.IsNotFalse("auto_indie_silent") && IndieAnd2DGames.Contains(procName));
+                    bool isCustomBalanced = hasCustomRule && customRule == "balanced_512z";
+                    bool isGame = hasCustomRule || !ExcludedProcesses.Contains(procName);
 
                     if (isGame)
                     {
@@ -341,7 +412,15 @@ namespace GHelper.Helpers
                             _savedWifiLowLatency = WifiLatencyHelper.IsLowLatencyActive();
                             _lastGamePid = pid;
                             _gameModeActive = true;
-                            Logger.WriteLine($"AutoGameMode: Detected game '{procName}' (PID {pid}, Title: '{windowTitle}'). Activating Turbo.");
+
+                            int targetMode = isIndie ? AsusACPI.PerformanceSilent
+                                           : isCustomBalanced ? AsusACPI.PerformanceBalanced
+                                           : AsusACPI.PerformanceTurbo;
+                            string profileLabel = isIndie ? "Silent • 35W Indie Cap"
+                                                : isCustomBalanced ? "Balanced • 512Z"
+                                                : "Turbo • 512Z HDR";
+
+                            Logger.WriteLine($"AutoGameMode: Detected '{procName}' (PID {pid}, Title: '{windowTitle}'). Activating {profileLabel}.");
 
                             if (AppConfig.Is("auto_wifi_gaming") && !_savedWifiLowLatency)
                             {
@@ -355,8 +434,14 @@ namespace GHelper.Helpers
                             {
                                 Program.settingsForm.BeginInvoke(delegate
                                 {
-                                    Program.modeControl.SetPerformanceMode(AsusACPI.PerformanceTurbo);
-                                    if (SystemInformation.PowerStatus.PowerLineStatus == PowerLineStatus.Online)
+                                    Program.modeControl.SetPerformanceMode(targetMode);
+                                    if (isIndie)
+                                    {
+                                        // Cap APU SPL/SPPT to 35W for cool, near-0 RPM silent indie gaming
+                                        Program.acpi.DeviceSet(AsusACPI.PPT_APUA0, 35, "IndieCapA0");
+                                        Program.acpi.DeviceSet(AsusACPI.PPT_APUA3, 35, "IndieCapA3");
+                                    }
+                                    else if (SystemInformation.PowerStatus.PowerLineStatus == PowerLineStatus.Online)
                                     {
                                         if (AppConfig.IsNotFalse("auto_game_miniled") && _savedGameMiniled == 0)
                                         {
@@ -365,7 +450,7 @@ namespace GHelper.Helpers
                                         }
                                         ScreenControl.SetScreen(frequency: ScreenControl.MAX_REFRESH, overdrive: 1);
                                     }
-                                    Program.toast?.RunToast($"Game Mode: {procName} (Turbo)");
+                                    Program.toast?.RunToast($"Game Profile: {procName} ({profileLabel})");
                                 });
                             }
                         }

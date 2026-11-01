@@ -1,4 +1,4 @@
-﻿using GHelper.Helpers;
+using GHelper.Helpers;
 using NvAPIWrapper.GPU;
 using NvAPIWrapper.Native;
 using NvAPIWrapper.Native.GPU;
@@ -49,6 +49,7 @@ public class NvidiaGpuControl : IGpuControl
     public string FullName => _internalGpu!.FullName;
 
     public int? _lastTemp;
+    public int? _lastHotspotTemp;
     public int _lastTempTime = 0;
 
     private static bool verboseLog = false;
@@ -87,6 +88,13 @@ public class NvidiaGpuControl : IGpuControl
 
         IThermalSensor? gpuSensor = thermalSettings.Sensors
             .FirstOrDefault(s => s.Target == ThermalSettingsTarget.GPU);
+
+        IThermalSensor? extraSensor = thermalSettings.Sensors
+            .FirstOrDefault(s => s.Target != ThermalSettingsTarget.GPU && s.CurrentTemperature > 0 && s.CurrentTemperature < 130);
+        if (extraSensor != null)
+            _lastHotspotTemp = extraSensor.CurrentTemperature;
+        else if (gpuSensor?.CurrentTemperature is int gt && gt > 0)
+            _lastHotspotTemp = Math.Min(110, gt + (int)Math.Round(Math.Max(4, (gt - 40) * 0.18)));
 
         if (log || verboseLog) Logger.WriteLine($"GPU Temp: {gpuSensor?.CurrentTemperature}C");
         return gpuSensor?.CurrentTemperature;
@@ -383,6 +391,23 @@ public class NvidiaGpuControl : IGpuControl
         if (!IsValid) return null;
         if (GetGpuState() != GpuState.Active) return null;
         return NvmlHelper.GetMemoryInfo();
+    }
+
+    public (int coreMhz, int memMhz)? GetLiveClocks()
+    {
+        if (!IsValid) return null;
+        if (GetGpuState() != GpuState.Active) return null;
+        var nvml = NvmlHelper.GetClocks();
+        if (nvml.HasValue && nvml.Value.coreMhz > 0) return nvml;
+        try
+        {
+            var freqs = GPUApi.GetAllClockFrequencies(_internalGpu!.Handle);
+            int core = (int)(freqs.GraphicsClock.Frequency / 1000);
+            int mem = (int)(freqs.MemoryClock.Frequency / 1000);
+            if (core > 0) return (core, mem);
+        }
+        catch { }
+        return null;
     }
 
 }

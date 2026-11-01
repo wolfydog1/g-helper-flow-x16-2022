@@ -753,8 +753,45 @@ namespace GHelper
                     AppConfig.Set("posture_osd_enabled", en ? 1 : 0);
                     Program.settingsForm?.SetContextMenu();
                 },
-                "Displays a sleek, touch-friendly floating mini bar for 6 seconds when folding into Tablet or Tent mode with 1-tap Touch/Pen, Rotate, Silent, 1Z/512Z, and Brightness controls."
+                "Displays a sleek, draggable, pinnable touch-friendly bar when folding into Tablet or Tent mode with 1-tap Touch/Pen, Rotate, Silent, 1Z/512Z, OSK, Snip, Volume, and Brightness controls."
             );
+
+            CreateExtraCheckBox(
+                "Tent Mode Thermal Boost: Auto-unlock higher sustained cooling in Tent posture",
+                AppConfig.Is("auto_tent_boost"),
+                (s, e) =>
+                {
+                    bool en = ((RCheckBox)s!).Checked;
+                    AppConfig.Set("auto_tent_boost", en ? 1 : 0);
+                },
+                "When folded into Tent posture on AC power, bottom intake vents are completely unobstructed (dropping temps 4-8°C). Automatically engages higher sustained thermal headroom and restores your previous mode in Laptop posture."
+            );
+
+            CreateExtraCheckBox(
+                "Indie & 2D Games: Auto-run in Silent Mode with 35W CPU cap (0-RPM quiet)",
+                AppConfig.IsNotFalse("auto_indie_silent"),
+                (s, e) =>
+                {
+                    bool en = ((RCheckBox)s!).Checked;
+                    AppConfig.Set("auto_indie_silent", en ? 1 : 0);
+                },
+                "Automatically runs lightweight Indie and 2D games (Hades, Balatro, Hollow Knight, Celeste, Stardew Valley, Terraria, etc.) in Silent Mode with a 35W CPU power limit for whisper-quiet gaming."
+            );
+
+            // Per-App Custom Performance & Fan Profile Rules button in System tab
+            var btnAppRules = new RButton
+            {
+                Dock = DockStyle.Top,
+                Height = 32,
+                Margin = new Padding(8, 4, 8, 4),
+                Secondary = true,
+                BorderRadius = CurrentButtonRadius,
+                BorderColor = colorStandard,
+                Text = "🎮 Manage Per-App Custom Performance & Fan Profiles (.exe Rules)..."
+            };
+            btnAppRules.Click += (s, e) => AppProfileRulesForm.ShowManager(this);
+            toolTip.SetToolTip(btnAppRules, "Assign specific game or application .exe files to Silent 35W (Indie), Balanced + 512-Zone (Creator), Turbo + 512-Zone + 165Hz (AAA), or Excluded.");
+            panelSettings.Controls.Add(btnAppRules);
 
             CreateExtraCheckBox(
                 "Palm Rejection: Auto-disable finger touch (stylus only) in drawing & note apps",
@@ -833,7 +870,63 @@ namespace GHelper
             InitPowerSettings();
             InitVramMem();
 
+            // Add Reactive Telemetry Aura Quick Bar to Lighting tab (panelBacklight)
+            var barAuraTelemetry = new TableLayoutPanel
+            {
+                AutoSize = true,
+                Dock = DockStyle.Bottom,
+                ColumnCount = 2,
+                RowCount = 1,
+                Margin = new Padding(8, 6, 8, 4),
+                Padding = new Padding(4, 4, 4, 4)
+            };
+            barAuraTelemetry.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            barAuraTelemetry.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+
+            var btnHeatmapAura = new RButton
+            {
+                Dock = DockStyle.Fill,
+                Height = 32,
+                Secondary = true,
+                BorderRadius = CurrentButtonRadius,
+                BorderColor = colorTurbo,
+                Text = "🌡️ Thermal Heatmap Aura (CPU/GPU)",
+                Margin = new Padding(3, 2, 3, 2)
+            };
+            btnHeatmapAura.Click += (s, e) =>
+            {
+                Aura.Mode = AuraMode.HEATMAP;
+                Aura.ApplyAura();
+                Program.settingsForm?.InitAura();
+                Program.toast?.RunToast("Keyboard Aura: Thermal Heatmap (CPU/GPU Temp)");
+            };
+            toolTip.SetToolTip(btnHeatmapAura, "Dynamically shifts keyboard backlight color from cool Blue (<40°C) → Green → Yellow → Red (>90°C) based on live CPU/GPU temperature.");
+
+            var btnBatteryAura = new RButton
+            {
+                Dock = DockStyle.Fill,
+                Height = 32,
+                Secondary = true,
+                BorderRadius = CurrentButtonRadius,
+                BorderColor = colorEco,
+                Text = "🔋 Battery Charge Level Aura",
+                Margin = new Padding(3, 2, 3, 2)
+            };
+            btnBatteryAura.Click += (s, e) =>
+            {
+                Aura.Mode = AuraMode.BATTERY;
+                Aura.ApplyAura();
+                Program.settingsForm?.InitAura();
+                Program.toast?.RunToast("Keyboard Aura: Battery Charge Level (Green → Red)");
+            };
+            toolTip.SetToolTip(btnBatteryAura, "Dynamically shifts keyboard backlight color from Green (100%) → Yellow (50%) → Red (0%) based on live battery charge percentage.");
+
+            barAuraTelemetry.Controls.Add(btnHeatmapAura, 0, 0);
+            barAuraTelemetry.Controls.Add(btnBatteryAura, 1, 0);
+            panelBacklight.Controls.Add(barAuraTelemetry);
+
             InitACPITesting();
+            InitTheme();
 
             buttonTabKeyboard.Click += (s, e) => ShowTab(0);
             buttonTabLighting.Click += (s, e) => ShowTab(1);
@@ -1764,6 +1857,105 @@ namespace GHelper
                 // Power button actions
                 PopulatePowerButtonCombo(comboPowerBtnAC, PowerNative.GetPowerButtonAction(true), val => PowerNative.SetPowerButtonAction(val, true));
                 PopulatePowerButtonCombo(comboPowerBtnDC, PowerNative.GetPowerButtonAction(false), val => PowerNative.SetPowerButtonAction(val, false));
+
+                // USB-C PD Power Cap Selector & Battery Health Analytics Card
+                var cardPowerExtra = new TableLayoutPanel
+                {
+                    AutoSize = true,
+                    AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                    Dock = DockStyle.Bottom,
+                    ColumnCount = 2,
+                    RowCount = 3,
+                    Margin = new Padding(4, 8, 4, 4),
+                    Padding = new Padding(6, 6, 6, 4)
+                };
+                cardPowerExtra.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 54F));
+                cardPowerExtra.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 46F));
+
+                bool isPlugged = SystemInformation.PowerStatus.PowerLineStatus == PowerLineStatus.Online;
+                bool isUsbC = isPlugged && Program.currentSource == Program.PowerSource.USBC;
+                string chargerText = !isPlugged ? "🔋 Discharging on Battery"
+                                   : isUsbC ? "🔌 USB-C PD Charger (65W–100W)"
+                                   : "⚡ 240W Barrel AC Adapter";
+
+                var lblUsbcCap = new Label
+                {
+                    AutoSize = true,
+                    Dock = DockStyle.Fill,
+                    TextAlign = ContentAlignment.MiddleLeft,
+                    Text = $"USB-C CPU Power Cap ({chargerText}):",
+                    Margin = new Padding(3, 4, 3, 4)
+                };
+
+                var cbUsbcCap = new RComboBox
+                {
+                    Dock = DockStyle.Fill,
+                    DropDownStyle = ComboBoxStyle.DropDownList,
+                    FlatStyle = FlatStyle.Flat,
+                    Margin = new Padding(3, 4, 3, 4)
+                };
+                var usbcCapOptions = new (int watts, string label)[]
+                {
+                    (25, "25W CPU Cap (65W Travel USB-C)"),
+                    (35, "35W CPU Cap (100W Balanced Default)"),
+                    (45, "45W CPU Cap (100W Performance)"),
+                    (55, "55W CPU Cap (Max USB-C Draw)")
+                };
+                int curUsbcCap = AppConfig.Get("max_usbc_cpu", 35);
+                foreach (var opt in usbcCapOptions)
+                    cbUsbcCap.Items.Add(new ComboOption(opt.watts.ToString(), opt.label));
+                SelectComboKey(cbUsbcCap, curUsbcCap.ToString());
+                cbUsbcCap.SelectionChangeCommitted += (s, e) =>
+                {
+                    if (cbUsbcCap.SelectedItem is ComboOption opt && int.TryParse(opt.Key, out int w))
+                    {
+                        AppConfig.Set("max_usbc_cpu", w);
+                        Program.modeControl?.SetPower(false);
+                        Program.toast?.RunToast($"USB-C CPU Power Cap: {w}W");
+                    }
+                };
+                toolTip.SetToolTip(cbUsbcCap, "Selects the maximum CPU power limit applied when connected via a USB-C PD charger to prevent battery drain under load.");
+
+                if (HardwareControl.designCapacity == null || HardwareControl.fullCapacity == null)
+                    HardwareControl.RefreshBatteryHealth();
+                decimal designCap = (HardwareControl.designCapacity ?? 90000m) / 1000m;
+                decimal fullCap = (HardwareControl.fullCapacity ?? 90000m) / 1000m;
+                decimal healthPct = designCap > 0 ? Math.Clamp((fullCap / designCap) * 100m, 0m, 105m) : 100m;
+                decimal wearPct = Math.Max(0m, 100m - healthPct);
+                decimal rateW = HardwareControl.batteryRate ?? 0m;
+                string etaStr = !string.IsNullOrEmpty(HardwareControl.batteryTimeStr)
+                    ? HardwareControl.batteryTimeStr
+                    : (isPlugged ? "AC Connected" : "Calculating...");
+
+                var lblBatAnalytics = new Label
+                {
+                    AutoSize = true,
+                    Dock = DockStyle.Fill,
+                    TextAlign = ContentAlignment.MiddleLeft,
+                    Font = new Font(CurrentFontFamily, 8.2f, FontStyle.Regular),
+                    Text = $"🔋 Health: {healthPct:0.0}% ({fullCap:0.0}/{designCap:0.0} Wh • {wearPct:0.0}% Wear)  |  Rate: {(rateW >= 0 ? "+" : "")}{rateW:0.0}W  |  {etaStr}",
+                    Margin = new Padding(3, 6, 3, 4)
+                };
+
+                var btnBatInspector = new RButton
+                {
+                    Dock = DockStyle.Fill,
+                    Height = 32,
+                    Secondary = true,
+                    BorderRadius = CurrentButtonRadius,
+                    BorderColor = colorEco,
+                    Text = "📊 Battery Health Inspector & Report...",
+                    Margin = new Padding(3, 4, 3, 4)
+                };
+                btnBatInspector.Click += (s, e) => new GHelper.Battery.BatteryHealthForm().ShowDialog(this);
+                toolTip.SetToolTip(btnBatInspector, "Open the detailed Battery Health & Power Analytics Inspector or generate a Windows HTML battery report.");
+
+                cardPowerExtra.Controls.Add(lblUsbcCap, 0, 0);
+                cardPowerExtra.Controls.Add(cbUsbcCap, 1, 0);
+                cardPowerExtra.Controls.Add(lblBatAnalytics, 0, 1);
+                cardPowerExtra.Controls.Add(btnBatInspector, 1, 1);
+
+                panelPower.Controls.Add(cardPowerExtra);
             }
             catch (Exception ex)
             {

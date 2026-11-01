@@ -883,7 +883,7 @@ namespace GHelper.USB
             if (Mode == AuraMode.BATTERY)
             {
                 CustomRGB.ApplyBattery();
-                timer.Interval = 30000;
+                timer.Interval = 10000;
                 timer.Start();
                 return;
             }
@@ -1170,12 +1170,15 @@ namespace GHelper.USB
 
             public static void ApplyHeatmap(bool init = false)
             {
-                float cpuTemp = (float)HardwareControl.GetCPUTemp();
+                float cTemp = (float)(HardwareControl.GetCPUTemp() ?? 40f);
+                float gTemp = (float)(HardwareControl.gpuTemp ?? 0f);
+                float cpuTemp = Math.Max(cTemp, gTemp);
                 Color color = colorFreeze;
 
-                if (cpuTemp < tempCold) color = ColorUtils.GetWeightedAverage(colorFreeze, colorCold, ((float)cpuTemp - tempFreeze) / (tempCold - tempFreeze));
-                else if (cpuTemp < tempWarm) color = ColorUtils.GetWeightedAverage(colorCold, colorWarm, ((float)cpuTemp - tempCold) / (tempWarm - tempCold));
-                else if (cpuTemp < tempHot) color = ColorUtils.GetWeightedAverage(colorWarm, colorHot, ((float)cpuTemp - tempWarm) / (tempHot - tempWarm));
+                if (cpuTemp <= tempFreeze) color = colorFreeze;
+                else if (cpuTemp < tempCold) color = ColorUtils.GetWeightedAverage(colorFreeze, colorCold, (cpuTemp - tempFreeze) / (tempCold - tempFreeze));
+                else if (cpuTemp < tempWarm) color = ColorUtils.GetWeightedAverage(colorCold, colorWarm, (cpuTemp - tempCold) / (tempWarm - tempCold));
+                else if (cpuTemp < tempHot) color = ColorUtils.GetWeightedAverage(colorWarm, colorHot, (cpuTemp - tempWarm) / (tempHot - tempWarm));
                 else color = colorHot;
 
                 ApplyDirect(color, init);

@@ -329,6 +329,7 @@ namespace GHelper
 
             ConfigureSliderErgonomics();
             ConfigureChartAndModeMenus();
+            BuildAcousticPresetBar();
         }
 
         private void CheckFanClamp_Click(object? sender, EventArgs e)
@@ -2058,6 +2059,120 @@ namespace GHelper
             buttonAdd.MouseUp += modeMenuHandler;
             comboModes.MouseUp += modeMenuHandler;
             labelPowerLimits.MouseUp += modeMenuHandler;
+        }
+
+        private void BuildAcousticPresetBar()
+        {
+            var bar = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                Height = 32,
+                ColumnCount = 5,
+                RowCount = 1,
+                Margin = new Padding(4, 2, 4, 2),
+                Padding = new Padding(4, 2, 4, 2),
+                BackColor = Color.Transparent
+            };
+            for (int i = 0; i < 5; i++)
+                bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20F));
+
+            RButton MakePresetBtn(string text, Color accent, Action onClick)
+            {
+                var btn = new RButton
+                {
+                    Text = text,
+                    Dock = DockStyle.Fill,
+                    Margin = new Padding(2, 1, 2, 1),
+                    Secondary = true,
+                    BorderRadius = Math.Min(CurrentButtonRadius, 8),
+                    BorderColor = accent,
+                    FlatStyle = FlatStyle.Flat,
+                    Font = new Font(CurrentFontFamily, 7.6f, FontStyle.Bold)
+                };
+                btn.FlatAppearance.BorderSize = 0;
+                btn.Click += (s, e) => onClick();
+                return btn;
+            }
+
+            var btnZeroRpm = MakePresetBtn("🍃 0-RPM <55°C", colorEco, () =>
+            {
+                byte[] cpuGpu = [30, 40, 50, 55, 65, 75, 85, 95, 0, 0, 0, 0, 22, 40, 62, 82];
+                byte[] mid    = [30, 40, 50, 55, 65, 75, 85, 95, 0, 0, 0, 8, 24, 38, 54, 72];
+                ApplyCoordinatedFanPreset("0-RPM Silent (<55°C)", cpuGpu, cpuGpu, mid);
+            });
+
+            var btnWhisper = MakePresetBtn("🤫 38dB Whisper", colorStandard, () =>
+            {
+                byte[] cpuGpu = [30, 40, 50, 60, 70, 80, 88, 96, 0, 0, 12, 22, 32, 42, 48, 56];
+                byte[] mid    = [30, 40, 50, 60, 70, 80, 88, 96, 0, 8, 16, 26, 36, 44, 50, 58];
+                ApplyCoordinatedFanPreset("38dB Whisper Cap", cpuGpu, cpuGpu, mid);
+            });
+
+            var btnFrostForce = MakePresetBtn("❄️ Frost Force", colorStandard, () =>
+            {
+                byte[] cpu = [30, 40, 50, 60, 70, 78, 86, 94, 0, 10, 22, 36, 52, 68, 82, 94];
+                byte[] gpu = [30, 40, 50, 60, 70, 78, 86, 94, 0, 12, 24, 38, 54, 70, 84, 96];
+                byte[] mid = [30, 40, 48, 58, 68, 76, 84, 92, 8, 18, 28, 42, 56, 70, 82, 92];
+                ApplyCoordinatedFanPreset("Frost Force Tri-Fan Balanced", cpu, gpu, mid);
+            });
+
+            var btnMax = MakePresetBtn("🚀 Max Cooling", colorTurbo, () =>
+            {
+                byte[] max = [30, 40, 50, 60, 70, 78, 85, 92, 40, 55, 70, 82, 92, 98, 100, 100];
+                ApplyCoordinatedFanPreset("Max Cooling", max, max, max);
+            });
+
+            RButton? btnSmooth = null;
+            btnSmooth = MakePresetBtn("🌊 Anti-Pulse", colorCustom, () =>
+            {
+                bool next = !AppConfig.IsNotFalse("smart_fan_hysteresis");
+                AppConfig.Set("smart_fan_hysteresis", next ? 1 : 0);
+                if (btnSmooth != null)
+                {
+                    btnSmooth.Activated = next;
+                    btnSmooth.Text = next ? "🌊 Anti-Pulse: ON" : "🌊 Anti-Pulse: OFF";
+                }
+                if (next)
+                {
+                    AppConfig.SetMode("hysteresis_up", 4);
+                    AppConfig.SetMode("hysteresis_down", 5);
+                    Program.acpi.SetFanHysteresis(4, 5);
+                }
+                else
+                {
+                    AppConfig.SetMode("hysteresis_up", 2);
+                    AppConfig.SetMode("hysteresis_down", 2);
+                    Program.acpi.SetFanHysteresis(2, 2);
+                }
+                InitHysteresis();
+                Program.toast?.RunToast(next ? "Fan Anti-Pulse Hysteresis: ON (Smooth Step-Down)" : "Fan Anti-Pulse Hysteresis: Fast Response");
+            });
+            bool smoothActive = AppConfig.IsNotFalse("smart_fan_hysteresis");
+            btnSmooth.Activated = smoothActive;
+            btnSmooth.Text = smoothActive ? "🌊 Anti-Pulse: ON" : "🌊 Anti-Pulse: OFF";
+
+            bar.Controls.Add(btnZeroRpm, 0, 0);
+            bar.Controls.Add(btnWhisper, 1, 0);
+            bar.Controls.Add(btnFrostForce, 2, 0);
+            bar.Controls.Add(btnMax, 3, 0);
+            bar.Controls.Add(btnSmooth, 4, 0);
+
+            panelFans.SuspendLayout();
+            panelFans.Controls.Add(bar);
+            // In WinForms DockStyle.Top stacking, higher ChildIndex docks below lower ChildIndex;
+            // place bar just above tableFanCharts and below panelTitleFans
+            panelFans.Controls.SetChildIndex(panelTitleFans, panelFans.Controls.Count - 1);
+            panelFans.Controls.SetChildIndex(bar, panelFans.Controls.Count - 2);
+            panelFans.ResumeLayout(true);
+        }
+
+        private void ApplyCoordinatedFanPreset(string presetName, byte[] cpuCurve, byte[] gpuCurve, byte[] midCurve)
+        {
+            ApplyCustomCurveBytes(seriesCPU, AsusFan.CPU, (byte[])cpuCurve.Clone());
+            ApplyCustomCurveBytes(seriesGPU, AsusFan.GPU, (byte[])gpuCurve.Clone());
+            if (chartMid.Visible || AppConfig.IsMidFan())
+                ApplyCustomCurveBytes(seriesMid, AsusFan.Mid, (byte[])midCurve.Clone());
+            Program.toast?.RunToast($"Fan Preset: {presetName}");
         }
 
         private Series GetSeriesForDevice(AsusFan device) => device switch

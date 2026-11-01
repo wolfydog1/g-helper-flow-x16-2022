@@ -975,9 +975,10 @@ namespace GHelper.Helpers
     }
 
     // =========================================================================
-    // FEATURE 6: Convertible Posture OSD Pill (PostureOsdForm)
-    // Sleek, non-activating touch bar that pops up when folding into Tablet/Tent
-    // mode (or on demand) with 1-tap controls for Touch/Pen, Rotate, Mode, 1Z/512Z, Brightness
+    // FEATURE 6: Convertible Posture OSD Pill V2 (PostureOsdForm)
+    // Draggable, pinnable, non-activating touch bar that pops up when folding into
+    // Tablet/Tent mode (or on demand) with 1-tap controls for Touch/Pen, Rotate,
+    // Mode, 1Z/512Z, OSK, Screen Snip, Volume -/+, Brightness -/+, Pin, and Close
     // =========================================================================
     public class PostureOsdForm : Form
     {
@@ -988,9 +989,19 @@ namespace GHelper.Helpers
         private readonly RButton _btnRotate;
         private readonly RButton _btnMode;
         private readonly RButton _btnMiniled;
+        private readonly RButton _btnOsk;
+        private readonly RButton _btnSnip;
+        private readonly RButton _btnVolDown;
+        private readonly RButton _btnVolUp;
         private readonly RButton _btnBrightDown;
         private readonly RButton _btnBrightUp;
+        private readonly RButton _btnPin;
         private readonly RButton _btnClose;
+
+        private bool _isPinned;
+        private bool _dragging;
+        private Point _dragStartPoint;
+        private Point _dragFormOrigin;
 
         [DllImport("user32.dll")]
         private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
@@ -1036,12 +1047,15 @@ namespace GHelper.Helpers
             DoubleBuffered = true;
             BackColor = Color.FromArgb(24, 26, 32);
             ForeColor = Color.White;
-            Size = new Size(650, 52);
+            Size = new Size(880, 54);
             Padding = new Padding(10, 6, 10, 6);
 
-            _hideTimer = new System.Windows.Forms.Timer { Interval = 6500 };
+            _isPinned = AppConfig.Is("posture_osd_pinned");
+
+            _hideTimer = new System.Windows.Forms.Timer { Interval = 7000 };
             _hideTimer.Tick += (s, e) =>
             {
+                if (_isPinned) return;
                 _hideTimer.Stop();
                 Hide();
             };
@@ -1049,30 +1063,72 @@ namespace GHelper.Helpers
             var layout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                ColumnCount = 8,
+                ColumnCount = 13,
                 RowCount = 1,
                 BackColor = Color.Transparent,
                 Margin = new Padding(0)
             };
-            layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 23F));
-            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 21F));
-            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 21F));
-            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 21F));
-            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 44F));
-            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 44F));
-            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 36F));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); // Title (Drag Handle)
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F)); // Touch+Pen
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F)); // Rotate
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F)); // Mode
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F)); // Mini-LED
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 58F)); // OSK
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 54F)); // Snip
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 42F)); // Vol-
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 42F)); // Vol+
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 42F)); // Bright-
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 42F)); // Bright+
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 40F)); // Pin
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 36F)); // Close
 
             _titleLabel = new Label
             {
                 AutoSize = true,
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleLeft,
-                Font = new Font(RForm.CurrentFontFamily, 9.5f, FontStyle.Bold),
+                Font = new Font(RForm.CurrentFontFamily, 9.0f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(80, 210, 255),
                 Margin = new Padding(4, 0, 8, 0),
-                Text = "Posture"
+                Cursor = Cursors.SizeAll,
+                Text = "⠿ Posture"
             };
+
+            void AttachDrag(Control ctrl)
+            {
+                ctrl.MouseDown += (s, e) =>
+                {
+                    if (e.Button == MouseButtons.Left)
+                    {
+                        _dragging = true;
+                        _dragStartPoint = Cursor.Position;
+                        _dragFormOrigin = Location;
+                        ResetAutoHide();
+                    }
+                };
+                ctrl.MouseMove += (s, e) =>
+                {
+                    if (_dragging)
+                    {
+                        Point cur = Cursor.Position;
+                        Location = new Point(_dragFormOrigin.X + (cur.X - _dragStartPoint.X), _dragFormOrigin.Y + (cur.Y - _dragStartPoint.Y));
+                    }
+                };
+                ctrl.MouseUp += (s, e) =>
+                {
+                    if (_dragging)
+                    {
+                        _dragging = false;
+                        AppConfig.Set("posture_osd_x", Left);
+                        AppConfig.Set("posture_osd_y", Top);
+                        ResetAutoHide();
+                    }
+                };
+            }
+
+            AttachDrag(this);
+            AttachDrag(layout);
+            AttachDrag(_titleLabel);
 
             RButton MakeBtn(string text, EventHandler onClick)
             {
@@ -1080,14 +1136,14 @@ namespace GHelper.Helpers
                 {
                     Text = text,
                     Dock = DockStyle.Fill,
-                    Margin = new Padding(3, 2, 3, 2),
+                    Margin = new Padding(2, 2, 2, 2),
                     Secondary = true,
                     BorderRadius = 8,
                     FlatStyle = FlatStyle.Flat,
                     BackColor = Color.FromArgb(38, 42, 50),
                     ForeColor = Color.White,
                     BorderColor = Color.FromArgb(58, 174, 239),
-                    Font = new Font(RForm.CurrentFontFamily, 8.5f, FontStyle.Bold)
+                    Font = new Font(RForm.CurrentFontFamily, 8.2f, FontStyle.Bold)
                 };
                 btn.FlatAppearance.BorderSize = 0;
                 btn.Click += (s, e) =>
@@ -1129,6 +1185,30 @@ namespace GHelper.Helpers
                 ScreenControl.InitScreen();
             });
 
+            _btnOsk = MakeBtn("🎹 OSK", (s, e) =>
+            {
+                try
+                {
+                    Process.Start(new ProcessStartInfo { FileName = "tabtip.exe", UseShellExecute = true });
+                }
+                catch
+                {
+                    try { Process.Start(new ProcessStartInfo { FileName = "osk.exe", UseShellExecute = true }); } catch { }
+                }
+            });
+
+            _btnSnip = MakeBtn("✂️ Snip", (s, e) =>
+            {
+                try
+                {
+                    Process.Start(new ProcessStartInfo { FileName = "ms-screenclip:", UseShellExecute = true });
+                }
+                catch { }
+            });
+
+            _btnVolDown = MakeBtn("🔊-", (s, e) => KeyboardHook.KeyPress(Keys.VolumeDown));
+            _btnVolUp = MakeBtn("🔊+", (s, e) => KeyboardHook.KeyPress(Keys.VolumeUp));
+
             _btnBrightDown = MakeBtn("☀️-", (s, e) =>
             {
                 int b = ScreenBrightness.Adjust(-10);
@@ -1139,6 +1219,14 @@ namespace GHelper.Helpers
             {
                 int b = ScreenBrightness.Adjust(10);
                 Program.settingsForm?.UpdateBrightnessSlider(b);
+            });
+
+            _btnPin = MakeBtn("📌", (s, e) =>
+            {
+                _isPinned = !_isPinned;
+                AppConfig.Set("posture_osd_pinned", _isPinned ? 1 : 0);
+                if (_isPinned) _hideTimer.Stop();
+                else ResetAutoHide();
             });
 
             _btnClose = MakeBtn("✕", (s, e) =>
@@ -1153,9 +1241,14 @@ namespace GHelper.Helpers
             layout.Controls.Add(_btnRotate, 2, 0);
             layout.Controls.Add(_btnMode, 3, 0);
             layout.Controls.Add(_btnMiniled, 4, 0);
-            layout.Controls.Add(_btnBrightDown, 5, 0);
-            layout.Controls.Add(_btnBrightUp, 6, 0);
-            layout.Controls.Add(_btnClose, 7, 0);
+            layout.Controls.Add(_btnOsk, 5, 0);
+            layout.Controls.Add(_btnSnip, 6, 0);
+            layout.Controls.Add(_btnVolDown, 7, 0);
+            layout.Controls.Add(_btnVolUp, 8, 0);
+            layout.Controls.Add(_btnBrightDown, 9, 0);
+            layout.Controls.Add(_btnBrightUp, 10, 0);
+            layout.Controls.Add(_btnPin, 11, 0);
+            layout.Controls.Add(_btnClose, 12, 0);
 
             Controls.Add(layout);
         }
@@ -1163,7 +1256,7 @@ namespace GHelper.Helpers
         private void ResetAutoHide()
         {
             _hideTimer.Stop();
-            _hideTimer.Start();
+            if (!_isPinned) _hideTimer.Start();
         }
 
         public void PresentBar(string postureName)
@@ -1172,12 +1265,22 @@ namespace GHelper.Helpers
             {
                 postureName = InputDispatcher.tabletMode ? "Tablet" : (InputDispatcher.tentMode ? "Tent" : "Convertible");
             }
-            _titleLabel.Text = $"🔄 {postureName}";
+            _titleLabel.Text = $"⠿ {postureName}";
             RefreshButtonStates();
 
             Rectangle workArea = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1920, 1080);
-            Left = workArea.Left + (workArea.Width - Width) / 2;
-            Top = workArea.Top + 18;
+            int savedX = AppConfig.Get("posture_osd_x", -9999);
+            int savedY = AppConfig.Get("posture_osd_y", -9999);
+            if (savedX != -9999 && savedY != -9999)
+            {
+                Left = Math.Clamp(savedX, workArea.Left + 4, Math.Max(workArea.Left + 4, workArea.Right - Width - 4));
+                Top = Math.Clamp(savedY, workArea.Top + 4, Math.Max(workArea.Top + 4, workArea.Bottom - Height - 4));
+            }
+            else
+            {
+                Left = workArea.Left + (workArea.Width - Width) / 2;
+                Top = workArea.Top + 18;
+            }
 
             ShowWindow(Handle, SW_SHOWNOACTIVATE);
             Invalidate();
@@ -1201,6 +1304,9 @@ namespace GHelper.Helpers
             int mled = AppConfig.Get("miniled", 1);
             _btnMiniled.Text = mled == 1 ? "🔆 512-Zone" : "🔅 1-Zone";
             _btnMiniled.Activated = mled == 1;
+
+            _btnPin.Activated = _isPinned;
+            _btnPin.BorderColor = _isPinned ? Color.FromArgb(255, 190, 40) : Color.FromArgb(58, 174, 239);
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -1326,6 +1432,263 @@ namespace GHelper.Helpers
             }
             using var pen = new Pen(color, 1.6f);
             g.DrawLines(pen, pts);
+        }
+    }
+
+    // =========================================================================
+    // FEATURE 7: Per-App Custom Performance & Fan Profile Rules Manager
+    // Assign specific .exe files to Indie Silent (35W), Creator Balanced (512Z),
+    // AAA Turbo (512Z + 165Hz), or Desktop Ignore
+    // =========================================================================
+    public class AppProfileRulesForm : RForm
+    {
+        private static AppProfileRulesForm? _instance;
+        private readonly ListBox _listRules;
+        private readonly TextBox _txtApp;
+        private readonly RComboBox _comboTier;
+
+        private static readonly (string key, string label)[] ProfileTiers = new[]
+        {
+            ("silent_35w", "🍃 Indie / 2D Game  ➔  Silent + 35W CPU Cap (0 RPM Quiet)"),
+            ("balanced_512z", "🎨 Creative / Studio  ➔  Balanced + 512-Zone Mini-LED"),
+            ("turbo_512z", "🚀 Heavy AAA Game  ➔  Turbo + 512-Zone + 165Hz Overdrive"),
+            ("ignore", "🚫 Exclude / Ignore  ➔  Keep Current Desktop Profile")
+        };
+
+        public static void ShowManager(Form? owner = null)
+        {
+            if (_instance != null && !_instance.IsDisposed)
+            {
+                _instance.BringToFront();
+                _instance.Focus();
+                return;
+            }
+            _instance = new AppProfileRulesForm();
+            if (owner != null) _instance.Show(owner);
+            else _instance.Show();
+        }
+
+        public AppProfileRulesForm()
+        {
+            Text = "Per-App Custom Performance & Fan Profiles";
+            Size = new Size(560, 420);
+            StartPosition = FormStartPosition.CenterParent;
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = false;
+            MinimizeBox = false;
+            Padding = new Padding(14);
+
+            var root = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 5
+            };
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+            var lblDesc = new Label
+            {
+                AutoSize = true,
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0, 0, 0, 8),
+                Text = "Assign specific game or application executables (.exe) to automatic thermal, power, and Mini-LED profiles.\nBuilt-in Indie games (Hades, Balatro, Hollow Knight, Celeste, Stardew Valley, etc.) automatically use Silent 35W."
+            };
+
+            _listRules = new ListBox
+            {
+                Dock = DockStyle.Fill,
+                IntegralHeight = false,
+                BorderStyle = BorderStyle.FixedSingle,
+                Margin = new Padding(0, 0, 0, 10)
+            };
+
+            var rowInput = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                AutoSize = true,
+                ColumnCount = 3,
+                RowCount = 1,
+                Margin = new Padding(0, 0, 0, 6)
+            };
+            rowInput.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            rowInput.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            rowInput.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+            var lblExe = new Label
+            {
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Text = "App / Game (.exe):",
+                Margin = new Padding(0, 0, 8, 0)
+            };
+
+            _txtApp = new TextBox
+            {
+                Dock = DockStyle.Fill,
+                PlaceholderText = "e.g. Cyberpunk2077, Balatro, blender"
+            };
+
+            var btnBrowse = new RButton
+            {
+                Text = "Browse .exe...",
+                AutoSize = true,
+                Secondary = true,
+                BorderRadius = CurrentButtonRadius,
+                Padding = new Padding(8, 2, 8, 2),
+                Margin = new Padding(8, 0, 0, 0)
+            };
+            btnBrowse.Click += (s, e) =>
+            {
+                using var ofd = new OpenFileDialog
+                {
+                    Filter = "Executable Files (*.exe)|*.exe",
+                    Title = "Select Game or Application Executable"
+                };
+                if (ofd.ShowDialog(this) == DialogResult.OK)
+                {
+                    _txtApp.Text = Path.GetFileNameWithoutExtension(ofd.FileName);
+                }
+            };
+
+            rowInput.Controls.Add(lblExe, 0, 0);
+            rowInput.Controls.Add(_txtApp, 1, 0);
+            rowInput.Controls.Add(btnBrowse, 2, 0);
+
+            var rowTier = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                AutoSize = true,
+                ColumnCount = 2,
+                RowCount = 1,
+                Margin = new Padding(0, 0, 0, 10)
+            };
+            rowTier.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            rowTier.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+
+            var lblTier = new Label
+            {
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Text = "Target Profile:",
+                Margin = new Padding(0, 0, 8, 0)
+            };
+
+            _comboTier = new RComboBox
+            {
+                Dock = DockStyle.Fill,
+                DropDownStyle = ComboBoxStyle.DropDownList
+            };
+            foreach (var (_, label) in ProfileTiers) _comboTier.Items.Add(label);
+            _comboTier.SelectedIndex = 0;
+
+            rowTier.Controls.Add(lblTier, 0, 0);
+            rowTier.Controls.Add(_comboTier, 1, 0);
+
+            var rowButtons = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                AutoSize = true,
+                FlowDirection = FlowDirection.RightToLeft,
+                Margin = new Padding(0)
+            };
+
+            var btnClose = new RButton
+            {
+                Text = "Close",
+                Width = 90,
+                Height = 30,
+                Secondary = true,
+                BorderRadius = CurrentButtonRadius,
+                Margin = new Padding(6, 0, 0, 0)
+            };
+            btnClose.Click += (s, e) => Close();
+
+            var btnRemove = new RButton
+            {
+                Text = "Remove Selected",
+                Width = 135,
+                Height = 30,
+                Secondary = true,
+                BorderRadius = CurrentButtonRadius,
+                Margin = new Padding(6, 0, 0, 0)
+            };
+            btnRemove.Click += (s, e) =>
+            {
+                if (_listRules.SelectedItem is string item)
+                {
+                    int sep = item.IndexOf("  ➔  ", StringComparison.Ordinal);
+                    if (sep > 0)
+                    {
+                        string proc = item.Substring(0, sep).Trim();
+                        GameWatcher.RemoveCustomAppRule(proc);
+                        RefreshList();
+                    }
+                }
+            };
+
+            var btnAdd = new RButton
+            {
+                Text = "Add / Save Rule",
+                Width = 135,
+                Height = 30,
+                Secondary = false,
+                BorderRadius = CurrentButtonRadius,
+                Margin = new Padding(0)
+            };
+            btnAdd.Click += (s, e) =>
+            {
+                string proc = Path.GetFileNameWithoutExtension(_txtApp.Text.Trim());
+                if (string.IsNullOrEmpty(proc)) return;
+                int idx = Math.Clamp(_comboTier.SelectedIndex, 0, ProfileTiers.Length - 1);
+                GameWatcher.SetCustomAppRule(proc, ProfileTiers[idx].key);
+                _txtApp.Clear();
+                RefreshList();
+            };
+
+            rowButtons.Controls.Add(btnClose);
+            rowButtons.Controls.Add(btnRemove);
+            rowButtons.Controls.Add(btnAdd);
+
+            root.Controls.Add(lblDesc, 0, 0);
+            root.Controls.Add(_listRules, 0, 1);
+            root.Controls.Add(rowInput, 0, 2);
+            root.Controls.Add(rowTier, 0, 3);
+            root.Controls.Add(rowButtons, 0, 4);
+
+            Controls.Add(root);
+            InitTheme(true);
+            _listRules.BackColor = buttonMain;
+            _listRules.ForeColor = foreMain;
+            _txtApp.BackColor = buttonMain;
+            _txtApp.ForeColor = foreMain;
+
+            RefreshList();
+        }
+
+        private void RefreshList()
+        {
+            _listRules.Items.Clear();
+            var rules = GameWatcher.GetCustomAppRules();
+            foreach (var kv in rules)
+            {
+                string friendly = kv.Value switch
+                {
+                    "silent_35w" => "🍃 Silent + 35W CPU Cap (0 RPM Quiet)",
+                    "balanced_512z" => "🎨 Balanced + 512-Zone Mini-LED",
+                    "turbo_512z" => "🚀 Turbo + 512-Zone + 165Hz",
+                    "ignore" => "🚫 Excluded (Keep Desktop Profile)",
+                    _ => kv.Value
+                };
+                _listRules.Items.Add($"{kv.Key}  ➔  {friendly}");
+            }
+            if (_listRules.Items.Count == 0)
+            {
+                _listRules.Items.Add("(No custom .exe rules added yet — built-in Indie & AAA detection is active)");
+            }
         }
     }
 }

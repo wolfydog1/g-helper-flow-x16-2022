@@ -24,6 +24,7 @@ namespace GHelper.Input
         private static bool touchpadDisabledByTent = false;
         private static TouchPenMode? _preTabletTouchMode = null;
         private static int? _preTabletPerfMode = null;
+        private static int? _preTentPerfMode = null;
         private static bool? _fnLock = null;
         private static string? _asusPath = null;
 
@@ -193,6 +194,9 @@ namespace GHelper.Input
             }
 
             if (keyOverlay != Keys.None) hook.RegisterHotKey(keyModifierAlt, keyOverlay);
+            hook.RegisterHotKey(keyModifierAlt, Keys.P); // Cycle Overlay Preset (Light -> Strip -> Default -> Full -> Complete)
+            hook.RegisterHotKey(keyModifierAlt, Keys.M); // 1-Zone <-> 512-Zone Mini-LED Quick Toggle
+            hook.RegisterHotKey(keyModifierAlt, Keys.F); // 60Hz <-> 165Hz FPS / Refresh Rate Quick Switch
 
             if (!AppConfig.IsZ13() && !AppConfig.IsAlly() && !AppConfig.IsVivoZenPro())
             {
@@ -529,6 +533,9 @@ namespace GHelper.Input
                 if (e.Key == keyProfile4) modeControl.SetPerformanceMode(4, true);
                 if (e.Key == keyXGM) Program.RunOnUI(() => Program.settingsForm.gpuControl.ToggleXGM(true));
                 if (e.Key == keyOverlay) Program.RunOnUI(() => Program.settingsForm.ToggleOverlay(true));
+                if (e.Key == Keys.P) Program.RunOnUI(() => Program.hardwareOverlay?.CycleModeFromHotkey());
+                if (e.Key == Keys.M) Program.RunOnUI(() => Program.settingsForm?.ToogleMiniled(true));
+                if (e.Key == Keys.F) ToggleScreenRate();
 
                 switch (e.Key)
                 {
@@ -1167,13 +1174,32 @@ namespace GHelper.Input
                 }
                 if (tentMode)
                 {
+                    bool boosted = false;
+                    if (AppConfig.Is("auto_tent_boost") && modeControl != null && SystemInformation.PowerStatus.PowerLineStatus == PowerLineStatus.Online)
+                    {
+                        int curPerf = Modes.GetCurrent();
+                        if (curPerf != AsusACPI.PerformanceTurbo)
+                        {
+                            _preTentPerfMode = curPerf;
+                            modeControl.SetPerformanceMode(AsusACPI.PerformanceTurbo);
+                            boosted = true;
+                        }
+                    }
+
                     string rotPart = AppConfig.Get("auto_tablet_rotation", 1) == 1 ? " • Rotation Unlocked" : "";
-                    Program.toast?.RunToast($"Tent Mode: Open Airflow{rotPart} • Touchpad Off", ToastIcon.Touchpad);
+                    string boostPart = boosted ? " • Tent Thermal Boost (Turbo)" : "";
+                    Program.toast?.RunToast($"Tent Mode: Open Airflow{boostPart}{rotPart} • Touchpad Off", ToastIcon.Touchpad);
 
                     if (AppConfig.IsNotFalse("posture_osd_enabled")) PostureOsdForm.ShowPostureBar("Tent Mode");
                 }
                 else if (!tabletMode)
                 {
+                    if (_preTentPerfMode.HasValue && AppConfig.Is("auto_tent_boost") && modeControl != null)
+                    {
+                        int restorePerf = _preTentPerfMode.Value;
+                        _preTentPerfMode = null;
+                        modeControl.SetPerformanceMode(restorePerf);
+                    }
                     Program.toast?.RunToast($"Laptop Mode Restored ({Modes.GetCurrentName()})", ToastIcon.Touchpad);
                 }
             }

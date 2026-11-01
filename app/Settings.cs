@@ -2686,6 +2686,39 @@ namespace GHelper
                 };
                 menuMiniled.DropDownItems.Add(menuAutoHdrMiniled);
 
+                menuMiniled.DropDownItems.Add("-");
+                var itemMledPresetHeader = new ToolStripMenuItem("Blooming / Halo & Brightness Presets") { Enabled = false, Margin = padding };
+                menuMiniled.DropDownItems.Add(itemMledPresetHeader);
+
+                void ApplyMiniLedScenePreset(int mledZone, int brightnessPct, bool enableHdr, string label)
+                {
+                    AppConfig.Set("miniled", mledZone);
+                    ScreenControl.SetMiniled(mledZone);
+                    if (ScreenCCD.GetHDRStatus() != enableHdr)
+                        ScreenCCD.SetHDRStatus(enableHdr);
+                    ScreenBrightness.SetAsync(brightnessPct);
+                    UpdateBrightnessSlider(brightnessPct);
+                    ScreenControl.InitScreen();
+                    Program.toast?.RunToast($"Mini-LED Preset: {label}", mledZone == 1 ? ToastIcon.BrightnessUp : ToastIcon.BrightnessDown);
+                    SetContextMenu();
+                }
+
+                var itemDarkRoom = new ToolStripMenuItem("🌙 Dark Room Anti-Halo (1-Zone • 25% Brightness)") { Margin = padding };
+                itemDarkRoom.Click += (s, e) => ApplyMiniLedScenePreset(0, 25, false, "Dark Room Anti-Halo (1Z • 25%)");
+                menuMiniled.DropDownItems.Add(itemDarkRoom);
+
+                var itemCoding = new ToolStripMenuItem("💻 Balanced Desktop Coding (1-Zone • 55% Brightness)") { Margin = padding };
+                itemCoding.Click += (s, e) => ApplyMiniLedScenePreset(0, 55, false, "Balanced Coding (1Z • 55%)");
+                menuMiniled.DropDownItems.Add(itemCoding);
+
+                var itemCreatorRef = new ToolStripMenuItem("🎨 Creator Reference (512-Zone • SDR • 80% Brightness)") { Margin = padding };
+                itemCreatorRef.Click += (s, e) => ApplyMiniLedScenePreset(1, 80, false, "Creator Reference (512Z • 80%)");
+                menuMiniled.DropDownItems.Add(itemCreatorRef);
+
+                var itemCinemaMax = new ToolStripMenuItem("🎬 HDR Cinema & Gaming Max (512-Zone • HDR • 100%)") { Margin = padding };
+                itemCinemaMax.Click += (s, e) => ApplyMiniLedScenePreset(1, 100, true, "HDR Cinema Max (512Z • HDR • 100%)");
+                menuMiniled.DropDownItems.Add(itemCinemaMax);
+
                 contextMenuStrip.Items.Add(menuMiniled);
             }
 
@@ -2959,7 +2992,7 @@ namespace GHelper
                 contextMenuStrip.Items.Add(menuRotation);
             }
 
-            var menuGameMode = new ToolStripMenuItem("Auto Game Mode (Turbo in Games)");
+            var menuGameMode = new ToolStripMenuItem("Auto Game Mode (Turbo in AAA / Silent 35W in Indie)");
             menuGameMode.Margin = padding;
             menuGameMode.Checked = GameWatcher.IsEnabled();
             menuGameMode.Click += (s, e) =>
@@ -2969,6 +3002,13 @@ namespace GHelper
                 Program.toast?.RunToast(menuGameMode.Checked ? "Auto Game Mode Enabled" : "Auto Game Mode Disabled");
             };
             contextMenuStrip.Items.Add(menuGameMode);
+
+            var menuAppRules = new ToolStripMenuItem("Per-App Custom Performance & Fan Profiles (.exe Rules)...")
+            {
+                Margin = padding
+            };
+            menuAppRules.Click += (s, e) => AppProfileRulesForm.ShowManager(this);
+            contextMenuStrip.Items.Add(menuAppRules);
 
             var menuCreatorAuto = new ToolStripMenuItem("Auto Creator Profile (512Z Mini-LED in Creative Apps)")
             {
@@ -3905,6 +3945,11 @@ namespace GHelper
             Task.Run(() => ScreenControl.ToggleOverdrive());
         }
 
+        public void ToogleMiniled(bool hotkey = false)
+        {
+            ButtonMiniled_Click(buttonMiniled, EventArgs.Empty);
+        }
+
         private void ButtonMiniled_Click(object? sender, EventArgs e)
         {
             bool wasMultizone = buttonMiniled.Activated;
@@ -3921,7 +3966,11 @@ namespace GHelper
                     BeginInvoke(() =>
                     {
                         SetContextMenu();
-                        Program.toast.RunToast(modeName, ToastIcon.BrightnessUp);
+                        int curMled = AppConfig.Get("miniled", 1);
+                        string detailToast = curMled == 1
+                            ? "Mini-LED: 512-Zone Nebula HDR"
+                            : "Mini-LED: 1-Zone Uniform (Zero Halo)";
+                        Program.toast.RunToast(detailToast, curMled == 1 ? ToastIcon.BrightnessUp : ToastIcon.BrightnessDown);
                     });
                 }
             });
@@ -4203,7 +4252,10 @@ namespace GHelper
 
         public async void RefreshSensors(bool force = false)
         {
-            int throttle = (!Visible && (sensorsAlways || FlowFeaturesHelper.NeedsBackgroundSensorPolling())) ? 3000 : (Visible ? 400 : 2000);
+            bool isIdleOrDisplayOff = _displayOff || (!Visible && NativeMethods.GetIdleTime().TotalMinutes >= 5.0);
+            int throttle = isIdleOrDisplayOff
+                ? 5000
+                : ((!Visible && (sensorsAlways || FlowFeaturesHelper.NeedsBackgroundSensorPolling())) ? 3000 : (Visible ? 400 : 2000));
             if (!force && Math.Abs(DateTimeOffset.Now.ToUnixTimeMilliseconds() - lastRefresh) < throttle) return;
 
             // Prevent overlapping sensor reads from concurrent timer ticks / forced refreshes

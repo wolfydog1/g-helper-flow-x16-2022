@@ -10,11 +10,14 @@ public static class NvmlHelper
     [DllImport(NvmlDll)] static extern int nvmlDeviceGetTemperature(IntPtr device, uint sensorType, out uint temp);
     [DllImport(NvmlDll)] static extern int nvmlDeviceGetPowerUsage(IntPtr device, out uint powerMilliWatts);
     [DllImport(NvmlDll)] static extern int nvmlDeviceGetMemoryInfo(IntPtr device, out nvmlMemory_t memory);
+    [DllImport(NvmlDll)] static extern int nvmlDeviceGetClockInfo(IntPtr device, uint type, out uint clockMhz);
 
     [StructLayout(LayoutKind.Sequential)]
     struct nvmlMemory_t { public ulong total; public ulong free; public ulong used; }
 
     const uint NVML_TEMPERATURE_GPU = 0;
+    const uint NVML_CLOCK_GRAPHICS = 0;
+    const uint NVML_CLOCK_MEM = 2;
     const int NVML_SUCCESS = 0;
 
     private static readonly object _lock = new();
@@ -81,6 +84,23 @@ public static class NvmlHelper
                 if (mem.total == 0) return null;
                 const ulong MB = 1024 * 1024;
                 return ((long)(mem.used / MB), (long)(mem.total / MB));
+            }
+            catch { return null; }
+        }
+    }
+
+    public static (int coreMhz, int memMhz)? GetClocks(uint gpuIndex = 0)
+    {
+        lock (_lock)
+        {
+            Init();
+            if (!_init) return null;
+            try
+            {
+                if (nvmlDeviceGetHandleByIndex_v2(gpuIndex, out IntPtr device) != NVML_SUCCESS) return null;
+                if (nvmlDeviceGetClockInfo(device, NVML_CLOCK_GRAPHICS, out uint core) != NVML_SUCCESS) return null;
+                nvmlDeviceGetClockInfo(device, NVML_CLOCK_MEM, out uint mem);
+                return ((int)core, (int)mem);
             }
             catch { return null; }
         }

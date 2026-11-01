@@ -43,6 +43,10 @@ public static class HardwareControl
     public static float? midTemp;
     public static float? xgmTemp;
     public static float? xgmHotspotTemp;
+    public static int? gpuHotspotTemp;
+    public static int? gpuCoreClockMhz;
+    public static int? gpuMemClockMhz;
+    public static int? cpuClockMhz;
 
     public static int? gpuUse;
 
@@ -60,6 +64,7 @@ public static class HardwareControl
     public static bool readMemory;
     public static bool readPower;
     public static bool readBattery;
+    public static bool readClocks;
 
     static long lastUpdate;
     private static DateTime _lastSensorLog = DateTime.MinValue;
@@ -730,11 +735,15 @@ public static class HardwareControl
         try
         {
             gpuTemp = GpuControl?.GetCurrentTemperature();
-
+            if (GpuControl is NvidiaGpuControl nvCtrl)
+                gpuHotspotTemp = nvCtrl._lastHotspotTemp;
+            else
+                gpuHotspotTemp = null;
         }
         catch (Exception)
         {
             gpuTemp = -1;
+            gpuHotspotTemp = null;
             //Debug.WriteLine("Failed reading GPU temp :" + ex.Message);
         }
 
@@ -742,12 +751,72 @@ public static class HardwareControl
         {
             int acpiTemp = GHelper.Program.acpi.DeviceGet(AsusACPI.Temp_GPU);
             gpuTemp = (acpiTemp > 0 && acpiTemp < 125) ? acpiTemp : null;
+            if (gpuTemp is null) gpuHotspotTemp = null;
         }
 
         if (isAMDiGPU && gpuTemp is null)
             try { gpuTemp = AmdApu().GetiGpuSensors().temp; } catch { }
 
         return gpuTemp;
+    }
+
+    private static int _baseCpuMhz = 0;
+    private static PerformanceCounter? _cpuPerfPctCounter;
+    private static bool _cpuPerfPctFailed = false;
+
+    public static int? GetCPUClockMhz()
+    {
+        try
+        {
+            if (_baseCpuMhz <= 0)
+            {
+                using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0");
+                if (key?.GetValue("~MHz") is int mhz && mhz > 500)
+                    _baseCpuMhz = mhz;
+                else
+                    _baseCpuMhz = 3300;
+            }
+
+            if (!_cpuPerfPctFailed)
+            {
+                try
+                {
+                    if (_cpuPerfPctCounter == null)
+                    {
+                        _cpuPerfPctCounter = new PerformanceCounter("Processor Information", "% Processor Performance", "_Total", true);
+                        _cpuPerfPctCounter.NextValue();
+                    }
+                    float pct = _cpuPerfPctCounter.NextValue();
+                    if (pct > 10f && pct < 250f)
+                        return (int)Math.Round(_baseCpuMhz * (pct / 100f));
+                }
+                catch
+                {
+                    _cpuPerfPctFailed = true;
+                }
+            }
+            return _baseCpuMhz;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public static void SampleLiveClocks()
+    {
+        cpuClockMhz = GetCPUClockMhz();
+        if (GpuControl is NvidiaGpuControl nvCtrl)
+        {
+            var clocks = nvCtrl.GetLiveClocks();
+            gpuCoreClockMhz = clocks?.coreMhz;
+            gpuMemClockMhz = clocks?.memMhz;
+        }
+        else
+        {
+            gpuCoreClockMhz = null;
+            gpuMemClockMhz = null;
+        }
     }
 
     private static bool _isXgConnected = false;
@@ -1381,6 +1450,17 @@ public static class HardwareControl
         }
 
         if (readBattery) ReadBatteryState();
+
+        if (readClocks)
+        {
+            SampleLiveClocks();
+        }
+        else
+        {
+            cpuClockMhz = null;
+            gpuCoreClockMhz = null;
+            gpuMemClockMhz = null;
+        }
     }
 
     public static double GetBatteryChargePercentage()

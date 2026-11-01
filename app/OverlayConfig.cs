@@ -7,12 +7,61 @@ namespace GHelper
     {
         RButton[] modeButtons;
         (RCheckBox box, string key)[] blocks;
+        RCheckBox checkHotspot;
+        RCheckBox checkClocks;
+        RCheckBox checkPing;
+        RCheckBox checkBatEta;
         int mode;
         bool updating;
 
         public OverlayConfig()
         {
             InitializeComponent();
+
+            // Fix high-DPI TrackBar height overlap over HUD Typography Font / HUD Theme labels
+            float dpiScale = DeviceDpi / 96f;
+            trackScale.AutoSize = false;
+            trackScale.Height = (int)Math.Round(34 * dpiScale);
+            trackAlpha.AutoSize = false;
+            trackAlpha.Height = (int)Math.Round(34 * dpiScale);
+            panelSliders.AutoSize = false;
+            panelSliders.Height = (int)Math.Round(66 * dpiScale);
+            panelSliders.Margin = new Padding(0, (int)Math.Round(6 * dpiScale), 0, (int)Math.Round(6 * dpiScale));
+            tableAppearance.AutoSize = true;
+            tableAppearance.Margin = new Padding(0, (int)Math.Round(4 * dpiScale), 0, (int)Math.Round(6 * dpiScale));
+            labelFontTitle.Margin = new Padding(0, (int)Math.Round(2 * dpiScale), 0, (int)Math.Round(3 * dpiScale));
+            labelStyleTitle.Margin = new Padding(0, (int)Math.Round(2 * dpiScale), 0, (int)Math.Round(3 * dpiScale));
+
+            // Add 4 new HUD telemetry block checkboxes (Hotspot, Clocks, Ping, Battery ETA)
+            RCheckBox CreateTelemetryCheck(string name, string text)
+            {
+                return new RCheckBox
+                {
+                    Name = name,
+                    Text = text,
+                    AutoSize = true,
+                    Font = checkMidFan.Font,
+                    ForeColor = SystemColors.ControlLight,
+                    Margin = checkMidFan.Margin,
+                    UseVisualStyleBackColor = true
+                };
+            }
+
+            checkHotspot = CreateTelemetryCheck("checkHotspot", "GPU Hotspot Temp");
+            checkClocks = CreateTelemetryCheck("checkClocks", "CPU / GPU Clocks");
+            checkPing = CreateTelemetryCheck("checkPing", "Network Ping (ms)");
+            checkBatEta = CreateTelemetryCheck("checkBatEta", "Battery Time ETA");
+
+            tableBlocks.SuspendLayout();
+            tableBlocks.RowCount = 7;
+            while (tableBlocks.RowStyles.Count < 7)
+                tableBlocks.RowStyles.Add(new RowStyle());
+            tableBlocks.Controls.Add(checkHotspot, 2, 5);
+            tableBlocks.Controls.Add(checkClocks, 0, 6);
+            tableBlocks.Controls.Add(checkPing, 1, 6);
+            tableBlocks.Controls.Add(checkBatEta, 2, 6);
+            tableBlocks.ResumeLayout(true);
+
             InitTheme(true);
 
             Text = "Overlay Settings & Telemetry HUD";
@@ -39,11 +88,15 @@ namespace GHelper
             checkClock.Text = "System Clock";
             checkVram.Text = "VRAM Usage (GB)";
             checkMidFan.Text = "Mid System Fan";
+            checkHotspot.Text = "GPU Hotspot Temp";
+            checkClocks.Text = "CPU / GPU Clocks";
+            checkPing.Text = "Network Ping (ms)";
+            checkBatEta.Text = "Battery Time ETA";
             labelSizeTitle.Text = "HUD Scale Size:";
             labelAlphaTitle.Text = "HUD Transparency:";
             labelFontTitle.Text = "HUD Typography Font:";
             labelStyleTitle.Text = "HUD Theme & Backdrop Style:";
-            labelHotkeys.Text = "•  Ctrl + Shift + Alt + O - Toggle overlay\n•  Ctrl + Shift + Alt + Mouse Drag - Move overlay\n•  Ctrl + Shift + Alt + Mouse Click - Switch mode\n•  Ctrl + Shift + Alt + Wheel - Resize overlay\n•  Ctrl + Shift + Alt + Wheel Click - Reset size";
+            labelHotkeys.Text = "•  Ctrl + Shift + Alt + O - Toggle overlay  |  Ctrl + Shift + Alt + P - Cycle preset\n•  Ctrl + Shift + Alt + M - 1-Zone ⇄ 512-Zone  |  Ctrl + Shift + Alt + F - 60Hz ⇄ 165Hz\n•  Ctrl + Shift + Alt + Mouse Drag - Move  |  Click - Switch mode  |  Wheel - Resize";
             buttonCpuColor.Text = "CPU " + Properties.Strings.Color;
             buttonGpuColor.Text = "GPU " + Properties.Strings.Color;
             buttonReset.Text = Properties.Strings.Reset;
@@ -78,6 +131,10 @@ namespace GHelper
                 (checkClock, "overlay_show_clock"),
                 (checkVram, "overlay_show_vram"),
                 (checkMidFan, "overlay_show_mid_fan"),
+                (checkHotspot, "overlay_show_hotspot"),
+                (checkClocks, "overlay_show_clocks"),
+                (checkPing, "overlay_show_ping"),
+                (checkBatEta, "overlay_show_bat_eta"),
             };
 
             checkEnable.Checked = AppConfig.IsOverlay();
