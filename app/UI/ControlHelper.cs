@@ -64,7 +64,7 @@ public static class ControlHelper
         }
 
         string targetFamily = RForm.CurrentFontFamily;
-        float targetSize = Math.Clamp(info.BaseSize * RForm.CurrentFontScale, 6.5f, 22f);
+        float targetSize = Math.Clamp(info.BaseSize * RForm.CurrentFontScale, 4.5f, 22f);
         FontStyle targetStyle = info.BaseStyle;
 
         if (string.Equals(targetFamily, "Segoe UI Semibold", StringComparison.OrdinalIgnoreCase))

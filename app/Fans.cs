@@ -976,7 +976,7 @@ namespace GHelper
 
             if (Height > Program.settingsForm.Height)
             {
-                Top = Math.Max(0, Program.settingsForm.Top + Program.settingsForm.Height - Height);
+                Top = Math.Max(Screen.FromControl(Program.settingsForm).WorkingArea.Top, Program.settingsForm.Top + Program.settingsForm.Height - Height);
             }
             else
             {
@@ -2067,22 +2067,23 @@ namespace GHelper
             {
                 Dock = DockStyle.Top,
                 Height = 46,
-                ColumnCount = 6,
+                ColumnCount = 5,
                 RowCount = 1,
                 Margin = new Padding(4, 2, 4, 2),
-                Padding = new Padding(10, 3, 6, 3),
+                Padding = new Padding(10, 3, 10, 3),
                 BackColor = formBack
             };
-            bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             for (int i = 0; i < 5; i++)
                 bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20F));
             bar.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
             panelFans.Controls.Remove(checkFanClamp);
-            checkFanClamp.Dock = DockStyle.Fill;
             checkFanClamp.AutoSize = true;
-            checkFanClamp.Margin = new Padding(2, 2, 8, 2);
-            checkFanClamp.Padding = new Padding(4, 0, 2, 0);
+            checkFanClamp.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            checkFanClamp.Location = new Point(buttonCalibrate.Right + 16, checkApplyFans.Top + 4);
+            checkFanClamp.Margin = new Padding(4, 2, 4, 2);
+            checkFanClamp.Padding = new Padding(4, 2, 4, 2);
+            panelApplyFans.Controls.Add(checkFanClamp);
 
             RButton MakePresetBtn(string text, Color accent, Action onClick)
             {
@@ -2098,7 +2099,7 @@ namespace GHelper
                     BorderRadius = Math.Min(CurrentButtonRadius, 8),
                     BorderColor = accent,
                     FlatStyle = FlatStyle.Flat,
-                    Font = new Font(CurrentFontFamily, 7.6f, FontStyle.Bold)
+                    Font = new Font(CurrentFontFamily, 7.2f, FontStyle.Bold)
                 };
                 btn.FlatAppearance.BorderSize = 0;
                 btn.Click += (s, e) => onClick();
@@ -2162,12 +2163,11 @@ namespace GHelper
             btnSmooth.Activated = smoothActive;
             btnSmooth.Text = smoothActive ? "Anti-Pulse: ON" : "Anti-Pulse: OFF";
 
-            bar.Controls.Add(checkFanClamp, 0, 0);
-            bar.Controls.Add(btnZeroRpm, 1, 0);
-            bar.Controls.Add(btnWhisper, 2, 0);
-            bar.Controls.Add(btnFrostForce, 3, 0);
-            bar.Controls.Add(btnMax, 4, 0);
-            bar.Controls.Add(btnSmooth, 5, 0);
+            bar.Controls.Add(btnZeroRpm, 0, 0);
+            bar.Controls.Add(btnWhisper, 1, 0);
+            bar.Controls.Add(btnFrostForce, 2, 0);
+            bar.Controls.Add(btnMax, 3, 0);
+            bar.Controls.Add(btnSmooth, 4, 0);
 
             panelFans.SuspendLayout();
             panelFans.Controls.Add(bar);

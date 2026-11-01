@@ -62,6 +62,7 @@ namespace GHelper
               {"brightness_down", Properties.Strings.BrightnessDown},
               {"brightness_up", Properties.Strings.BrightnessUp},
               {"visual", Properties.Strings.VisualMode},
+              {"touchpad", "Toggle Touchpad"},
               {"touchscreen", Properties.Strings.ToggleTouchscreen },
               {"penonly", "Toggle Pen Only Mode"},
               {"rotation", "Toggle Rotation Lock"},
@@ -92,10 +93,12 @@ namespace GHelper
                 case "m1":
                     customActions[""] = Properties.Strings.VolumeDown;
                     customActions.Remove("volume_down");
+                    customActions.Remove("volume_up");
                     break;
                 case "m2":
                     customActions[""] = Properties.Strings.VolumeUp;
                     customActions.Remove("volume_up");
+                    customActions.Remove("volume_down");
                     break;
                 case "m3":
                     customActions[""] = Properties.Strings.MuteMic;
@@ -601,10 +604,13 @@ namespace GHelper
             checkXGMMidBoost.CheckedChanged += CheckXGMMidBoost_CheckedChanged;
 
             // Add XG Mobile Fan Curve Controls to panelXGM
+            int xgmRowHeight = Math.Max(36, checkXGMBattery.Height);
+            int row2Top = checkXGMBattery.Bottom + 4;
+
             var checkXGMIndepFan = new RCheckBox
             {
                 AutoSize = true,
-                Location = new Point(checkXGMBattery.Left, checkXGMBattery.Bottom + 4),
+                Location = new Point(checkXGMBattery.Left, row2Top),
                 Margin = checkXGMBattery.Margin,
                 Padding = checkXGMBattery.Padding,
                 Font = checkXGMBattery.Font,
@@ -623,7 +629,7 @@ namespace GHelper
             var checkXGMShowFan = new RCheckBox
             {
                 AutoSize = true,
-                Location = new Point(checkXGMMidBoost.Left, checkXGMMidBoost.Bottom + 4),
+                Location = new Point(checkXGMMidBoost.Left, row2Top),
                 Margin = checkXGMMidBoost.Margin,
                 Padding = checkXGMMidBoost.Padding,
                 Font = checkXGMMidBoost.Font,
@@ -638,12 +644,18 @@ namespace GHelper
                 if (Program.settingsForm?.fansForm is { Text.Length: > 0 } ff) ff.InitFans();
             };
 
+            panelXGM.Controls.Add(checkXGMIndepFan);
+            panelXGM.Controls.Add(checkXGMShowFan);
+
+            int btnTop = Math.Max(checkXGMIndepFan.Bottom, row2Top + xgmRowHeight) + 8;
+
             // Add Guided Safety Interlock Button and Hardware Latch Guard to panelXGM
             var buttonXGMSafety = new RButton
             {
                 AutoSize = false,
-                Size = new Size(390, 42),
-                Location = new Point(checkXGMIndepFan.Left, checkXGMIndepFan.Bottom + 8),
+                Secondary = true,
+                Size = new Size(420, 42),
+                Location = new Point(checkXGMBattery.Left + 10, btnTop),
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold),
                 Text = (Program.acpi.IsXGConnected() || XGM.IsConnected()) ? "⏏ Safely Undock XG Mobile (Park PCIe)" : "⚡ Handshake & Dock XG Mobile",
                 BorderColor = (Program.acpi.IsXGConnected() || XGM.IsConnected()) ? RForm.colorTurbo : RForm.colorEco
@@ -660,10 +672,13 @@ namespace GHelper
                 }
             };
 
+            int row4Top = buttonXGMSafety.Bottom + 8;
             var checkXGMLatchInterlock = new RCheckBox
             {
                 AutoSize = true,
-                Location = new Point(buttonXGMSafety.Left, buttonXGMSafety.Bottom + 6),
+                Location = new Point(checkXGMBattery.Left, row4Top),
+                Margin = checkXGMBattery.Margin,
+                Padding = checkXGMBattery.Padding,
                 Font = checkXGMBattery.Font,
                 ForeColor = checkXGMBattery.ForeColor,
                 BackColor = checkXGMBattery.BackColor,
@@ -678,11 +693,9 @@ namespace GHelper
             toolTip.SetToolTip(buttonXGMSafety, "Initiates a guided, safe software undocking sequence: closes all GPU apps, flushes PCIe bus, and notifies you when it is safe to release the physical cable latch.");
             toolTip.SetToolTip(checkXGMLatchInterlock, "Guards against sudden PCIe bus disconnects and BSODs by ensuring apps are stopped and PCIe lanes are gracefully parked before physical separation.");
 
-            panelXGM.Controls.Add(checkXGMIndepFan);
-            panelXGM.Controls.Add(checkXGMShowFan);
             panelXGM.Controls.Add(buttonXGMSafety);
             panelXGM.Controls.Add(checkXGMLatchInterlock);
-            panelXGM.Height = checkXGMLatchInterlock.Bottom + 12;
+            panelXGM.Height = Math.Max(checkXGMLatchInterlock.Bottom, row4Top + xgmRowHeight) + 12;
 
             numericBacklightTime.Value = AppConfig.Get("keyboard_timeout", 60);
             numericBacklightPluggedTime.Value = AppConfig.Get("keyboard_ac_timeout", 0);
@@ -2044,16 +2057,18 @@ namespace GHelper
                 // Add USB-C PD Power Cap Selector & Battery Health Analytics rows directly into tablePower for pixel-perfect column alignment
                 bool isPlugged = SystemInformation.PowerStatus.PowerLineStatus == PowerLineStatus.Online;
                 bool isUsbC = isPlugged && Program.currentSource == Program.PowerSource.USBC;
-                string chargerText = !isPlugged ? "On Battery"
-                                   : isUsbC ? "USB-C PD 65–100W"
-                                   : "240W Barrel AC";
+                string chargerText = !isPlugged ? "Battery"
+                                   : isUsbC ? "USB-C PD"
+                                   : "240W AC";
 
                 var lblUsbcCap = new Label
                 {
                     Dock = DockStyle.Fill,
+                    Size = labelPowerBtnAction.Size,
+                    Font = labelPowerBtnAction.Font,
                     TextAlign = ContentAlignment.MiddleLeft,
                     Text = $"USB-C CPU Power Cap ({chargerText})",
-                    Margin = labelPowerBtnAction.Margin,
+                    Margin = new Padding(3, 5, 3, 5),
                     UseMnemonic = false
                 };
 
@@ -2062,16 +2077,17 @@ namespace GHelper
                     BorderColor = Color.White,
                     ButtonColor = SystemColors.ControlLight,
                     Dock = DockStyle.Fill,
+                    Size = comboPowerBtnAC.Size,
                     DropDownStyle = ComboBoxStyle.DropDownList,
                     FlatStyle = FlatStyle.Flat,
-                    Margin = comboPowerBtnAC.Margin
+                    Margin = new Padding(3, 5, 3, 5)
                 };
                 var usbcCapOptions = new (int watts, string label)[]
                 {
-                    (25, "25W CPU Cap (65W Travel USB-C)"),
-                    (35, "35W CPU Cap (100W Balanced Default)"),
-                    (45, "45W CPU Cap (100W Performance)"),
-                    (55, "55W CPU Cap (Max USB-C Draw)")
+                    (25, "25W Cap (65W Travel USB-C)"),
+                    (35, "35W Cap (100W Balanced)"),
+                    (45, "45W Cap (100W Performance)"),
+                    (55, "55W Cap (Max USB-C Draw)")
                 };
                 int curUsbcCap = AppConfig.Get("max_usbc_cpu", 35);
                 foreach (var opt in usbcCapOptions)
@@ -2099,11 +2115,14 @@ namespace GHelper
                 var lblBatAnalytics = new Label
                 {
                     Dock = DockStyle.Fill,
+                    Size = labelPowerBtnAction.Size,
+                    Font = labelPowerBtnAction.Font,
                     TextAlign = ContentAlignment.MiddleLeft,
-                    Text = $"Battery Health: {healthPct:0.0}% ({fullCap:0.0}/{designCap:0.0} Wh • {wearPct:0.0}% Wear • {(rateW >= 0 ? "+" : "")}{rateW:0.0}W)",
-                    Margin = labelPowerBtnAction.Margin,
+                    Text = $"Battery Health: {healthPct:0.0}% ({fullCap:0.0} / {designCap:0.0} Wh)",
+                    Margin = new Padding(3, 5, 3, 5),
                     UseMnemonic = false
                 };
+                toolTip.SetToolTip(lblBatAnalytics, $"Full Charge Capacity: {fullCap:0.0} Wh / {designCap:0.0} Wh Design ({wearPct:0.0}% Wear)  |  Live Rate: {(rateW >= 0 ? "+" : "")}{rateW:0.0}W");
 
                 var btnBatInspector = new RButton
                 {
@@ -2113,7 +2132,7 @@ namespace GHelper
                     BorderRadius = CurrentButtonRadius,
                     BorderColor = colorEco,
                     Text = "Battery Health Inspector & Report...",
-                    Margin = comboPowerBtnAC.Margin,
+                    Margin = new Padding(3, 5, 3, 5),
                     UseVisualStyleBackColor = false
                 };
                 btnBatInspector.Click += (s, e) => new GHelper.Battery.BatteryHealthForm().ShowDialog(this);
@@ -2122,7 +2141,7 @@ namespace GHelper
                 tablePower.SuspendLayout();
                 tablePower.RowCount = 10;
                 while (tablePower.RowStyles.Count < 10)
-                    tablePower.RowStyles.Add(new RowStyle());
+                    tablePower.RowStyles.Add(new RowStyle(SizeType.AutoSize));
                 tablePower.Controls.Add(lblUsbcCap, 0, 8);
                 tablePower.Controls.Add(cbUsbcCap, 1, 8);
                 tablePower.SetColumnSpan(cbUsbcCap, 2);

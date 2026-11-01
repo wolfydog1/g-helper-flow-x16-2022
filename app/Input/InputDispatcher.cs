@@ -123,7 +123,6 @@ namespace GHelper.Input
         public static void InitFNLock()
         {
             if (!IsHardwareFnLock()) return;
-            AsusHid.InitInput();
             HardwareFnLock(AppConfig.Is("fn_lock"));
         }
 
@@ -739,6 +738,9 @@ namespace GHelper.Input
                     break;
                 case "touchscreen":
                     ToggleTouchScreen();
+                    break;
+                case "touchpad":
+                    ToggleTouchpadEvent(true);
                     break;
                 case "penonly":
                     TogglePenOnlyMode();

@@ -1120,7 +1120,7 @@ namespace GHelper
 
         private void ButtonEnergySaver_Click(object? sender, EventArgs e)
         {
-            KeyboardHook.KeyKeyPress(Keys.LWin, Keys.A);
+            PowerNative.SetEnergySaver(false);
         }
 
         private void LabelBacklight_Click(object? sender, EventArgs e)
@@ -1595,8 +1595,9 @@ namespace GHelper
                 return;
             }
 
-            Left = Screen.FromControl(this).WorkingArea.Width - 10 - Width;
-            Top = Screen.FromControl(this).WorkingArea.Height - 10 - Height;
+            var screen = Screen.FromControl(this);
+            Left = screen.WorkingArea.Right - 10 - Width;
+            Top = screen.WorkingArea.Top - screen.Bounds.Top > screen.Bounds.Bottom - screen.WorkingArea.Bottom ? screen.WorkingArea.Top + 10 : screen.WorkingArea.Bottom - 10 - Height;
         }
 
         private void PanelBattery_MouseEnter(object? sender, EventArgs e)
@@ -1747,7 +1748,9 @@ namespace GHelper
                             Logger.WriteLine("Monitor Power On");
                             _displayOff = false;
                             GPUModeControl.suspended = false;
+                            Thread.Sleep(1000);
                             if (!Program.SetAutoModes(wakeup: true)) BatteryControl.AutoBattery();
+                            Task.Delay(2000).ContinueWith(_ => InputDispatcher.InitFNLock());
                             Program.hardwareOverlay?.ResumeForDisplayOn();
                             Task.Run(() => PollLightSensor(force: true));
                             break;

@@ -234,18 +234,18 @@ namespace GHelper.UI
 
             if (isCompactTextButton && !string.IsNullOrEmpty(Text))
             {
-                int padX = border + 2;
+                int padX = Math.Max(2, border);
                 Rectangle textRect = new Rectangle(padX, border, Math.Max(4, rectSurface.Width - 2 * padX), Math.Max(4, rectSurface.Height - 2 * border));
                 TextFormatFlags flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
 
                 Font drawFont = Font;
                 float curSize = drawFont.Size;
-                while (curSize > 6.5f)
+                while (curSize > 4.5f)
                 {
                     Size measured = TextRenderer.MeasureText(pevent.Graphics, Text, drawFont, new Size(int.MaxValue, int.MaxValue), flags);
                     if (measured.Width <= textRect.Width)
                         break;
-                    curSize -= 0.5f;
+                    curSize -= 0.4f;
                     drawFont = ControlHelper.GetCachedFont(drawFont.Name, curSize, drawFont.Style, drawFont.Unit);
                 }
 
