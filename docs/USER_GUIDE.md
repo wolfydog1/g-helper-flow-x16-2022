@@ -100,13 +100,14 @@ Click **`Fans + Power`** on the main window to fine-tune each performance mode (
    - Adjust **GPU Core Clock Offset**, **GPU Memory Clock Offset**, **GPU Power / Dynamic Boost**, and **GPU Temperature Target**.
 3. **Advanced Tab**:
    - Configure **AMD Ryzen CPU Temperature Limit** and **CPU Undervolting (Curve Optimizer)** to run cooler at the same clock speeds.
-4. **3-Fan BIOS Fan Curves & Acoustic Presets**:
-   - Customize all three Flow X16 fans (**CPU Fan**, **GPU Fan**, and **Mid System Fan**) by dragging points on the temperature/RPM graphs.
-   - Use the top **Acoustic Preset Bar** for instant 1-click tuning:
+4. **4-Fan BIOS & USB Fan Curves & Acoustic Presets**:
+   - Customize all Flow X16 internal fans (**CPU Fan**, **GPU Fan**, **Mid System Fan**) as well as your connected **ROG XG Mobile Fan** by dragging points on the temperature/RPM graphs.
+   - When the XG Mobile is connected, an orange **XG Mobile Fan Profile** graph appears alongside live GPU core/hotspot temperature and RPM telemetry. Click **`Test XGM`** to briefly test fan ramp-up and verify live RPM feedback.
+   - Use the top **Acoustic Preset Bar** for instant 1-click tuning across all active fans:
      - **`0-RPM <55°C`**: Dead-silent passive cooling below 55°C.
      - **`38dB Whisper`**: Smooth, low-noise curve capped for quiet rooms.
-     - **`Frost Force`**: Optimized 3-fan airflow curve leveraging the Mid intake fan.
-     - **`Max Cooling`**: Aggressive ramp for heavy benchmarking or hot environments.
+     - **`Frost Force`**: Optimized multi-fan balanced intake curve.
+     - **`Max Cooling`**: Aggressive 95%–100% full-blast ramp for heavy rendering or benchmarking.
      - **`Anti-Pulse: ON`**: Smooths out sudden fan revving caused by brief 1-second CPU temperature spikes.
 
 ---
@@ -166,6 +167,11 @@ G-Helper checks [GitHub Releases](https://github.com/wolfydog1/g-helper-flow-x16
 If an application is actively running on the NVIDIA GPU, Windows blocks disabling the dGPU. Either:
 1. Click the G-Helper tray icon or GPU status message to see which apps are using the NVIDIA GPU and close them, **or**
 2. Open **Extra → System** and check **`Auto-Close Apps Using GPU When Switching to Eco Mode`**.
+
+### Q: How do I safely dock, control fans, and undock the ROG XG Mobile?
+1. **Docking**: Plug the proprietary PCIe + USB-C connector into the side of your Flow X16 and lock the physical cable latch. Open G-Helper and click **`XGM`** on the main window (or click **`⚡ Handshake & Dock XG Mobile`** in **Extra → Light**). The PCIe bus will handshake and initialize the external GPU cleanly.
+2. **Fan Control**: Open **Fans + Power**. The orange **XG Mobile Fan Profile** graph appears alongside CPU, GPU, and Mid fan curves. Drag temperature and fan percentage points to set your curve, or click presets like **`Frost Force`** or **`38dB Whisper`** to configure all 4 fans simultaneously. Click **`Test XGM`** to verify fan response.
+3. **Safe Undocking**: Click **`⏏ Safely Undock XG Mobile (Park PCIe)`** in **Extra → Light** (or toggle XGM on the main dashboard). G-Helper will close active GPU applications, flush and park the PCIe bus, and alert you with a chime when it is 100% safe to slide the mechanical cable latch and disconnect. Never pull the cable while PCIe is active to avoid Windows blue screens (BSOD)!
 
 ### Q: How do I completely uninstall G-Helper?
 1. Open G-Helper and uncheck **`Run on Startup`**.

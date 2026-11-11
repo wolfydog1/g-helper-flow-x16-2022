@@ -20,16 +20,9 @@ namespace GHelper.USB
         {
             try
             {
-                if (_cachedDevice != null)
-                {
-                    try
-                    {
-                        if (_cachedDevice.CanOpen) return _cachedDevice;
-                    }
-                    catch { _cachedDevice = null; }
-                }
+                if (_cachedDevice != null) return _cachedDevice;
 
-                if (_cachedDevice == null && Environment.TickCount64 - _lastDeviceCheck < 1500)
+                if (Environment.TickCount64 - _lastDeviceCheck < 1500)
                     return null;
 
                 _lastDeviceCheck = Environment.TickCount64;
@@ -46,13 +39,11 @@ namespace GHelper.USB
 
                     try
                     {
-                        if (device.CanOpen && device.GetReportDescriptor().TryGetReport(ReportType.Feature, XGM_REPORT_ID, out _))
+                        if (device.GetReportDescriptor().TryGetReport(ReportType.Feature, XGM_REPORT_ID, out _))
                         {
-                            _cachedDevice = device; return device;
-
+                            _cachedDevice = device;
+                            return device;
                         }
-
-
                     }
                     catch { }
                 }
@@ -72,15 +63,10 @@ namespace GHelper.USB
 
                         try
                         {
-                            if (device.CanOpen && device.GetReportDescriptor().TryGetReport(ReportType.Feature, XGM_REPORT_ID, out _))
-                        {
-                            _cachedDevice = device; return device;
-
-                        }
-
+                            if (device.GetReportDescriptor().TryGetReport(ReportType.Feature, XGM_REPORT_ID, out _))
                             {
-
-    
+                                _cachedDevice = device;
+                                return device;
                             }
                         }
                         catch { }
@@ -128,7 +114,8 @@ namespace GHelper.USB
                 }
                 catch (Exception ex)
                 {
-                    Logger.WriteLine($"Error accessing XGM device: {ex}"); _cachedDevice = null;
+                    Logger.WriteLine($"Error accessing XGM device: {ex}");
+                    _cachedDevice = null;
                 }
             }
         }
@@ -183,7 +170,8 @@ namespace GHelper.USB
             }
             catch (Exception ex)
             {
-                Logger.WriteLine($"XGM Probe Error: {ex.Message}"); _cachedDevice = null;
+                Logger.WriteLine($"XGM Probe Error: {ex.Message}");
+                _cachedDevice = null;
             }
         }
 
@@ -333,14 +321,19 @@ namespace GHelper.USB
             });
         }
 
-        public static async Task TestFan(int seconds = 8)
+        public static async Task TestFan(int seconds = 8, Action<int, int>? onProgress = null)
         {
             if (!IsConnected()) return;
 
             byte[] maxCurve = [20, 30, 40, 50, 60, 70, 80, 90, 95, 95, 95, 95, 95, 95, 95, 95];
             SetFan(maxCurve);
 
-            await Task.Delay(TimeSpan.FromSeconds(seconds));
+            for (int i = 0; i < seconds; i++)
+            {
+                await Task.Delay(1000);
+                ProbeSync();
+                onProgress?.Invoke(LastFanRPM ?? 0, LastTargetRPM ?? 0);
+            }
 
             if (AppConfig.IsApplyFans() || IsIndependentFanEnabled())
             {

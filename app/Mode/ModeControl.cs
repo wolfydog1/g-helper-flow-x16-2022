@@ -292,7 +292,7 @@ namespace GHelper.Mode
                 }
 
                 bool xgmFan = false;
-                if (HardwareControl.IsXGConnectedCached())
+                if (HardwareControl.IsXGConnectedCached() || XGM.IsConnected() || (HardwareControl.xgmTemp is not null && HardwareControl.xgmTemp > 0))
                 {
                     byte[] xgmCurve = GetValidFanCurve(AsusFan.XGM);
                     XGM.SetFan(xgmCurve);
@@ -349,7 +349,7 @@ namespace GHelper.Mode
 
             } else
             {
-                if (HardwareControl.IsXGConnectedCached() && XGM.IsIndependentFanEnabled())
+                if ((HardwareControl.IsXGConnectedCached() || XGM.IsConnected() || (HardwareControl.xgmTemp is not null && HardwareControl.xgmTemp > 0)) && XGM.IsIndependentFanEnabled())
                 {
                     byte[] xgmCurve = GetValidFanCurve(AsusFan.XGM);
                     XGM.SetFan(xgmCurve);

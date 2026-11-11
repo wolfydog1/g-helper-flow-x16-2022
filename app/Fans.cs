@@ -376,7 +376,18 @@ namespace GHelper
             buttonTestXGM.Text = "Testing...";
             try
             {
-                await XGM.TestFan(8);
+                await XGM.TestFan(8, (rpm, target) =>
+                {
+                    try
+                    {
+                        BeginInvoke(() =>
+                        {
+                            buttonTestXGM.Text = rpm > 0 ? $"{rpm} RPM" : "Testing...";
+                            UpdateSensors();
+                        });
+                    }
+                    catch { }
+                });
             }
             catch (Exception ex)
             {
@@ -386,6 +397,7 @@ namespace GHelper
             {
                 buttonTestXGM.Text = "Test XGM";
                 buttonTestXGM.Enabled = true;
+                UpdateSensors();
             }
         }
 
@@ -1411,9 +1423,9 @@ namespace GHelper
                 AppConfig.Set("mid_fan", 0);
             }
 
-            // XG Mobile Fan check (show when connected OR when Always Show XGM Fan Curve is enabled)
-            bool xgmConnected = Program.acpi.IsXGConnected() || XGM.IsConnected();
-            if (xgmConnected || XGM.AlwaysShowFanCurve())
+            // XG Mobile Fan check (show when connected OR when Always Show XGM Fan Curve is enabled OR when Independent Fan is enabled)
+            bool xgmConnected = Program.acpi.IsXGConnected() || XGM.IsConnected() || HardwareControl.IsXGConnectedCached() || (HardwareControl.xgmTemp is not null && HardwareControl.xgmTemp > 0) || (HardwareControl.xgmFanRPM is not null && HardwareControl.xgmFanRPM > 0);
+            if (xgmConnected || XGM.IsIndependentFanEnabled() || XGM.AlwaysShowFanCurve())
             {
                 AppConfig.Set("xgm_fan", 1);
                 chartCount++;
@@ -1429,14 +1441,35 @@ namespace GHelper
                 buttonTestXGM.Visible = false;
             }
 
+            // Dynamic row sizing for tableFanCharts so visible charts divide the space evenly
+            // Row 0: CPU, Row 1: GPU, Row 2: Mid, Row 3: XGM
+            List<Control> visibleCharts = new List<Control>();
+            if (chartCPU.Visible) visibleCharts.Add(chartCPU);
+            if (chartGPU.Visible) visibleCharts.Add(chartGPU);
+            if (chartMid.Visible) visibleCharts.Add(chartMid);
+            if (chartXGM.Visible) visibleCharts.Add(chartXGM);
+
+            tableFanCharts.SuspendLayout();
+            tableFanCharts.RowCount = 4;
+            while (tableFanCharts.RowStyles.Count < 4)
+                tableFanCharts.RowStyles.Add(new RowStyle());
+
+            float percentPerChart = visibleCharts.Count > 0 ? (100f / visibleCharts.Count) : 25f;
+            tableFanCharts.RowStyles[0] = chartCPU.Visible ? new RowStyle(SizeType.Percent, percentPerChart) : new RowStyle(SizeType.Absolute, 0);
+            tableFanCharts.RowStyles[1] = chartGPU.Visible ? new RowStyle(SizeType.Percent, percentPerChart) : new RowStyle(SizeType.Absolute, 0);
+            tableFanCharts.RowStyles[2] = chartMid.Visible ? new RowStyle(SizeType.Percent, percentPerChart) : new RowStyle(SizeType.Absolute, 0);
+            tableFanCharts.RowStyles[3] = chartXGM.Visible ? new RowStyle(SizeType.Percent, percentPerChart) : new RowStyle(SizeType.Absolute, 0);
+            tableFanCharts.ResumeLayout(true);
+
             try
             {
                 if (chartCount > 2)
                 {
                     int maxWorkingHeight = (Screen.FromControl(this)?.WorkingArea.Height ?? 1000) - 50;
-                    int calculatedHeight = (int)(ControlHelper.GetDpiScale(this).Value * (chartCount * 200 + 100));
-                    int finalHeight = Math.Min(maxWorkingHeight, Math.Max(MinimumSize.Height, calculatedHeight));
-                    Size = MinimumSize = new Size(Size.Width, finalHeight);
+                    int calculatedHeight = (int)(ControlHelper.GetDpiScale(this).Value * (chartCount * 190 + 120));
+                    int finalHeight = Math.Min(maxWorkingHeight, calculatedHeight);
+                    Size = new Size(Size.Width, finalHeight);
+                    MinimumSize = new Size(Size.Width, Math.Min(finalHeight, (int)(ControlHelper.GetDpiScale(this).Value * 550)));
                 }
             }
             catch (Exception ex)
@@ -2185,6 +2218,8 @@ namespace GHelper
             ApplyCustomCurveBytes(seriesGPU, AsusFan.GPU, (byte[])gpuCurve.Clone());
             if (chartMid.Visible || AppConfig.IsMidFan())
                 ApplyCustomCurveBytes(seriesMid, AsusFan.Mid, (byte[])midCurve.Clone());
+            if (chartXGM.Visible || AppConfig.Is("xgm_fan") || XGM.IsConnected() || HardwareControl.IsXGConnectedCached())
+                ApplyCustomCurveBytes(seriesXGM, AsusFan.XGM, (byte[])gpuCurve.Clone());
             Program.toast?.RunToast($"Fan Preset: {presetName}");
         }
 

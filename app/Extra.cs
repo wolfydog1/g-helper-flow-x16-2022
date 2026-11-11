@@ -604,13 +604,9 @@ namespace GHelper
             checkXGMMidBoost.CheckedChanged += CheckXGMMidBoost_CheckedChanged;
 
             // Add XG Mobile Fan Curve Controls to panelXGM
-            int xgmRowHeight = Math.Max(36, checkXGMBattery.Height);
-            int row2Top = checkXGMBattery.Bottom + 4;
-
             var checkXGMIndepFan = new RCheckBox
             {
                 AutoSize = true,
-                Location = new Point(checkXGMBattery.Left, row2Top),
                 Margin = checkXGMBattery.Margin,
                 Padding = checkXGMBattery.Padding,
                 Font = checkXGMBattery.Font,
@@ -629,7 +625,6 @@ namespace GHelper
             var checkXGMShowFan = new RCheckBox
             {
                 AutoSize = true,
-                Location = new Point(checkXGMMidBoost.Left, row2Top),
                 Margin = checkXGMMidBoost.Margin,
                 Padding = checkXGMMidBoost.Padding,
                 Font = checkXGMMidBoost.Font,
@@ -644,25 +639,33 @@ namespace GHelper
                 if (Program.settingsForm?.fansForm is { Text.Length: > 0 } ff) ff.InitFans();
             };
 
-            panelXGM.Controls.Add(checkXGMIndepFan);
-            panelXGM.Controls.Add(checkXGMShowFan);
-
-            int btnTop = Math.Max(checkXGMIndepFan.Bottom, row2Top + xgmRowHeight) + 8;
+            bool IsXgmDockedState() =>
+                HardwareControl.IsXGConnectedCached()
+                || XGM.IsConnected()
+                || (Program.acpi is not null && Program.acpi.IsXGConnected())
+                || (Program.acpi is not null && Program.acpi.DeviceGet(AsusACPI.GPUXG) == 1);
 
             // Add Guided Safety Interlock Button and Hardware Latch Guard to panelXGM
             var buttonXGMSafety = new RButton
             {
                 AutoSize = false,
                 Secondary = true,
-                Size = new Size(420, 42),
-                Location = new Point(checkXGMBattery.Left + 10, btnTop),
+                Height = 42,
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-                Text = (Program.acpi.DeviceGet(AsusACPI.GPUXG) == 1) ? "⏏ Safely Undock XG Mobile (Park PCIe)" : "⚡ Handshake & Dock XG Mobile",
-                BorderColor = (Program.acpi.DeviceGet(AsusACPI.GPUXG) == 1) ? RForm.colorTurbo : RForm.colorEco
+                Text = IsXgmDockedState() ? "⏏ Safely Undock XG Mobile (Park PCIe)" : "⚡ Handshake & Dock XG Mobile",
+                BorderColor = IsXgmDockedState() ? RForm.colorTurbo : RForm.colorEco
             };
+
+            void RefreshXgmButton()
+            {
+                bool docked = IsXgmDockedState();
+                buttonXGMSafety.Text = docked ? "⏏ Safely Undock XG Mobile (Park PCIe)" : "⚡ Handshake & Dock XG Mobile";
+                buttonXGMSafety.BorderColor = docked ? RForm.colorTurbo : RForm.colorEco;
+            }
+
             buttonXGMSafety.Click += (s, e) =>
             {
-                if (Program.acpi.DeviceGet(AsusACPI.GPUXG) == 1)
+                if (IsXgmDockedState())
                 {
                     Program.settingsForm?.gpuControl.SafelyUndockXGM();
                 }
@@ -670,13 +673,12 @@ namespace GHelper
                 {
                     Program.settingsForm?.gpuControl.ToggleXGM();
                 }
+                RefreshXgmButton();
             };
 
-            int row4Top = buttonXGMSafety.Bottom + 8;
             var checkXGMLatchInterlock = new RCheckBox
             {
                 AutoSize = true,
-                Location = new Point(checkXGMBattery.Left, row4Top),
                 Margin = checkXGMBattery.Margin,
                 Padding = checkXGMBattery.Padding,
                 Font = checkXGMBattery.Font,
@@ -693,9 +695,53 @@ namespace GHelper
             toolTip.SetToolTip(buttonXGMSafety, "Initiates a guided, safe software undocking sequence: closes all GPU apps, flushes PCIe bus, and notifies you when it is safe to release the physical cable latch.");
             toolTip.SetToolTip(checkXGMLatchInterlock, "Guards against sudden PCIe bus disconnects and BSODs by ensuring apps are stopped and PCIe lanes are gracefully parked before physical separation.");
 
-            panelXGM.Controls.Add(buttonXGMSafety);
-            panelXGM.Controls.Add(checkXGMLatchInterlock);
-            panelXGM.Height = Math.Max(checkXGMLatchInterlock.Bottom, row4Top + xgmRowHeight) + 12;
+            // Organize panelXGM into a clean TableLayoutPanel to prevent any overlap across DPI scales
+            panelXGM.SuspendLayout();
+            panelXGM.Controls.Clear();
+            panelXGM.AutoSize = true;
+            panelXGM.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+
+            var tableXGM = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                ColumnCount = 2,
+                RowCount = 5,
+                Margin = new Padding(0),
+                Padding = new Padding(0, 4, 0, 4)
+            };
+            tableXGM.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 48f));
+            tableXGM.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 52f));
+            for (int r = 0; r < 5; r++)
+                tableXGM.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+            checkXGM.Dock = DockStyle.Fill;
+            sliderXGMBrightness.Dock = DockStyle.Fill;
+            tableXGM.Controls.Add(checkXGM, 0, 0);
+            tableXGM.Controls.Add(sliderXGMBrightness, 1, 0);
+
+            checkXGMBattery.Dock = DockStyle.Fill;
+            checkXGMMidBoost.Dock = DockStyle.Fill;
+            tableXGM.Controls.Add(checkXGMBattery, 0, 1);
+            tableXGM.Controls.Add(checkXGMMidBoost, 1, 1);
+
+            checkXGMIndepFan.Dock = DockStyle.Fill;
+            checkXGMShowFan.Dock = DockStyle.Fill;
+            tableXGM.Controls.Add(checkXGMIndepFan, 0, 2);
+            tableXGM.Controls.Add(checkXGMShowFan, 1, 2);
+
+            buttonXGMSafety.Dock = DockStyle.Fill;
+            buttonXGMSafety.Margin = new Padding(5, 10, 5, 10);
+            tableXGM.Controls.Add(buttonXGMSafety, 0, 3);
+            tableXGM.SetColumnSpan(buttonXGMSafety, 2);
+
+            checkXGMLatchInterlock.Dock = DockStyle.Fill;
+            tableXGM.Controls.Add(checkXGMLatchInterlock, 0, 4);
+            tableXGM.SetColumnSpan(checkXGMLatchInterlock, 2);
+
+            panelXGM.Controls.Add(tableXGM);
+            panelXGM.ResumeLayout(true);
 
             numericBacklightTime.Value = AppConfig.Get("keyboard_timeout", 60);
             numericBacklightPluggedTime.Value = AppConfig.Get("keyboard_ac_timeout", 0);
@@ -2063,12 +2109,12 @@ namespace GHelper
 
                 var lblUsbcCap = new Label
                 {
+                    AutoSize = true,
                     Dock = DockStyle.Fill,
-                    Size = labelPowerBtnAction.Size,
                     Font = labelPowerBtnAction.Font,
                     TextAlign = ContentAlignment.MiddleLeft,
                     Text = $"USB-C CPU Power Cap ({chargerText})",
-                    Margin = new Padding(3, 5, 3, 5),
+                    Margin = new Padding(3, 8, 3, 8),
                     UseMnemonic = false
                 };
 
@@ -2114,12 +2160,12 @@ namespace GHelper
 
                 var lblBatAnalytics = new Label
                 {
+                    AutoSize = true,
                     Dock = DockStyle.Fill,
-                    Size = labelPowerBtnAction.Size,
                     Font = labelPowerBtnAction.Font,
                     TextAlign = ContentAlignment.MiddleLeft,
                     Text = $"Battery Health: {healthPct:0.0}% ({fullCap:0.0} / {designCap:0.0} Wh)",
-                    Margin = new Padding(3, 5, 3, 5),
+                    Margin = new Padding(3, 8, 3, 8),
                     UseMnemonic = false
                 };
                 toolTip.SetToolTip(lblBatAnalytics, $"Full Charge Capacity: {fullCap:0.0} Wh / {designCap:0.0} Wh Design ({wearPct:0.0}% Wear)  |  Live Rate: {(rateW >= 0 ? "+" : "")}{rateW:0.0}W");
@@ -2142,6 +2188,8 @@ namespace GHelper
                 tablePower.RowCount = 10;
                 while (tablePower.RowStyles.Count < 10)
                     tablePower.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                tablePower.RowStyles[8] = new RowStyle(SizeType.AutoSize);
+                tablePower.RowStyles[9] = new RowStyle(SizeType.AutoSize);
                 tablePower.Controls.Add(lblUsbcCap, 0, 8);
                 tablePower.Controls.Add(cbUsbcCap, 1, 8);
                 tablePower.SetColumnSpan(cbUsbcCap, 2);

@@ -334,6 +334,8 @@ public static class AppConfig
             case AsusACPI.PerformanceTurbo:
                 switch (device)
                 {
+                    case AsusFan.XGM:
+                        return StringToBytes("01-1F-30-3E-47-4E-51-57-11-27-30-3D-40-53-64-64");
                     case AsusFan.GPU:
                         return StringToBytes("1E-3F-44-48-4C-50-54-62-16-1F-26-2D-39-47-55-5F");
                     default:
@@ -342,6 +344,8 @@ public static class AppConfig
             case AsusACPI.PerformanceSilent:
                 switch (device)
                 {
+                    case AsusFan.XGM:
+                        return StringToBytes("01-1F-30-3E-47-4E-51-57-00-14-24-34-40-53-64-64");
                     case AsusFan.GPU:
                         return StringToBytes("1E-31-3B-42-47-50-5A-64-00-00-04-11-1B-23-28-2D");
                     default:
@@ -350,6 +354,8 @@ public static class AppConfig
             default:
                 switch (device)
                 {
+                    case AsusFan.XGM:
+                        return StringToBytes("01-1F-30-3E-47-4E-51-57-11-27-30-3D-40-53-64-64");
                     case AsusFan.GPU:
                         return StringToBytes("3A-3D-40-44-48-4D-51-62-0C-16-1D-1F-26-2D-34-4A");
                     default:

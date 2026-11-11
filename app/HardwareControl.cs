@@ -828,7 +828,7 @@ public static class HardwareControl
         if (Environment.TickCount64 - _lastXgCheck > 2000)
         {
             _lastXgCheck = Environment.TickCount64;
-            _isXgConnected = GHelper.Program.acpi.IsXGConnected() || GHelper.USB.XGM.IsConnected();
+            _isXgConnected = GHelper.Program.acpi.IsXGConnected() || GHelper.USB.XGM.IsConnected() || (xgmTemp is not null && xgmTemp > 0) || (xgmFanRPM is not null && xgmFanRPM > 0);
         }
         return _isXgConnected;
     }
