@@ -657,8 +657,8 @@ namespace GHelper
                 Size = new Size(420, 42),
                 Location = new Point(checkXGMBattery.Left + 10, btnTop),
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-                Text = (Program.acpi.IsXGConnected() || XGM.IsConnected()) ? "⏏ Safely Undock XG Mobile (Park PCIe)" : "⚡ Handshake & Dock XG Mobile",
-                BorderColor = (Program.acpi.IsXGConnected() || XGM.IsConnected()) ? RForm.colorTurbo : RForm.colorEco
+                Text = (Program.acpi.DeviceGet(AsusACPI.GPUXG) == 1) ? "⏏ Safely Undock XG Mobile (Park PCIe)" : "⚡ Handshake & Dock XG Mobile",
+                BorderColor = (Program.acpi.DeviceGet(AsusACPI.GPUXG) == 1) ? RForm.colorTurbo : RForm.colorEco
             };
             buttonXGMSafety.Click += (s, e) =>
             {

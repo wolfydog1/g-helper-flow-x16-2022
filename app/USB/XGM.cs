@@ -13,10 +13,27 @@ namespace GHelper.USB
         const int ASUS_ID = 0x0b05;
         static readonly int[] deviceIds = { 0x1970, 0x1a9a, 0x1C28, 0x1C29, 0x1BC1, 0x19FC, 0x1A27 };
 
+        private static HidDevice? _cachedDevice;
+        private static long _lastDeviceCheck = 0;
+
         public static HidDevice? GetDevice()
         {
             try
             {
+                if (_cachedDevice != null)
+                {
+                    try
+                    {
+                        if (_cachedDevice.CanOpen) return _cachedDevice;
+                    }
+                    catch { _cachedDevice = null; }
+                }
+
+                if (_cachedDevice == null && Environment.TickCount64 - _lastDeviceCheck < 1500)
+                    return null;
+
+                _lastDeviceCheck = Environment.TickCount64;
+
                 var asusDevices = DeviceList.Local.GetHidDevices(ASUS_ID);
 
                 // Look for known XG Mobile PIDs first, verifying the device supports the 0x5e Feature report
@@ -30,7 +47,12 @@ namespace GHelper.USB
                     try
                     {
                         if (device.CanOpen && device.GetReportDescriptor().TryGetReport(ReportType.Feature, XGM_REPORT_ID, out _))
-                            return device;
+                        {
+                            _cachedDevice = device; return device;
+
+                        }
+
+
                     }
                     catch { }
                 }
@@ -51,9 +73,14 @@ namespace GHelper.USB
                         try
                         {
                             if (device.CanOpen && device.GetReportDescriptor().TryGetReport(ReportType.Feature, XGM_REPORT_ID, out _))
+                        {
+                            _cachedDevice = device; return device;
+
+                        }
+
                             {
-                                Logger.WriteLine($"Dynamically discovered XGM Device: PID=0x{device.ProductID:X4}, MaxFeatureReportLength={device.GetMaxFeatureReportLength()}");
-                                return device;
+
+    
                             }
                         }
                         catch { }
@@ -101,7 +128,7 @@ namespace GHelper.USB
                 }
                 catch (Exception ex)
                 {
-                    Logger.WriteLine($"Error accessing XGM device: {ex}");
+                    Logger.WriteLine($"Error accessing XGM device: {ex}"); _cachedDevice = null;
                 }
             }
         }
@@ -144,19 +171,19 @@ namespace GHelper.USB
                         {
                             int rpm = response[12] + (response[13] << 8);
                             int targetRpm = response[14] + (response[15] << 8);
-                            LastFanRPM = rpm;
-                            LastTargetRPM = targetRpm;
+                            if (rpm >= 0 && rpm < 15000) LastFanRPM = rpm;
+                            if (targetRpm >= 0 && targetRpm < 15000) LastTargetRPM = targetRpm;
                             int b6 = response[6];
                             int b9 = response[9];
-                            if (b6 > 0 && b6 < 125) LastCoreTemp = b6;
-                            if (b9 > 0 && b9 < 125) LastHotspotTemp = b9;
+                            LastCoreTemp = (b6 > 0 && b6 < 125) ? b6 : null;
+                            LastHotspotTemp = (b9 > 0 && b9 < 125) ? b9 : null;
                         }
                     }
                 }
             }
             catch (Exception ex)
             {
-                Logger.WriteLine($"XGM Probe Error: {ex.Message}");
+                Logger.WriteLine($"XGM Probe Error: {ex.Message}"); _cachedDevice = null;
             }
         }
 

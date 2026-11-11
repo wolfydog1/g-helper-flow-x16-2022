@@ -350,7 +350,7 @@ namespace GHelper.Gpu
 
                     // 1. Terminate any lingering GPU applications to ensure VRAM is released cleanly
                     HardwareControl.KillGPUApps();
-                    XGM.Reset();
+                    XGM.Reset(); HardwareControl.DisposeGpuControl();
                     await Task.Delay(500);
 
                     // 2. Command ASUS ACPI to disconnect PCIe bus
@@ -415,7 +415,7 @@ namespace GHelper.Gpu
                         await Task.Delay(1000);
                     }
 
-                    if (AppConfig.Is("xgm_special"))
+                    HardwareControl.DisposeGpuControl(); if (AppConfig.Is("xgm_special"))
                         Program.acpi.DeviceSet(AsusACPI.GPUXG, 0x101, "GPU XGM");
                     else
                         Program.acpi.DeviceSet(AsusACPI.GPUXG, 1, "GPU XGM");

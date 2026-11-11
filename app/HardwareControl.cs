@@ -879,8 +879,13 @@ public static class HardwareControl
             catch { _xgmGpu = null; }
         }
 
-        int? hidTemp = GHelper.USB.XGM.LastCoreTemp ?? GHelper.USB.XGM.LastHotspotTemp;
+        int? hidTemp = (GHelper.USB.XGM.LastCoreTemp > 0) ? GHelper.USB.XGM.LastCoreTemp : GHelper.USB.XGM.LastHotspotTemp;
         if (hidTemp is > 0 and < 125) return hidTemp.Value;
+
+        if (GpuControl is not null && GpuControl.IsValid)
+        {
+            try { return GpuControl.GetCurrentTemperature(); } catch { }
+        }
 
         return null;
     }
@@ -891,13 +896,14 @@ public static class HardwareControl
 
         try
         {
-            var gpus = NvAPIWrapper.GPU.PhysicalGPU.GetPhysicalGPUs();
-            if (gpus.Length > 0)
+            if (GpuControl is NvidiaGpuControl nv && nv.IsValid)
             {
-                uint idx = (uint)(gpus.Length - 1);
-                float? p = NvmlHelper.GetGpuPower(idx);
+                float? p = nv.GetGpuPower();
                 if (p is not null && p > 0) return p.Value;
             }
+
+            float? pNvml = NvmlHelper.GetGpuPower(0);
+            if (pNvml is not null && pNvml > 0) return pNvml.Value;
         }
         catch { }
 
@@ -907,6 +913,16 @@ public static class HardwareControl
     public static int? GetXGMUsage()
     {
         if (!IsXGConnectedCached()) return null;
+
+        if (GpuControl is not null && GpuControl.IsValid)
+        {
+            try
+            {
+                int? u = GpuControl.GetGpuUse();
+                if (u is not null && u >= 0) return u;
+            }
+            catch { }
+        }
 
         var gpu = GetXGMPhysicalGpu();
         if (gpu != null)
@@ -1500,14 +1516,11 @@ public static class HardwareControl
 
     public static void DisposeGpuControl()
     {
-        bool wasNvidia = GpuControl is NvidiaGpuControl;
+        _xgmGpu = null;
         GpuControl?.Dispose();
         GpuControl = null;
-        if (wasNvidia)
-        {
-            NvmlHelper.Shutdown();
-            UnloadNvAPI();
-        }
+        NvmlHelper.Shutdown();
+        UnloadNvAPI();
     }
 
     public static void UnloadNvAPI()
