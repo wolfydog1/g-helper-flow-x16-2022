@@ -639,11 +639,7 @@ namespace GHelper
                 if (Program.settingsForm?.fansForm is { Text.Length: > 0 } ff) ff.InitFans();
             };
 
-            bool IsXgmDockedState() =>
-                HardwareControl.IsXGConnectedCached()
-                || XGM.IsConnected()
-                || (Program.acpi is not null && Program.acpi.IsXGConnected())
-                || (Program.acpi is not null && Program.acpi.DeviceGet(AsusACPI.GPUXG) == 1);
+            bool IsXgmPcieActive() => Program.acpi is not null && Program.acpi.DeviceGet(AsusACPI.GPUXG) == 1;
 
             // Add Guided Safety Interlock Button and Hardware Latch Guard to panelXGM
             var buttonXGMSafety = new RButton
@@ -652,20 +648,20 @@ namespace GHelper
                 Secondary = true,
                 Height = 42,
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold),
-                Text = IsXgmDockedState() ? "⏏ Safely Undock XG Mobile (Park PCIe)" : "⚡ Handshake & Dock XG Mobile",
-                BorderColor = IsXgmDockedState() ? RForm.colorTurbo : RForm.colorEco
+                Text = IsXgmPcieActive() ? "⏏ Safely Undock XG Mobile (Park PCIe)" : "⚡ Handshake & Dock XG Mobile",
+                BorderColor = IsXgmPcieActive() ? RForm.colorTurbo : RForm.colorEco
             };
 
             void RefreshXgmButton()
             {
-                bool docked = IsXgmDockedState();
-                buttonXGMSafety.Text = docked ? "⏏ Safely Undock XG Mobile (Park PCIe)" : "⚡ Handshake & Dock XG Mobile";
-                buttonXGMSafety.BorderColor = docked ? RForm.colorTurbo : RForm.colorEco;
+                bool active = IsXgmPcieActive();
+                buttonXGMSafety.Text = active ? "⏏ Safely Undock XG Mobile (Park PCIe)" : "⚡ Handshake & Dock XG Mobile";
+                buttonXGMSafety.BorderColor = active ? RForm.colorTurbo : RForm.colorEco;
             }
 
             buttonXGMSafety.Click += (s, e) =>
             {
-                if (IsXgmDockedState())
+                if (IsXgmPcieActive())
                 {
                     Program.settingsForm?.gpuControl.SafelyUndockXGM();
                 }

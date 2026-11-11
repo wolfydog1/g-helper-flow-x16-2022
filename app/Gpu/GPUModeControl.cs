@@ -388,7 +388,7 @@ namespace GHelper.Gpu
 
         public void ToggleXGM(bool silent = false)
         {
-            if (Program.acpi.DeviceGet(AsusACPI.GPUXG) == 1 || HardwareControl.IsXGConnectedCached() || XGM.IsConnected() || Program.acpi.IsXGConnected())
+            if (Program.acpi.DeviceGet(AsusACPI.GPUXG) == 1)
             {
                 if (silent)
                 {
