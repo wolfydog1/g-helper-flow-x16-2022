@@ -1279,7 +1279,7 @@ public static class HardwareControl
             xgmTemp = GetXGMTemp() ?? gpuTemp;
             int? realRpm = GHelper.USB.XGM.LastFanRPM;
             xgmHotspotTemp = GHelper.USB.XGM.LastHotspotTemp;
-            if (realRpm is > 0)
+            if (realRpm is not null)
             {
                 xgmFanRPM = realRpm.Value;
                 xgmFan = $"{realRpm.Value}RPM";
@@ -1396,7 +1396,7 @@ public static class HardwareControl
             xgmTemp = GetXGMTemp() ?? gpuTemp;
             int? realRpm = GHelper.USB.XGM.LastFanRPM;
             xgmHotspotTemp = GHelper.USB.XGM.LastHotspotTemp;
-            if (realRpm is > 0)
+            if (realRpm is not null)
             {
                 xgmFanRPM = realRpm.Value;
                 xgmFan = $"{realRpm.Value}RPM";
