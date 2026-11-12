@@ -294,6 +294,12 @@ namespace GHelper
 
             buttonCalibrate.Click += ButtonCalibrate_Click;
             buttonTestXGM.Click += ButtonTestXGM_Click;
+            buttonTestXGM.AutoSize = true;
+            buttonTestXGM.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            buttonTestXGM.Padding = new Padding(8, 0, 8, 0);
+            buttonTestXGM.MinimumSize = new Size(115, 54);
+            buttonTestXGM.TextChanged += (s, e) => UpdateBottomControlsLayout();
+            buttonTestXGM.VisibleChanged += (s, e) => UpdateBottomControlsLayout();
 
             buttonDownload.Click += ButtonDownload_Click;
 
@@ -1551,6 +1557,7 @@ namespace GHelper
                 chartXGM.Visible = false;
                 buttonTestXGM.Visible = false;
             }
+            UpdateBottomControlsLayout();
 
             // Dynamic row sizing for tableFanCharts so visible charts divide the space evenly
             // Row 0: CPU, Row 1: GPU, Row 2: Mid, Row 3: XGM
@@ -2232,10 +2239,10 @@ namespace GHelper
             panelFans.Controls.Remove(checkFanClamp);
             checkFanClamp.AutoSize = true;
             checkFanClamp.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            checkFanClamp.Location = new Point(buttonCalibrate.Right + 16, checkApplyFans.Top + 4);
             checkFanClamp.Margin = new Padding(4, 2, 4, 2);
             checkFanClamp.Padding = new Padding(4, 2, 4, 2);
             panelApplyFans.Controls.Add(checkFanClamp);
+            UpdateBottomControlsLayout();
 
             RButton MakePresetBtn(string text, Color accent, Action onClick)
             {
@@ -2329,6 +2336,18 @@ namespace GHelper
             panelFans.ResumeLayout(true);
 
             ControlHelper.Adjust(this);
+        }
+
+        private void UpdateBottomControlsLayout()
+        {
+            if (buttonCalibrate is null || checkFanClamp is null || checkApplyFans is null) return;
+            int nextX = (buttonCalibrate.Visible ? buttonCalibrate.Right : buttonReset.Right) + 12;
+            if (buttonTestXGM is not null && buttonTestXGM.Visible)
+            {
+                buttonTestXGM.Location = new Point(nextX, buttonCalibrate.Top);
+                nextX = buttonTestXGM.Right + 12;
+            }
+            checkFanClamp.Location = new Point(nextX, checkApplyFans.Top + 4);
         }
 
         private void ApplyCoordinatedFanPreset(string presetName, byte[] cpuCurve, byte[] gpuCurve, byte[] midCurve)
