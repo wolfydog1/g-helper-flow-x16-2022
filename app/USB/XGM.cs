@@ -124,6 +124,9 @@ namespace GHelper.USB
         public static int? LastTargetRPM { get; private set; } = null;
         public static int? LastHotspotTemp { get; private set; } = null;
         public static int? LastCoreTemp { get; private set; } = null;
+        public static bool? LastCurveActive { get; private set; } = null;
+        public static bool IsManualSpeedActive { get; private set; } = false;
+        public static int? ManualSpeedPercent { get; private set; } = null;
 
         public static bool IsIndependentFanEnabled() => AppConfig.Get("xgm_independent_fan", 1) == 1;
         public static bool AlwaysShowFanCurve() => AppConfig.Is("show_xgm_fan");
@@ -164,6 +167,7 @@ namespace GHelper.USB
                             int b9 = response[9];
                             LastCoreTemp = (b6 > 0 && b6 < 125) ? b6 : null;
                             LastHotspotTemp = (b9 > 0 && b9 < 125) ? b9 : null;
+                            LastCurveActive = (response[18] == 0x80);
                         }
                     }
                 }
@@ -295,17 +299,18 @@ namespace GHelper.USB
             {
                 if (IsConnected())
                 {
-                    byte[] factoryCurve = [0x01, 0x1F, 0x30, 0x3E, 0x47, 0x4E, 0x51, 0x57, 0x11, 0x27, 0x30, 0x3D, 0x40, 0x53, 0x64, 0x64];
-                    Write([XGM_REPORT_ID, 0xd0, 0x03]);
                     Write([XGM_REPORT_ID, 0xd1, 0x02]);
-                    Write([XGM_REPORT_ID, 0xd1, 0x01, .. factoryCurve]);
+                    IsManualSpeedActive = false;
+                    ManualSpeedPercent = null;
+                    Thread.Sleep(50);
+                    ProbeSync();
                 }
             });
         }
 
         public static void SetFan(byte[] curve)
         {
-            Task.Run(async () =>
+            Task.Run(() =>
             {
                 if (AsusACPI.IsInvalidCurve(curve)) return;
                 byte[] xgmPayload = new byte[16];
@@ -319,37 +324,53 @@ namespace GHelper.USB
                     oldTemp = t;
                 }
 
-                // Safety: Ensure Point 0 is anchored to 1°C with at least a 15% fan speed floor.
-                // The XG Mobile EC microcontroller requires point 0 to cover cold idle (0-28°C).
-                // Without an anchor at 1°C, low idle temps fall below the curve causing the EC to cut power to 0 RPM.
-                xgmPayload[0] = 1;
-                if (xgmPayload[8] < 15) xgmPayload[8] = 15;
+                // The XG Mobile EC microcontroller requires Point 0 to start at 0°C.
+                // If point 0 starts above 0°C, idle temperatures (0°C..28°C) fall below the curve,
+                // causing the EC to drop out of custom curve control.
+                xgmPayload[0] = 0;
+                if (xgmPayload[8] < 15) xgmPayload[8] = 15; // Safe minimum speed floor
 
                 if (IsConnected())
                 {
-                    // Exact Armoury Crate Mode Unlock Sequence:
-                    // D0-01, D0-02, D0-03, D0-04 unlocks the firmware for custom fan curve control
-                    Write([XGM_REPORT_ID, 0xd0, 0x01]);
-                    await Task.Delay(10);
-                    Write([XGM_REPORT_ID, 0xd0, 0x02]);
-                    await Task.Delay(10);
-                    Write([XGM_REPORT_ID, 0xd0, 0x03]);
-                    await Task.Delay(10);
-                    Write([XGM_REPORT_ID, 0xd0, 0x04]);
-                    await Task.Delay(30);
-
-                    // Send custom fan curve payload directly (matches official Armoury Crate capture 5E-D1-01)
+                    // Matches official ASUS Armoury Crate capture (5E-D1-01)
                     Write([XGM_REPORT_ID, 0xd1, 0x01, .. xgmPayload]);
+                    IsManualSpeedActive = false;
+                    ManualSpeedPercent = null;
+                    Thread.Sleep(50);
+                    ProbeSync();
                 }
             });
         }
 
-        public static async Task TestFan(int seconds = 8, Action<int, int>? onProgress = null)
+        public static void SetManualSpeed(int percent)
+        {
+            byte speed = (byte)Math.Clamp(percent, 0, 100);
+            byte[] manualCurve = [
+                0, 10, 20, 30, 40, 50, 60, 70,
+                speed, speed, speed, speed, speed, speed, speed, speed
+            ];
+            Task.Run(() =>
+            {
+                if (IsConnected())
+                {
+                    Write([XGM_REPORT_ID, 0xd1, 0x01, .. manualCurve]);
+                    IsManualSpeedActive = true;
+                    ManualSpeedPercent = speed;
+                    Thread.Sleep(50);
+                    ProbeSync();
+                }
+            });
+        }
+
+        public static async Task TestFan(int seconds = 10, Action<int, int>? onProgress = null)
         {
             if (!IsConnected()) return;
 
-            byte[] maxCurve = [1, 20, 30, 40, 50, 60, 70, 80, 85, 85, 85, 85, 85, 85, 85, 85];
-            SetFan(maxCurve);
+            // Send 85% (~6500 RPM) across all points starting at 0°C
+            byte[] testCurve = [0, 10, 20, 30, 40, 50, 60, 70, 85, 85, 85, 85, 85, 85, 85, 85];
+            Write([XGM_REPORT_ID, 0xd1, 0x01, .. testCurve]);
+            IsManualSpeedActive = true;
+            ManualSpeedPercent = 85;
 
             for (int i = 0; i < seconds; i++)
             {
@@ -357,6 +378,9 @@ namespace GHelper.USB
                 ProbeSync();
                 onProgress?.Invoke(LastFanRPM ?? 0, LastTargetRPM ?? 0);
             }
+
+            IsManualSpeedActive = false;
+            ManualSpeedPercent = null;
 
             if (AppConfig.IsApplyFans() || IsIndependentFanEnabled())
             {

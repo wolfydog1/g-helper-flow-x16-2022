@@ -370,35 +370,120 @@ namespace GHelper
             fanSensorControl.StartCalibration();
         }
 
-        private async void ButtonTestXGM_Click(object? sender, EventArgs e)
+        private void ShowXgmTestMenu(Control source, Point pt)
         {
-            buttonTestXGM.Enabled = false;
-            buttonTestXGM.Text = "Testing...";
-            try
+            var menu = new ContextMenuStrip
             {
-                await XGM.TestFan(8, (rpm, target) =>
+                Renderer = new CustomMenuRenderer(),
+                BackColor = this.BackColor,
+                ForeColor = this.ForeColor,
+                ShowImageMargin = false,
+                ShowCheckMargin = true
+            };
+            var pad = new Padding(4, 2, 4, 2);
+
+            var itemHeader = new ToolStripMenuItem("ROG XG Mobile Fan Control & Diagnostics") { Enabled = false, Margin = pad, Font = new Font(this.Font, FontStyle.Bold) };
+            menu.Items.Add(itemHeader);
+            menu.Items.Add("-");
+
+            var itemTestRamp = new ToolStripMenuItem("🚀 Run Ramp Test (85% Speed / ~6500 RPM for 10s)") { Margin = pad };
+            itemTestRamp.Click += async (s, e) =>
+            {
+                buttonTestXGM.Enabled = false;
+                buttonTestXGM.Text = "Testing...";
+                try
                 {
-                    try
+                    await XGM.TestFan(10, (rpm, target) =>
                     {
-                        BeginInvoke(() =>
+                        try
                         {
-                            buttonTestXGM.Text = rpm > 0 ? $"{rpm} RPM" : "Testing...";
-                            UpdateSensors();
-                        });
-                    }
-                    catch { }
-                });
-            }
-            catch (Exception ex)
+                            BeginInvoke(() =>
+                            {
+                                buttonTestXGM.Text = rpm > 0 ? $"{rpm} RPM" : "Testing...";
+                                UpdateSensors();
+                            });
+                        }
+                        catch { }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Logger.WriteLine(ex.ToString());
+                }
+                finally
+                {
+                    buttonTestXGM.Text = "Test XGM";
+                    buttonTestXGM.Enabled = true;
+                    UpdateSensors();
+                }
+            };
+            menu.Items.Add(itemTestRamp);
+            menu.Items.Add("-");
+
+            var manualHeader = new ToolStripMenuItem("Manual Fan Speed Presets:") { Enabled = false, Margin = pad };
+            menu.Items.Add(manualHeader);
+
+            int[] speeds = [35, 50, 70, 85, 100, 0];
+            string[] labels = [
+                "🌀 Manual 35% (~3900 RPM - Quiet)",
+                "🌀 Manual 50% (~4500 RPM - Balanced)",
+                "🌀 Manual 70% (~5800 RPM - Performance)",
+                "🌀 Manual 85% (~6500 RPM - Heavy Load)",
+                "🌀 Manual 100% (~7600 RPM - Maximum)",
+                "🛑 Manual 0% (Stop Fan / Idle Off)"
+            ];
+
+            for (int k = 0; k < speeds.Length; k++)
             {
-                Logger.WriteLine(ex.ToString());
+                int spd = speeds[k];
+                var itemSpd = new ToolStripMenuItem(labels[k])
+                {
+                    Checked = XGM.IsManualSpeedActive && XGM.ManualSpeedPercent == spd,
+                    Margin = pad
+                };
+                itemSpd.Click += (s, e) =>
+                {
+                    XGM.SetManualSpeed(spd);
+                    buttonTestXGM.Text = spd > 0 ? $"Manual {spd}%" : "Fan 0%";
+                    Program.toast?.RunToast($"XG Mobile Fan set to Manual {spd}%");
+                    UpdateSensors();
+                };
+                menu.Items.Add(itemSpd);
             }
-            finally
+
+            menu.Items.Add("-");
+
+            var itemApplyCurve = new ToolStripMenuItem("🔄 Apply Custom Fan Curve") { Margin = pad };
+            itemApplyCurve.Click += (s, e) =>
             {
                 buttonTestXGM.Text = "Test XGM";
-                buttonTestXGM.Enabled = true;
+                if (!checkApplyFans.Checked && !XGM.IsIndependentFanEnabled())
+                {
+                    checkApplyFans.Checked = true;
+                    AppConfig.SetMode("auto_apply", 1);
+                }
+                modeControl.AutoFans();
+                Program.toast?.RunToast("XG Mobile Custom Curve Applied");
                 UpdateSensors();
-            }
+            };
+            menu.Items.Add(itemApplyCurve);
+
+            var itemResetBios = new ToolStripMenuItem("⚙️ Reset to Factory BIOS Defaults") { Margin = pad };
+            itemResetBios.Click += (s, e) =>
+            {
+                buttonTestXGM.Text = "Test XGM";
+                XGM.Reset();
+                Program.toast?.RunToast("XG Mobile Fan Reset to Factory Defaults");
+                UpdateSensors();
+            };
+            menu.Items.Add(itemResetBios);
+
+            menu.Show(source, pt);
+        }
+
+        private void ButtonTestXGM_Click(object? sender, EventArgs e)
+        {
+            ShowXgmTestMenu(buttonTestXGM, new Point(0, buttonTestXGM.Height));
         }
 
         private void ChartCPU_MouseClick(object? sender, MouseEventArgs e)
@@ -1231,7 +1316,23 @@ namespace GHelper
                             string fanStr = HardwareControl.xgmFan != null ? (tempStr.Length > 0 ? $", {HardwareControl.xgmFan}" : HardwareControl.xgmFan) : "";
                             int? targetPct = GetInterpolatedFanPercent(seriesXGM, xgmActiveTemp);
                             string targetStr = targetPct.HasValue ? $" → {targetPct.Value}%" : "";
-                            xgmInfo = $" ({tempStr}{fanStr}{targetStr})";
+
+                            string statusStr = "";
+                            if (XGM.IsManualSpeedActive)
+                            {
+                                statusStr = $" [Manual {XGM.ManualSpeedPercent}%]";
+                            }
+                            else if (XGM.LastCurveActive == true)
+                            {
+                                statusStr = " [Curve Active]";
+                            }
+                            else if (XGM.LastCurveActive == false)
+                            {
+                                statusStr = " [Factory Mode]";
+                            }
+
+                            string ecTarget = XGM.LastTargetRPM > 0 ? $", Target: {XGM.LastTargetRPM}RPM" : "";
+                            xgmInfo = $" ({tempStr}{fanStr}{targetStr}{ecTarget}{statusStr})";
                         }
                         else if (!Program.acpi.IsXGConnected() && !XGM.IsConnected())
                         {
@@ -2460,8 +2561,8 @@ namespace GHelper
 
                 if (Program.acpi.IsXGConnected() || XGM.IsConnected())
                 {
-                    var itemTestXgm = new ToolStripMenuItem("XG Mobile: Test Fan Full Speed (8s)") { Margin = pad };
-                    itemTestXgm.Click += ButtonTestXGM_Click;
+                    var itemTestXgm = new ToolStripMenuItem("XG Mobile: Diagnostics & Manual Fan Speed...") { Margin = pad };
+                    itemTestXgm.Click += (s, e) => ShowXgmTestMenu(chart, location);
                     menu.Items.Add(itemTestXgm);
                 }
 
