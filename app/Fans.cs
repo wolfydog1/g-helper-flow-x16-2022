@@ -41,6 +41,7 @@ namespace GHelper
         static int gpuPowerBase = 0;
         static bool isGPUPower => gpuPowerBase > 0;
         static bool clampFanDots = AppConfig.IsClampFanDots();
+        RButton buttonGridToggle = new RButton();
 
         public Fans()
         {
@@ -300,6 +301,26 @@ namespace GHelper
             buttonTestXGM.MinimumSize = new Size(115, 54);
             buttonTestXGM.TextChanged += (s, e) => UpdateBottomControlsLayout();
             buttonTestXGM.VisibleChanged += (s, e) => UpdateBottomControlsLayout();
+
+            buttonGridToggle.Text = AppConfig.Get("fan_charts_grid", 1) == 1 ? "田 2x2 Grid" : "☰ Stacked";
+            buttonGridToggle.Activated = false;
+            buttonGridToggle.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            buttonGridToggle.BackColor = SystemColors.ControlLight;
+            buttonGridToggle.BorderColor = Color.Transparent;
+            buttonGridToggle.BorderRadius = 2;
+            buttonGridToggle.FlatStyle = FlatStyle.Flat;
+            buttonGridToggle.Secondary = true;
+            buttonGridToggle.AutoSize = true;
+            buttonGridToggle.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            buttonGridToggle.Padding = new Padding(8, 0, 8, 0);
+            buttonGridToggle.MinimumSize = new Size(100, 54);
+            buttonGridToggle.Click += (s, e) =>
+            {
+                bool cur = AppConfig.Get("fan_charts_grid", 1) == 1;
+                AppConfig.Set("fan_charts_grid", cur ? 0 : 1);
+                InitFans();
+            };
+            panelApplyFans.Controls.Add(buttonGridToggle);
 
             buttonDownload.Click += ButtonDownload_Click;
 
@@ -998,13 +1019,13 @@ namespace GHelper
 
             chart.ChartAreas[0].AxisY.CustomLabels.Clear();
 
-            for (int i = 0; i <= fansMax; i += 10)
+            int step = 20; // 0%, 20%, 40%, 60%, 80%, 100% - clean spacing, no overlapping numbers!
+            for (int i = 0; i <= fansMax; i += step)
             {
-                chart.ChartAreas[0].AxisY.CustomLabels.Add(i - 2, i + 2, ChartYLabel(i, device));
+                chart.ChartAreas[0].AxisY.CustomLabels.Add(i - 4, i + 4, ChartYLabel(i, device));
             }
 
-            //chart.ChartAreas[0].AxisY.CustomLabels.Add(fansMax -2, fansMax + 2, Properties.Strings.RPM);
-            chart.ChartAreas[0].AxisY.Interval = 10;
+            chart.ChartAreas[0].AxisY.Interval = step;
 
             chart.ChartAreas[0].AxisX.CustomLabels.Clear();
             for (int i = tempMin; i <= tempMax; i += 10)
@@ -1173,11 +1194,8 @@ namespace GHelper
             if (sender is null) return;
             CheckBox chk = (CheckBox)sender;
 
-            if (!chk.Checked)
-            {
-                buttonTestXGM.Text = "Test XGM";
-                XGM.ClearManualSpeed();
-            }
+            buttonTestXGM.Text = "Test XGM";
+            XGM.ClearManualSpeed();
 
             AppConfig.SetMode("auto_apply", chk.Checked ? 1 : 0);
             modeControl.SetPerformanceMode();
@@ -1559,8 +1577,8 @@ namespace GHelper
             }
             UpdateBottomControlsLayout();
 
-            // Dynamic row sizing for tableFanCharts so visible charts divide the space evenly
-            // Row 0: CPU, Row 1: GPU, Row 2: Mid, Row 3: XGM
+            // Dynamic sizing for tableFanCharts so visible charts divide the space evenly
+            // When 4 fans are active, 2x2 Grid View provides double the vertical chart height and prevents overlapping labels
             bool showMid = AppConfig.IsMidFan() || !AsusACPI.IsEmptyCurve(Program.acpi.GetFanCurve(AsusFan.Mid)) || Program.acpi.IsMidFanSupported();
             bool showXgm = xgmConnected || XGM.IsIndependentFanEnabled() || XGM.AlwaysShowFanCurve();
 
@@ -1572,28 +1590,73 @@ namespace GHelper
             int activeCount = 2 + (showMid ? 1 : 0) + (showXgm ? 1 : 0);
             chartCount = activeCount;
 
-            tableFanCharts.SuspendLayout();
-            tableFanCharts.RowCount = 4;
-            while (tableFanCharts.RowStyles.Count < 4)
-                tableFanCharts.RowStyles.Add(new RowStyle());
+            bool isGrid = activeCount >= 4 && AppConfig.Get("fan_charts_grid", 1) == 1;
+            buttonGridToggle.Text = isGrid ? "田 2x2 Grid" : "☰ Stacked";
+            buttonGridToggle.Visible = activeCount >= 4;
+            UpdateBottomControlsLayout();
 
-            float percentPerChart = 100f / activeCount;
-            tableFanCharts.RowStyles[0] = new RowStyle(SizeType.Percent, percentPerChart);
-            tableFanCharts.RowStyles[1] = new RowStyle(SizeType.Percent, percentPerChart);
-            tableFanCharts.RowStyles[2] = showMid ? new RowStyle(SizeType.Percent, percentPerChart) : new RowStyle(SizeType.Absolute, 0);
-            tableFanCharts.RowStyles[3] = showXgm ? new RowStyle(SizeType.Percent, percentPerChart) : new RowStyle(SizeType.Absolute, 0);
+            tableFanCharts.SuspendLayout();
+            tableFanCharts.Controls.Clear();
+
+            if (isGrid)
+            {
+                tableFanCharts.ColumnCount = 2;
+                tableFanCharts.RowCount = 2;
+                tableFanCharts.ColumnStyles.Clear();
+                tableFanCharts.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+                tableFanCharts.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+                tableFanCharts.RowStyles.Clear();
+                tableFanCharts.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+                tableFanCharts.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+
+                tableFanCharts.Controls.Add(chartCPU, 0, 0);
+                tableFanCharts.Controls.Add(chartGPU, 1, 0);
+                tableFanCharts.Controls.Add(chartMid, 0, 1);
+                tableFanCharts.Controls.Add(chartXGM, 1, 1);
+            }
+            else
+            {
+                tableFanCharts.ColumnCount = 1;
+                tableFanCharts.RowCount = activeCount;
+                tableFanCharts.ColumnStyles.Clear();
+                tableFanCharts.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+                tableFanCharts.RowStyles.Clear();
+                float percentPerChart = 100f / activeCount;
+                for (int r = 0; r < activeCount; r++)
+                    tableFanCharts.RowStyles.Add(new RowStyle(SizeType.Percent, percentPerChart));
+
+                tableFanCharts.Controls.Add(chartCPU, 0, 0);
+                tableFanCharts.Controls.Add(chartGPU, 0, 1);
+                int rIdx = 2;
+                if (showMid) tableFanCharts.Controls.Add(chartMid, 0, rIdx++);
+                if (showXgm) tableFanCharts.Controls.Add(chartXGM, 0, rIdx++);
+            }
+
             tableFanCharts.ResumeLayout(true);
 
             try
             {
-                if (chartCount > 2)
+                int maxWorkingHeight = (Screen.FromControl(this)?.WorkingArea.Height ?? 1080) - 40;
+                int maxWorkingWidth = (Screen.FromControl(this)?.WorkingArea.Width ?? 1920) - 60;
+                float dpi = ControlHelper.GetDpiScale(this).Value;
+
+                int calculatedHeight;
+                int calculatedWidth;
+
+                if (isGrid)
                 {
-                    int maxWorkingHeight = (Screen.FromControl(this)?.WorkingArea.Height ?? 1080) - 40;
-                    int calculatedHeight = (int)(ControlHelper.GetDpiScale(this).Value * (chartCount * 225 + 130));
-                    int finalHeight = Math.Min(maxWorkingHeight, calculatedHeight);
-                    Size = new Size(Size.Width, finalHeight);
-                    MinimumSize = new Size(Size.Width, Math.Min(finalHeight, (int)(ControlHelper.GetDpiScale(this).Value * 600)));
+                    calculatedHeight = (int)(dpi * (2 * 300 + 160));
+                    calculatedWidth = Math.Min(maxWorkingWidth, (int)(dpi * 1480));
                 }
+                else
+                {
+                    calculatedHeight = (int)(dpi * (activeCount * 225 + 130));
+                    calculatedWidth = Math.Min(maxWorkingWidth, (int)(dpi * 1350));
+                }
+
+                int finalHeight = Math.Min(maxWorkingHeight, calculatedHeight);
+                Size = new Size(calculatedWidth, finalHeight);
+                MinimumSize = new Size((int)(dpi * 1100), Math.Min(finalHeight, (int)(dpi * 550)));
             }
             catch (Exception ex)
             {
@@ -1775,6 +1838,9 @@ namespace GHelper
             curPoint = null;
             curIndex = -1;
             labelTip.Visible = false;
+
+            buttonTestXGM.Text = "Test XGM";
+            XGM.ClearManualSpeed();
 
             SaveProfile(seriesCPU, AsusFan.CPU);
             SaveProfile(seriesGPU, AsusFan.GPU);
@@ -2346,6 +2412,11 @@ namespace GHelper
             {
                 buttonTestXGM.Location = new Point(nextX, buttonCalibrate.Top);
                 nextX = buttonTestXGM.Right + 12;
+            }
+            if (buttonGridToggle is not null && buttonGridToggle.Visible)
+            {
+                buttonGridToggle.Location = new Point(nextX, buttonCalibrate.Top);
+                nextX = buttonGridToggle.Right + 12;
             }
             checkFanClamp.Location = new Point(nextX, checkApplyFans.Top + 4);
         }

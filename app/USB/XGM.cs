@@ -174,6 +174,7 @@ namespace GHelper.USB
                             LastCoreTemp = (b6 > 0 && b6 < 125) ? b6 : null;
                             LastHotspotTemp = (b9 > 0 && b9 < 125) ? b9 : null;
                             LastCurveActive = (response[18] == 0x80);
+                            Logger.WriteLine($"XGM Telemetry: RPM={rpm}, Target={targetRpm}, b6={b6}C, b9={b9}C, active=0x{response[18]:X2} | {BitConverter.ToString(response, 0, Math.Min(24, response.Length))}");
                         }
                     }
                 }
@@ -335,8 +336,10 @@ namespace GHelper.USB
                 // causing the EC to drop out of custom curve control.
                 // Point 7 must cover high temperatures (at least 100°C) so load temps (e.g. 96°C)
                 // never exceed the curve table.
+                // The XG Mobile EC microcontroller requires Point 0 to start at 0C.
+                // Point 7 should cover load temperatures up to 90C.
                 xgmPayload[0] = 0;
-                if (xgmPayload[7] < 100) xgmPayload[7] = 105;
+                if (xgmPayload[7] < 80 || xgmPayload[7] > 95) xgmPayload[7] = 90;
                 if (xgmPayload[8] < 15) xgmPayload[8] = 15; // Safe minimum speed floor
 
                 if (IsConnected())
@@ -355,7 +358,7 @@ namespace GHelper.USB
         {
             byte speed = (byte)Math.Clamp(percent, 0, 100);
             byte[] manualCurve = [
-                0, 20, 40, 60, 75, 85, 95, 105,
+                0, 20, 35, 50, 60, 70, 80, 90,
                 speed, speed, speed, speed, speed, speed, speed, speed
             ];
             Task.Run(() =>
@@ -376,7 +379,7 @@ namespace GHelper.USB
             if (!IsConnected()) return;
 
             // Send 85% (~6500 RPM) across all points from 0°C to 105°C
-            byte[] testCurve = [0, 20, 40, 60, 75, 85, 95, 105, 85, 85, 85, 85, 85, 85, 85, 85];
+            byte[] testCurve = [0, 20, 35, 50, 60, 70, 80, 90, 85, 85, 85, 85, 85, 85, 85, 85];
             Write([XGM_REPORT_ID, 0xd1, 0x01, .. testCurve]);
             IsManualSpeedActive = true;
             ManualSpeedPercent = 85;

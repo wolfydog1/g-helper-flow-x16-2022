@@ -294,7 +294,7 @@ namespace GHelper.Mode
                 bool xgmFan = false;
                 if (HardwareControl.IsXGConnectedCached() || XGM.IsConnected() || (HardwareControl.xgmTemp is not null && HardwareControl.xgmTemp > 0))
                 {
-                    if (!XGM.IsManualSpeedActive)
+                    if (!XGM.IsManualSpeedActive || force)
                     {
                         byte[] xgmCurve = GetValidFanCurve(AsusFan.XGM);
                         XGM.SetFan(xgmCurve);
