@@ -457,11 +457,14 @@ namespace GHelper
             itemApplyCurve.Click += (s, e) =>
             {
                 buttonTestXGM.Text = "Test XGM";
+                XGM.ClearManualSpeed();
                 if (!checkApplyFans.Checked && !XGM.IsIndependentFanEnabled())
                 {
                     checkApplyFans.Checked = true;
                     AppConfig.SetMode("auto_apply", 1);
                 }
+                byte[] xgmCurve = AppConfig.GetFanConfig(AsusFan.XGM);
+                XGM.SetFan(xgmCurve);
                 modeControl.AutoFans();
                 Program.toast?.RunToast("XG Mobile Custom Curve Applied");
                 UpdateSensors();
@@ -1088,6 +1091,7 @@ namespace GHelper
         private void Fans_Shown(object? sender, EventArgs e)
         {
             FormPosition();
+            InitFans();
             UpdateSensors();
         }
 
@@ -1162,6 +1166,12 @@ namespace GHelper
         {
             if (sender is null) return;
             CheckBox chk = (CheckBox)sender;
+
+            if (!chk.Checked)
+            {
+                buttonTestXGM.Text = "Test XGM";
+                XGM.ClearManualSpeed();
+            }
 
             AppConfig.SetMode("auto_apply", chk.Checked ? 1 : 0);
             modeControl.SetPerformanceMode();
@@ -1544,33 +1554,38 @@ namespace GHelper
 
             // Dynamic row sizing for tableFanCharts so visible charts divide the space evenly
             // Row 0: CPU, Row 1: GPU, Row 2: Mid, Row 3: XGM
-            List<Control> visibleCharts = new List<Control>();
-            if (chartCPU.Visible) visibleCharts.Add(chartCPU);
-            if (chartGPU.Visible) visibleCharts.Add(chartGPU);
-            if (chartMid.Visible) visibleCharts.Add(chartMid);
-            if (chartXGM.Visible) visibleCharts.Add(chartXGM);
+            bool showMid = AppConfig.IsMidFan() || !AsusACPI.IsEmptyCurve(Program.acpi.GetFanCurve(AsusFan.Mid)) || Program.acpi.IsMidFanSupported();
+            bool showXgm = xgmConnected || XGM.IsIndependentFanEnabled() || XGM.AlwaysShowFanCurve();
+
+            chartCPU.Visible = true;
+            chartGPU.Visible = true;
+            chartMid.Visible = showMid;
+            chartXGM.Visible = showXgm;
+
+            int activeCount = 2 + (showMid ? 1 : 0) + (showXgm ? 1 : 0);
+            chartCount = activeCount;
 
             tableFanCharts.SuspendLayout();
             tableFanCharts.RowCount = 4;
             while (tableFanCharts.RowStyles.Count < 4)
                 tableFanCharts.RowStyles.Add(new RowStyle());
 
-            float percentPerChart = visibleCharts.Count > 0 ? (100f / visibleCharts.Count) : 25f;
-            tableFanCharts.RowStyles[0] = chartCPU.Visible ? new RowStyle(SizeType.Percent, percentPerChart) : new RowStyle(SizeType.Absolute, 0);
-            tableFanCharts.RowStyles[1] = chartGPU.Visible ? new RowStyle(SizeType.Percent, percentPerChart) : new RowStyle(SizeType.Absolute, 0);
-            tableFanCharts.RowStyles[2] = chartMid.Visible ? new RowStyle(SizeType.Percent, percentPerChart) : new RowStyle(SizeType.Absolute, 0);
-            tableFanCharts.RowStyles[3] = chartXGM.Visible ? new RowStyle(SizeType.Percent, percentPerChart) : new RowStyle(SizeType.Absolute, 0);
+            float percentPerChart = 100f / activeCount;
+            tableFanCharts.RowStyles[0] = new RowStyle(SizeType.Percent, percentPerChart);
+            tableFanCharts.RowStyles[1] = new RowStyle(SizeType.Percent, percentPerChart);
+            tableFanCharts.RowStyles[2] = showMid ? new RowStyle(SizeType.Percent, percentPerChart) : new RowStyle(SizeType.Absolute, 0);
+            tableFanCharts.RowStyles[3] = showXgm ? new RowStyle(SizeType.Percent, percentPerChart) : new RowStyle(SizeType.Absolute, 0);
             tableFanCharts.ResumeLayout(true);
 
             try
             {
                 if (chartCount > 2)
                 {
-                    int maxWorkingHeight = (Screen.FromControl(this)?.WorkingArea.Height ?? 1000) - 50;
-                    int calculatedHeight = (int)(ControlHelper.GetDpiScale(this).Value * (chartCount * 190 + 120));
+                    int maxWorkingHeight = (Screen.FromControl(this)?.WorkingArea.Height ?? 1080) - 40;
+                    int calculatedHeight = (int)(ControlHelper.GetDpiScale(this).Value * (chartCount * 225 + 130));
                     int finalHeight = Math.Min(maxWorkingHeight, calculatedHeight);
                     Size = new Size(Size.Width, finalHeight);
-                    MinimumSize = new Size(Size.Width, Math.Min(finalHeight, (int)(ControlHelper.GetDpiScale(this).Value * 550)));
+                    MinimumSize = new Size(Size.Width, Math.Min(finalHeight, (int)(ControlHelper.GetDpiScale(this).Value * 600)));
                 }
             }
             catch (Exception ex)
@@ -1679,6 +1694,9 @@ namespace GHelper
 
             if (chartXGM.Visible || Program.acpi.IsXGConnected() || XGM.IsConnected())
                 LoadProfile(seriesXGM, AsusFan.XGM, true);
+
+            buttonTestXGM.Text = "Test XGM";
+            XGM.ClearManualSpeed();
 
             checkApplyFans.Checked = false;
             checkApplyPower.Checked = false;

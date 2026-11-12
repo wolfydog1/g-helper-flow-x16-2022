@@ -294,9 +294,12 @@ namespace GHelper.Mode
                 bool xgmFan = false;
                 if (HardwareControl.IsXGConnectedCached() || XGM.IsConnected() || (HardwareControl.xgmTemp is not null && HardwareControl.xgmTemp > 0))
                 {
-                    byte[] xgmCurve = GetValidFanCurve(AsusFan.XGM);
-                    XGM.SetFan(xgmCurve);
-                    xgmFan = true;
+                    if (!XGM.IsManualSpeedActive)
+                    {
+                        byte[] xgmCurve = GetValidFanCurve(AsusFan.XGM);
+                        XGM.SetFan(xgmCurve);
+                        xgmFan = true;
+                    }
                 }
 
                 byte[] cpuCurve = GetValidFanCurve(AsusFan.CPU);
@@ -351,12 +354,18 @@ namespace GHelper.Mode
             {
                 if ((HardwareControl.IsXGConnectedCached() || XGM.IsConnected() || (HardwareControl.xgmTemp is not null && HardwareControl.xgmTemp > 0)) && XGM.IsIndependentFanEnabled())
                 {
-                    byte[] xgmCurve = GetValidFanCurve(AsusFan.XGM);
-                    XGM.SetFan(xgmCurve);
+                    if (!XGM.IsManualSpeedActive)
+                    {
+                        byte[] xgmCurve = GetValidFanCurve(AsusFan.XGM);
+                        XGM.SetFan(xgmCurve);
+                    }
                 }
                 else
                 {
-                    XGM.Reset();
+                    if (!XGM.IsManualSpeedActive)
+                    {
+                        XGM.Reset();
+                    }
                 }
                 ApplyHysteresis();
             }
