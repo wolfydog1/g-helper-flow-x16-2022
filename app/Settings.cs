@@ -1800,10 +1800,11 @@ namespace GHelper
                 {
                     BeginInvoke(() =>
                     {
+                        XGM.InvalidateCache();
                         RefreshExternalDisplayVisibility();
                         SetContextMenu();
                         VisualizeXGM();
-                        
+
                         bool isXgm = Program.acpi.IsXGConnected() || XGM.IsConnected();
                         if (isXgm && !wasXgmConnected)
                         {
@@ -1818,12 +1819,9 @@ namespace GHelper
                         if (XGM.IsConnected())
                         {
                             XGM.Init();
-                            if (Program.acpi.IsXGConnected())
+                            if (Program.acpi.IsXGConnected() && AppConfig.IsApplyFans())
                             {
-                                if (AppConfig.IsApplyFans() || XGM.IsIndependentFanEnabled())
-                                    Program.modeControl.AutoFans();
-                                else
-                                    XGM.Reset();
+                                Program.modeControl.AutoFans();
                             }
                         }
                         if (fansForm is not null && fansForm.Text != "") fansForm.InitFans();

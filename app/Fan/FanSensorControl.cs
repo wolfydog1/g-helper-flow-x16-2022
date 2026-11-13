@@ -8,7 +8,8 @@ namespace GHelper.Fan
         public const int DEFAULT_FAN_MIN = 18;
         public const int DEFAULT_FAN_MAX = 58;
 
-        public const int XGM_FAN_MAX = 76;
+        public const int XGM_FAN_MIN = 6;
+        public const int XGM_FAN_MAX = 63;
 
         public const int INADEQUATE_MAX = 104;
 
@@ -102,7 +103,7 @@ namespace GHelper.Fan
 
         public static int GetFanMin(AsusFan device)
         {
-            if (device == AsusFan.XGM) return DEFAULT_FAN_MIN;
+            if (device == AsusFan.XGM) return XGM_FAN_MIN;
             int devIndex = (int)device;
             if (devIndex >= _fanMin.Length) return DEFAULT_FAN_MIN;
             return _fanMin[devIndex];
@@ -184,13 +185,10 @@ namespace GHelper.Fan
             int roundedPercent = Math.Clamp((int)Math.Round(percent), 0, 100);
             int min = GetFanMin(AsusFan.XGM);
             int max = GetFanMax(AsusFan.XGM);
-            int calculatedRpm = (int)(200 * Math.Floor((float)(min * 100 + (max - min) * roundedPercent) / 200));
+            int calculatedRpm = (int)(100 * Math.Round((float)(min * 100 + (max - min) * roundedPercent) / 100));
 
             if (roundedPercent == 0)
                 return (fanRpm ? "0RPM" : "0%", 0);
-
-            if (t < 50 && roundedPercent <= 20)
-                return (fanRpm ? "0RPM (0dB)" : "0% (0dB)", 0);
 
             string formatted = fanRpm ? $"{calculatedRpm}RPM" : $"{roundedPercent}%";
             return (formatted, calculatedRpm);
@@ -279,7 +277,7 @@ namespace GHelper.Fan
                     if (measuredMax[3] >= 50 && measuredMax[3] < INADEQUATE_MAX)
                         SetFanMax(AsusFan.XGM, measuredMax[3]);
                     else
-                        SetFanMax(AsusFan.XGM, Math.Max(previousXgmMax, XGM_FAN_MAX));
+                        SetFanMax(AsusFan.XGM, XGM_FAN_MAX);
                 }
 
                 sameCount = 0;
@@ -297,7 +295,7 @@ namespace GHelper.Fan
                 modeControl.SetPerformanceMode();
                 if (Program.acpi.IsXGConnected() || XGM.IsConnected())
                 {
-                    if (AppConfig.IsApplyFans())
+                    if (AppConfig.IsApplyFans() || XGM.IsIndependentFanEnabled())
                     {
                         byte[] xgmCurve = AppConfig.GetFanConfig(AsusFan.XGM);
                         if (AsusACPI.IsInvalidCurve(xgmCurve)) xgmCurve = AppConfig.GetDefaultCurve(AsusFan.XGM);
@@ -333,7 +331,7 @@ namespace GHelper.Fan
                 else
                     label = label + ", XGM: " + currentXgmMax;
 
-                if (AppConfig.IsApplyFans())
+                if (AppConfig.IsApplyFans() || XGM.IsIndependentFanEnabled())
                 {
                     byte[] xgmCurve = AppConfig.GetFanConfig(AsusFan.XGM);
                     if (AsusACPI.IsInvalidCurve(xgmCurve)) xgmCurve = AppConfig.GetDefaultCurve(AsusFan.XGM);

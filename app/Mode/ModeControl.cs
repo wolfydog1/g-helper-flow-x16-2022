@@ -255,9 +255,14 @@ namespace GHelper.Mode
             byte[] curve = AppConfig.GetFanConfig(device);
             if (AsusACPI.IsInvalidCurve(curve))
             {
-                curve = Program.acpi.GetFanCurve(device, Modes.GetCurrentBase());
-                if (AsusACPI.IsInvalidCurve(curve))
+                if (device == AsusFan.XGM)
                     curve = AppConfig.GetDefaultCurve(device);
+                else
+                {
+                    curve = Program.acpi.GetFanCurve(device, Modes.GetCurrentBase());
+                    if (AsusACPI.IsInvalidCurve(curve))
+                        curve = AppConfig.GetDefaultCurve(device);
+                }
             }
             return curve;
         }

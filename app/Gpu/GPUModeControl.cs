@@ -350,7 +350,11 @@ namespace GHelper.Gpu
 
                     // 1. Terminate any lingering GPU applications to ensure VRAM is released cleanly
                     HardwareControl.KillGPUApps();
-                    XGM.Reset(); HardwareControl.DisposeGpuControl();
+                    XGM.Reset();
+                    await Task.Delay(100);
+                    XGM.NotifyShutdown();
+                    HardwareControl.DisposeGpuControl();
+                    XGM.InvalidateCache();
                     await Task.Delay(500);
 
                     // 2. Command ASUS ACPI to disconnect PCIe bus
@@ -406,6 +410,7 @@ namespace GHelper.Gpu
             Task.Run(async () =>
             {
                 settings.LockGPUModes();
+                try
                 {
                     // If in Eco mode, wake up graphics subsystem first so the PCIe link can handshake
                     if (Program.acpi.DeviceGet(AsusACPI.GPUEco) == 1)
@@ -415,7 +420,9 @@ namespace GHelper.Gpu
                         await Task.Delay(1000);
                     }
 
-                    HardwareControl.DisposeGpuControl(); if (AppConfig.Is("xgm_special"))
+                    HardwareControl.DisposeGpuControl();
+                    XGM.InvalidateCache();
+                    if (AppConfig.Is("xgm_special"))
                         Program.acpi.DeviceSet(AsusACPI.GPUXG, 0x101, "GPU XGM");
                     else
                         Program.acpi.DeviceSet(AsusACPI.GPUXG, 1, "GPU XGM");
@@ -427,7 +434,7 @@ namespace GHelper.Gpu
 
                     XGM.Init();
 
-                    if (AppConfig.IsApplyFans())
+                    if (AppConfig.IsApplyFans() || XGM.IsIndependentFanEnabled())
                     {
                         byte[] xgmCurve = AppConfig.GetFanConfig(AsusFan.XGM);
                         if (AsusACPI.IsInvalidCurve(xgmCurve)) xgmCurve = AppConfig.GetDefaultCurve(AsusFan.XGM);
@@ -441,13 +448,19 @@ namespace GHelper.Gpu
                     Battery.BatteryControl.OnXgmConnected();
                     Program.toast?.RunToast("XG Mobile Activated");
                 }
-
-                if (settings.IsHandleCreated && !settings.IsDisposed)
+                catch (Exception ex)
                 {
-                    settings.BeginInvoke(delegate
+                    Logger.WriteLine("XGM Activate error: " + ex.Message);
+                }
+                finally
+                {
+                    if (settings.IsHandleCreated && !settings.IsDisposed)
                     {
-                        InitGPUMode();
-                    });
+                        settings.BeginInvoke(delegate
+                        {
+                            InitGPUMode();
+                        });
+                    }
                 }
             });
         }

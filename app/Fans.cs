@@ -297,12 +297,12 @@ namespace GHelper
             buttonTestXGM.Click += ButtonTestXGM_Click;
             buttonTestXGM.AutoSize = true;
             buttonTestXGM.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            buttonTestXGM.Padding = new Padding(8, 0, 8, 0);
-            buttonTestXGM.MinimumSize = new Size(115, 54);
+            buttonTestXGM.Padding = new Padding(6, 0, 6, 0);
+            buttonTestXGM.MinimumSize = new Size(85, 36);
             buttonTestXGM.TextChanged += (s, e) => UpdateBottomControlsLayout();
             buttonTestXGM.VisibleChanged += (s, e) => UpdateBottomControlsLayout();
 
-            buttonGridToggle.Text = AppConfig.Get("fan_charts_grid", 1) == 1 ? "田 2x2 Grid" : "☰ Stacked";
+            buttonGridToggle.Text = AppConfig.Get("fan_charts_grid", 1) == 1 ? "Stacked View" : "2x2 Grid";
             buttonGridToggle.Activated = false;
             buttonGridToggle.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             buttonGridToggle.BackColor = SystemColors.ControlLight;
@@ -312,8 +312,8 @@ namespace GHelper
             buttonGridToggle.Secondary = true;
             buttonGridToggle.AutoSize = true;
             buttonGridToggle.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            buttonGridToggle.Padding = new Padding(8, 0, 8, 0);
-            buttonGridToggle.MinimumSize = new Size(100, 54);
+            buttonGridToggle.Padding = new Padding(6, 0, 6, 0);
+            buttonGridToggle.MinimumSize = new Size(80, 36);
             buttonGridToggle.Click += (s, e) =>
             {
                 bool cur = AppConfig.Get("fan_charts_grid", 1) == 1;
@@ -321,6 +321,7 @@ namespace GHelper
                 InitFans();
             };
             panelApplyFans.Controls.Add(buttonGridToggle);
+            panelApplyFans.Resize += (s, e) => UpdateBottomControlsLayout();
 
             buttonDownload.Click += ButtonDownload_Click;
 
@@ -1009,7 +1010,11 @@ namespace GHelper
             int Max = FanSensorControl.GetFanMax(device);
 
             if (fanRpm)
+            {
+                if (device == AsusFan.XGM)
+                    return (100 * Math.Round((float)(Min * 100 + (Max - Min) * percentage) / 100)).ToString() + unit;
                 return (200 * Math.Floor((float)(Min * 100 + (Max - Min) * percentage) / 200)).ToString() + unit;
+            }
             else
                 return percentage + "%";
         }
@@ -1107,7 +1112,7 @@ namespace GHelper
             }
             else
             {
-                Size = MinimumSize = new Size(0, Program.settingsForm.Height);
+                MinimumSize = new Size(Math.Min(Width, 800), Program.settingsForm.Height);
                 Height = Program.settingsForm.Height;
                 Top = Program.settingsForm.Top;
             }
@@ -1120,6 +1125,7 @@ namespace GHelper
             FormPosition();
             InitFans();
             UpdateSensors();
+            panelFans.AutoScrollPosition = new Point(0, 0);
         }
 
 
@@ -1196,6 +1202,11 @@ namespace GHelper
 
             buttonTestXGM.Text = "Test XGM";
             XGM.ClearManualSpeed();
+
+            if (chk.Checked)
+            {
+                Chart_Save();
+            }
 
             AppConfig.SetMode("auto_apply", chk.Checked ? 1 : 0);
             modeControl.SetPerformanceMode();
@@ -1351,6 +1362,8 @@ namespace GHelper
                             int? targetPct = GetInterpolatedFanPercent(seriesXGM, xgmActiveTemp);
                             string targetStr = targetPct.HasValue ? $" → {targetPct.Value}%" : "";
 
+                            bool isZeroRpm = (XGM.LastFanRPM ?? 0) == 0;
+
                             string statusStr = "";
                             if (XGM.IsManualSpeedActive)
                             {
@@ -1358,14 +1371,18 @@ namespace GHelper
                             }
                             else if (XGM.LastCurveActive == true)
                             {
-                                statusStr = " [Curve Active]";
+                                statusStr = isZeroRpm ? " [Curve Active, 0 RPM]" : " [Curve Active]";
                             }
                             else if (XGM.LastCurveActive == false)
                             {
-                                statusStr = " [Factory Mode]";
+                                statusStr = isZeroRpm ? " [Factory Auto, 0 RPM]" : " [Factory Auto]";
+                            }
+                            else if (isZeroRpm)
+                            {
+                                statusStr = " [0 RPM]";
                             }
 
-                            string ecTarget = XGM.LastTargetRPM > 0 ? $", Target: {XGM.LastTargetRPM}RPM" : "";
+                            string ecTarget = (XGM.LastTargetRPM > 0) ? $", Target: {XGM.LastTargetRPM}RPM" : "";
                             xgmInfo = $" ({tempStr}{fanStr}{targetStr}{ecTarget}{statusStr})";
                         }
                         else if (!Program.acpi.IsXGConnected() && !XGM.IsConnected())
@@ -1591,7 +1608,7 @@ namespace GHelper
             chartCount = activeCount;
 
             bool isGrid = activeCount >= 4 && AppConfig.Get("fan_charts_grid", 1) == 1;
-            buttonGridToggle.Text = isGrid ? "田 2x2 Grid" : "☰ Stacked";
+            buttonGridToggle.Text = isGrid ? "Stacked View" : "2x2 Grid";
             buttonGridToggle.Visible = activeCount >= 4;
             UpdateBottomControlsLayout();
 
@@ -1600,6 +1617,7 @@ namespace GHelper
 
             if (isGrid)
             {
+                tableFanCharts.GrowStyle = TableLayoutPanelGrowStyle.FixedSize;
                 tableFanCharts.ColumnCount = 2;
                 tableFanCharts.RowCount = 2;
                 tableFanCharts.ColumnStyles.Clear();
@@ -1609,13 +1627,34 @@ namespace GHelper
                 tableFanCharts.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
                 tableFanCharts.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
 
-                tableFanCharts.Controls.Add(chartCPU, 0, 0);
-                tableFanCharts.Controls.Add(chartGPU, 1, 0);
-                tableFanCharts.Controls.Add(chartMid, 0, 1);
-                tableFanCharts.Controls.Add(chartXGM, 1, 1);
+                tableFanCharts.Controls.Add(chartCPU);
+                tableFanCharts.SetCellPosition(chartCPU, new TableLayoutPanelCellPosition(0, 0));
+                tableFanCharts.SetColumnSpan(chartCPU, 1);
+                tableFanCharts.SetRowSpan(chartCPU, 1);
+
+                tableFanCharts.Controls.Add(chartGPU);
+                tableFanCharts.SetCellPosition(chartGPU, new TableLayoutPanelCellPosition(1, 0));
+                tableFanCharts.SetColumnSpan(chartGPU, 1);
+                tableFanCharts.SetRowSpan(chartGPU, 1);
+
+                tableFanCharts.Controls.Add(chartMid);
+                tableFanCharts.SetCellPosition(chartMid, new TableLayoutPanelCellPosition(0, 1));
+                tableFanCharts.SetColumnSpan(chartMid, 1);
+                tableFanCharts.SetRowSpan(chartMid, 1);
+
+                tableFanCharts.Controls.Add(chartXGM);
+                tableFanCharts.SetCellPosition(chartXGM, new TableLayoutPanelCellPosition(1, 1));
+                tableFanCharts.SetColumnSpan(chartXGM, 1);
+                tableFanCharts.SetRowSpan(chartXGM, 1);
+
+                chartCPU.Dock = DockStyle.Fill;
+                chartGPU.Dock = DockStyle.Fill;
+                chartMid.Dock = DockStyle.Fill;
+                chartXGM.Dock = DockStyle.Fill;
             }
             else
             {
+                tableFanCharts.GrowStyle = TableLayoutPanelGrowStyle.FixedSize;
                 tableFanCharts.ColumnCount = 1;
                 tableFanCharts.RowCount = activeCount;
                 tableFanCharts.ColumnStyles.Clear();
@@ -1625,11 +1664,28 @@ namespace GHelper
                 for (int r = 0; r < activeCount; r++)
                     tableFanCharts.RowStyles.Add(new RowStyle(SizeType.Percent, percentPerChart));
 
-                tableFanCharts.Controls.Add(chartCPU, 0, 0);
-                tableFanCharts.Controls.Add(chartGPU, 0, 1);
+                tableFanCharts.Controls.Add(chartCPU);
+                tableFanCharts.SetCellPosition(chartCPU, new TableLayoutPanelCellPosition(0, 0));
+
+                tableFanCharts.Controls.Add(chartGPU);
+                tableFanCharts.SetCellPosition(chartGPU, new TableLayoutPanelCellPosition(0, 1));
+
                 int rIdx = 2;
-                if (showMid) tableFanCharts.Controls.Add(chartMid, 0, rIdx++);
-                if (showXgm) tableFanCharts.Controls.Add(chartXGM, 0, rIdx++);
+                if (showMid)
+                {
+                    tableFanCharts.Controls.Add(chartMid);
+                    tableFanCharts.SetCellPosition(chartMid, new TableLayoutPanelCellPosition(0, rIdx++));
+                }
+                if (showXgm)
+                {
+                    tableFanCharts.Controls.Add(chartXGM);
+                    tableFanCharts.SetCellPosition(chartXGM, new TableLayoutPanelCellPosition(0, rIdx++));
+                }
+
+                chartCPU.Dock = DockStyle.Fill;
+                chartGPU.Dock = DockStyle.Fill;
+                chartMid.Dock = DockStyle.Fill;
+                chartXGM.Dock = DockStyle.Fill;
             }
 
             tableFanCharts.ResumeLayout(true);
@@ -1691,6 +1747,8 @@ namespace GHelper
             }
 
             InitHysteresis();
+            UpdateBottomControlsLayout();
+            panelFans.AutoScrollPosition = new Point(0, 0);
 
         }
 
@@ -1749,7 +1807,7 @@ namespace GHelper
             }
 
             AppConfig.SetFanConfig(device, curve);
-            //Program.wmi.SetFanCurve(device, curve);
+            Logger.WriteLine($"Saved fan profile for {device}: {BitConverter.ToString(curve)}");
 
         }
 
@@ -2406,19 +2464,41 @@ namespace GHelper
 
         private void UpdateBottomControlsLayout()
         {
-            if (buttonCalibrate is null || checkFanClamp is null || checkApplyFans is null) return;
-            int nextX = (buttonCalibrate.Visible ? buttonCalibrate.Right : buttonReset.Right) + 12;
+            if (buttonReset is null || buttonCalibrate is null || checkFanClamp is null || checkApplyFans is null) return;
+
+            int gap = 6;
+            int btnHeight = buttonReset.Height;
+
+            // Size and position checkApplyFans cleanly at the right edge
+            checkApplyFans.AutoSize = true;
+            int applyWidth = Math.Max(checkApplyFans.GetPreferredSize(Size.Empty).Width + 6, 150);
+            checkApplyFans.Size = new Size(applyWidth, btnHeight);
+            checkApplyFans.Location = new Point(Math.Max(0, panelApplyFans.ClientSize.Width - applyWidth - 10), buttonReset.Top);
+
+            int nextX = buttonReset.Right + gap;
+            if (buttonCalibrate.Visible)
+            {
+                buttonCalibrate.Location = new Point(nextX, buttonReset.Top);
+                nextX = buttonCalibrate.Right + gap;
+            }
             if (buttonTestXGM is not null && buttonTestXGM.Visible)
             {
-                buttonTestXGM.Location = new Point(nextX, buttonCalibrate.Top);
-                nextX = buttonTestXGM.Right + 12;
+                buttonTestXGM.MinimumSize = new Size(80, btnHeight);
+                buttonTestXGM.Size = new Size(Math.Max(80, buttonTestXGM.GetPreferredSize(Size.Empty).Width), btnHeight);
+                buttonTestXGM.Location = new Point(nextX, buttonReset.Top);
+                nextX = buttonTestXGM.Right + gap;
             }
             if (buttonGridToggle is not null && buttonGridToggle.Visible)
             {
-                buttonGridToggle.Location = new Point(nextX, buttonCalibrate.Top);
-                nextX = buttonGridToggle.Right + 12;
+                buttonGridToggle.MinimumSize = new Size(80, btnHeight);
+                buttonGridToggle.Size = new Size(Math.Max(80, buttonGridToggle.GetPreferredSize(Size.Empty).Width), btnHeight);
+                buttonGridToggle.Location = new Point(nextX, buttonReset.Top);
+                nextX = buttonGridToggle.Right + gap;
             }
-            checkFanClamp.Location = new Point(nextX, checkApplyFans.Top + 4);
+            checkFanClamp.AutoSize = true;
+            int clampWidth = checkFanClamp.GetPreferredSize(Size.Empty).Width;
+            int maxClampX = Math.Max(nextX, checkApplyFans.Left - clampWidth - gap);
+            checkFanClamp.Location = new Point(Math.Min(nextX, maxClampX), buttonReset.Top + Math.Max(0, (btnHeight - checkFanClamp.Height) / 2));
         }
 
         private void ApplyCoordinatedFanPreset(string presetName, byte[] cpuCurve, byte[] gpuCurve, byte[] midCurve)
@@ -2428,7 +2508,15 @@ namespace GHelper
             if (chartMid.Visible || AppConfig.IsMidFan())
                 ApplyCustomCurveBytes(seriesMid, AsusFan.Mid, (byte[])midCurve.Clone());
             if (chartXGM.Visible || AppConfig.Is("xgm_fan") || XGM.IsConnected() || HardwareControl.IsXGConnectedCached())
-                ApplyCustomCurveBytes(seriesXGM, AsusFan.XGM, (byte[])gpuCurve.Clone());
+            {
+                byte[] xgmClone = (byte[])gpuCurve.Clone();
+                for (int i = 0; i < 8; i++)
+                {
+                    if (xgmClone[i] < 60 && xgmClone[i + 8] < 15)
+                        xgmClone[i + 8] = 15;
+                }
+                ApplyCustomCurveBytes(seriesXGM, AsusFan.XGM, xgmClone);
+            }
             Program.toast?.RunToast($"Fan Preset: {presetName}");
         }
 
@@ -2500,14 +2588,23 @@ namespace GHelper
             menu.Items.Add("-");
 
             // Presets
-            var presets = new (string name, byte[] curve)[]
-            {
-                ("Preset: Silent / Zero-RPM Idle (< 55°C)", [30, 40, 50, 55, 65, 75, 85, 95, 0, 0, 0, 14, 28, 48, 68, 88]),
-                ("Preset: Quiet Balanced",                  [30, 40, 50, 60, 70, 80, 90, 100, 0, 8, 18, 28, 42, 58, 74, 90]),
-                ("Preset: Linear Standard",                 [30, 40, 50, 60, 70, 80, 90, 100, 10, 20, 32, 45, 60, 74, 88, 100]),
-                ("Preset: Aggressive Cooling",              [30, 40, 50, 60, 70, 80, 90, 100, 20, 32, 46, 62, 76, 88, 96, 100]),
-                ("Preset: Max Cooling (95% Full Blast)",    [30, 40, 50, 60, 70, 80, 90, 100, 50, 65, 80, 90, 95, 95, 95, 100])
-            };
+            var presets = (device == AsusFan.XGM)
+                ? new (string name, byte[] curve)[]
+                {
+                    ("Preset: Silent Active Fan (~1800 RPM)",   [30, 40, 50, 60, 70, 80, 90, 100, 15, 18, 24, 34, 46, 60, 75, 90]),
+                    ("Preset: Quiet Balanced",                  [30, 40, 50, 60, 70, 80, 90, 100, 18, 24, 32, 44, 56, 70, 82, 95]),
+                    ("Preset: Linear Standard",                 [30, 40, 50, 60, 70, 80, 90, 100, 20, 30, 42, 55, 68, 80, 90, 100]),
+                    ("Preset: Aggressive Cooling",              [30, 40, 50, 60, 70, 80, 90, 100, 25, 38, 52, 68, 80, 90, 96, 100]),
+                    ("Preset: Max Cooling (95% Full Blast)",    [30, 40, 50, 60, 70, 80, 90, 100, 50, 65, 80, 90, 95, 95, 95, 100])
+                }
+                : new (string name, byte[] curve)[]
+                {
+                    ("Preset: Silent / Zero-RPM Idle (< 55°C)", [30, 40, 50, 55, 65, 75, 85, 95, 0, 0, 0, 14, 28, 48, 68, 88]),
+                    ("Preset: Quiet Balanced",                  [30, 40, 50, 60, 70, 80, 90, 100, 0, 8, 18, 28, 42, 58, 74, 90]),
+                    ("Preset: Linear Standard",                 [30, 40, 50, 60, 70, 80, 90, 100, 10, 20, 32, 45, 60, 74, 88, 100]),
+                    ("Preset: Aggressive Cooling",              [30, 40, 50, 60, 70, 80, 90, 100, 20, 32, 46, 62, 76, 88, 96, 100]),
+                    ("Preset: Max Cooling (95% Full Blast)",    [30, 40, 50, 60, 70, 80, 90, 100, 50, 65, 80, 90, 95, 95, 95, 100])
+                };
 
             foreach (var p in presets)
             {
@@ -2631,7 +2728,7 @@ namespace GHelper
 
                 var itemXgmScale = new ToolStripMenuItem($"XG Mobile: Max RPM Scale ({FanSensorControl.GetFanMax(AsusFan.XGM) * 100} RPM)") { Margin = pad };
                 int currentXgmMax = FanSensorControl.GetFanMax(AsusFan.XGM);
-                int[] scaleOptions = new int[] { 76, 72, 65, 60, 55, 50, 45, 36 };
+                int[] scaleOptions = new int[] { 76, 72, 65, 63, 60, 55, 50, 45, 36 };
 
                 if (!scaleOptions.Contains(currentXgmMax))
                 {
@@ -2645,6 +2742,7 @@ namespace GHelper
                     {
                         76 => "7600 RPM (Full Physical Max)",
                         72 => "7200 RPM (Rated Spec)",
+                        63 => "6300 RPM (GC31S Max / Default)",
                         36 => "3600 RPM (Quiet Limit)",
                         _ => $"{scaleVal * 100} RPM"
                     };

@@ -674,6 +674,9 @@ public class AsusACPI
             case AsusFan.Mid:
                 result = DeviceGetBuffer(DevsMidFanCurve, fan_mode);
                 break;
+            case AsusFan.XGM:
+                result = AppConfig.GetDefaultCurve(AsusFan.XGM);
+                break;
             default:
                 result = DeviceGetBuffer(DevsCPUFanCurve, fan_mode);
                 break;
